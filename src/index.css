@@ -1,0 +1,610 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
+
+@layer base {
+  :root, [data-theme="dark"], .dark {
+    /* ==========================================================================
+       DARK THEME: Carbon UI & Premium Esports Operations System
+       ========================================================================== */
+    
+    /* Level 0: Deep Graphite Canvas (Warm carbon foundation, not pitch black) */
+    --bg-base: #101319;
+    
+    /* Level 1: Primary Structured Container / Sidebar / Card Base */
+    --bg-surface: #171c26;
+    --bg-surface-subtle: #171c26;
+    
+    /* Level 2: Elevated Cards / Raised Panels / Active Sections */
+    --bg-surface-raised: #1f2533;
+    
+    /* Level 3: Interactive Hover / Active Focus / Flyouts / Modals */
+    --bg-surface-hover: #272f40;
+    
+    /* Level Recessed: Input Wells, Stat Insets, Code Containers */
+    --bg-surface-inset: #131720;
+
+    /* Semantic Regions */
+    --bg-sidebar: #171c26;
+    --bg-header: #171c26;
+    --bg-hero: #171c26;
+    --bg-workspace: #101319;
+    
+    /* Overlay Background */
+    --bg-surface-overlay: rgba(16, 19, 25, 0.85);
+
+    /* Refined Low-Opacity Borders (Layered Depth without harsh outlines) */
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-medium: rgba(255, 255, 255, 0.13);
+    --border-strong: rgba(255, 255, 255, 0.20);
+    --border-highlight: rgba(255, 255, 255, 0.06);
+
+    /* Signature Esports Gold/Yellow Accent (High Contrast, Purposeful) */
+    --accent-primary: #f59e0b;
+    --accent-primary-hover: #fbbf24;
+    --accent-primary-dark: #d97706;
+    --accent-primary-text: #0d1117;
+    --accent-soft: rgba(245, 158, 11, 0.12);
+    --accent-border: rgba(245, 158, 11, 0.32);
+
+    --accent-gold: #f59e0b;
+    --accent-gold-soft: rgba(245, 158, 11, 0.14);
+
+    /* Controlled Semantic Status Tokens */
+    --status-live: #10b981;
+    --status-warning: #f59e0b;
+    --status-danger: #ef4444;
+    --status-info: #38bdf8;
+
+    /* Refined Warm White Typography */
+    --text-primary: #f3f4f6;
+    --text-secondary: #9ca3af;
+    --text-muted: #6b7280;
+
+    /* Depth Shadows with Subtle Ambient Spread */
+    --shadow-flat: 0 2px 8px -2px rgba(0, 0, 0, 0.35), 0 1px 3px 0 rgba(0, 0, 0, 0.25);
+    --shadow-raised: 0 10px 25px -3px rgba(0, 0, 0, 0.45), 0 4px 10px -2px rgba(0, 0, 0, 0.30);
+    --shadow-inset: inset 0 2px 4px 0 rgba(0, 0, 0, 0.40);
+    --shadow-floating: 0 20px 40px -4px rgba(0, 0, 0, 0.65), 0 8px 16px -2px rgba(0, 0, 0, 0.35);
+
+    color-scheme: dark;
+  }
+
+  [data-theme="light"], .light {
+    /* ==========================================================================
+       LIGHT THEME: Layered Warm-Neutral Carbon UI & PointX Identity
+       ========================================================================== */
+    
+    /* Level 0: Soft Cool-Gray Application Canvas (Creates immediate depth against white cards) */
+    --bg-base: #EEF1F5;
+    
+    /* Level 1: Primary Elevated Card Surface / White Containers / Modals */
+    --bg-surface: #FFFFFF;
+    
+    /* Level 1.5: Secondary Card Surface / Telemetry Cards / Supporting Panels / Inputs */
+    --bg-surface-subtle: #F8FAFC;
+    
+    /* Level 2: Raised Panels / Flyouts / Elevated Modals */
+    --bg-surface-raised: #FFFFFF;
+    
+    /* Level 3: Interactive Hover / Active Focus */
+    --bg-surface-hover: #EEF2F6;
+    
+    /* Level Recessed: Inset Wells / Filter Containers / Search Bar Backgrounds */
+    --bg-surface-inset: #E7EBF0;
+    
+    /* Sidebar Specific Surface: Distinct Navigation Layer */
+    --bg-sidebar: #E5E9EF;
+    
+    /* Header Specific Surface: Fixed Application Toolbar */
+    --bg-header: #F8F9FB;
+    
+    /* Hero Specific Surface */
+    --bg-hero: #F8F9FB;
+    
+    /* Previous Tournaments Workspace Background */
+    --bg-workspace: #E9EDF2;
+    
+    /* Overlay Background */
+    --bg-surface-overlay: rgba(238, 241, 245, 0.92);
+
+    /* Layered Subtle & Medium Borders */
+    --border-subtle: #D7DDE5;
+    --border-medium: #CBD3DD;
+    --border-strong: #C8D0DA;
+    --border-highlight: rgba(255, 255, 255, 0.95);
+
+    /* Signature PointX Yellow Accent */
+    --accent-primary: #FFC400;
+    --accent-primary-hover: #E5A900;
+    --accent-primary-dark: #CC9400;
+    --accent-primary-text: #111827;
+    --accent-soft: rgba(255, 196, 0, 0.16);
+    --accent-border: rgba(229, 169, 0, 0.45);
+
+    --accent-gold: #E5A900;
+    --accent-gold-soft: rgba(255, 196, 0, 0.18);
+
+    /* Controlled Semantic Status Tokens */
+    --status-live: #059669;
+    --status-warning: #D97706;
+    --status-danger: #DC2626;
+    --status-info: #0284C7;
+
+    /* High-Contrast Charcoal & Neutral Typography */
+    --text-primary: #111827;
+    --text-secondary: #5F6B7A;
+    --text-muted: #8791A0;
+
+    /* Multi-Tier Light-Theme Shadow System */
+    --shadow-flat: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+    --shadow-raised: 0 6px 16px -2px rgba(0, 0, 0, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
+    --shadow-inset: inset 0 1px 3px 0 rgba(0, 0, 0, 0.06);
+    --shadow-floating: 0 16px 36px -4px rgba(0, 0, 0, 0.12), 0 6px 14px -2px rgba(0, 0, 0, 0.06);
+
+    color-scheme: light;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    font-size: 16px;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 0.95rem;
+    line-height: 1.55;
+    min-height: 100vh;
+    overflow-x: hidden;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  /* Esports Numerical Font Tuning */
+  .font-numbers {
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, monospace;
+    font-variant-numeric: tabular-nums lining-nums;
+    letter-spacing: -0.02em;
+  }
+
+  /* Sora for Display Headings */
+  .font-display {
+    font-family: 'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.025em;
+  }
+
+  /* Monospace Tag & Telemetry text */
+  .font-mono {
+    font-family: 'Space Grotesk', monospace;
+    font-feature-settings: "tnum";
+  }
+
+  /* Accessibility Focus Rings */
+  *:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+
+  /* Neumorphic Custom Scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--bg-base);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-medium);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-primary);
+  }
+}
+
+/* Glass Button Slide Navigation System */
+.glass-nav-item {
+  position: relative;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.glass-nav-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02));
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: scale(0.96);
+  pointer-events: none;
+}
+
+.glass-nav-item:hover::before {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.glass-nav-item.active {
+  background: var(--accent-primary) !important;
+  color: var(--accent-primary-text) !important;
+  box-shadow: 0 4px 16px var(--accent-soft), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+  transform: translateY(-1px);
+  font-weight: 800;
+}
+
+/* Dynamic Carbon Surface Utilities */
+.neu-flat {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-flat), inset 0 1px 0 0 var(--border-highlight);
+}
+
+.neu-raised {
+  background-color: var(--bg-surface-raised);
+  border: 1px solid var(--border-medium);
+  box-shadow: var(--shadow-raised), inset 0 1px 0 0 var(--border-highlight);
+}
+
+.neu-raised-sm {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-flat), inset 0 1px 0 0 var(--border-highlight);
+}
+
+.neu-raised-hover {
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.neu-raised-hover:hover {
+  background-color: var(--bg-surface-hover);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-raised), inset 0 1px 0 0 var(--border-highlight);
+}
+.neu-raised-hover:active {
+  box-shadow: var(--shadow-inset);
+  transform: translateY(1px);
+}
+
+.neu-pressed,
+.neu-inset {
+  background-color: var(--bg-surface-inset);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-inset);
+}
+
+.neu-floating {
+  background-color: var(--bg-surface-raised);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-floating), inset 0 1px 0 0 var(--border-highlight);
+}
+
+.neu-accent-primary {
+  background-color: var(--accent-primary);
+  color: var(--accent-primary-text);
+  font-weight: 700;
+  box-shadow: 0 4px 14px var(--accent-soft), inset 0 1px 0 0 rgba(255, 255, 255, 0.3);
+}
+.neu-accent-primary:hover {
+  background-color: var(--accent-primary-hover);
+  box-shadow: 0 6px 18px var(--accent-soft), inset 0 1px 0 0 rgba(255, 255, 255, 0.4);
+}
+.neu-accent-primary:active {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  transform: translateY(1px);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45), 0 8px 20px -4px rgba(245, 158, 11, 0.25);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(245, 158, 11, 0), 0 14px 28px -4px rgba(245, 158, 11, 0.35);
+    transform: scale(1.025);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* ==========================================================================
+   MOTION SYSTEM & MICRO-INTERACTION TOKENS
+   ========================================================================== */
+
+:root {
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-fast: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-micro: 140ms;
+  --dur-interaction: 180ms;
+  --dur-panel: 220ms;
+  --dur-page: 320ms;
+}
+
+/* Page & Section Subtle Entrance */
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page-enter {
+  animation: pageEnter var(--dur-page) var(--ease-spring) forwards;
+  will-change: transform, opacity;
+}
+
+/* Dropdown & Popover Entrance */
+@keyframes dropdownEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-dropdown-enter {
+  animation: dropdownEnter var(--dur-panel) var(--ease-out-fast) forwards;
+  will-change: transform, opacity;
+}
+
+/* Modal Content Entrance */
+@keyframes modalEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-modal-enter {
+  animation: modalEnter 240ms var(--ease-spring) forwards;
+  will-change: transform, opacity;
+}
+
+/* Stagger Progressions */
+.stagger-1 { animation-delay: 40ms; }
+.stagger-2 { animation-delay: 80ms; }
+.stagger-3 { animation-delay: 120ms; }
+.stagger-4 { animation-delay: 160ms; }
+
+/* Interactive Card Elevation */
+.hover-lift {
+  transition: transform var(--dur-interaction) var(--ease-spring),
+              box-shadow var(--dur-interaction) var(--ease-spring),
+              border-color var(--dur-interaction) var(--ease-spring);
+  will-change: transform;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+}
+
+.hover-lift:active {
+  transform: translateY(0);
+}
+
+/* Standard Button Micro-interaction */
+button, a, input, select, textarea {
+  transition: background-color var(--dur-micro) var(--ease-in-out),
+              border-color var(--dur-micro) var(--ease-in-out),
+              color var(--dur-micro) var(--ease-in-out),
+              box-shadow var(--dur-micro) var(--ease-in-out),
+              transform var(--dur-micro) var(--ease-spring);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fireBurnFlicker {
+  0% {
+    box-shadow: 0 0 16px rgba(249, 115, 22, 0.75), 0 0 32px rgba(239, 68, 68, 0.6), inset 0 0 16px rgba(245, 158, 11, 0.4);
+    border-color: #f97316;
+  }
+  25% {
+    box-shadow: 0 0 28px rgba(249, 115, 22, 0.95), 0 0 48px rgba(220, 38, 38, 0.85), inset 0 0 24px rgba(234, 179, 8, 0.65);
+    border-color: #ef4444;
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.85), 0 0 38px rgba(239, 68, 68, 0.75), inset 0 0 18px rgba(249, 115, 22, 0.55);
+    border-color: #eab308;
+  }
+  75% {
+    box-shadow: 0 0 32px rgba(239, 68, 68, 1), 0 0 55px rgba(249, 115, 22, 0.9), inset 0 0 26px rgba(245, 158, 11, 0.75);
+    border-color: #f97316;
+  }
+  100% {
+    box-shadow: 0 0 16px rgba(249, 115, 22, 0.75), 0 0 32px rgba(239, 68, 68, 0.6), inset 0 0 16px rgba(245, 158, 11, 0.4);
+    border-color: #f97316;
+  }
+}
+
+.animate-fire-burn {
+  animation: fireBurnFlicker 1.1s infinite ease-in-out;
+}
+
+@keyframes flameWave {
+  0% { transform: translateY(0) scaleY(1); }
+  50% { transform: translateY(-2px) scaleY(1.18); }
+  100% { transform: translateY(0) scaleY(1); }
+}
+
+.animate-flame-wave {
+  animation: flameWave 0.75s infinite alternate ease-in-out;
+}
+
+/* PointX Logo Alpha-Masked Precision Shine Effect */
+@keyframes pointxAlphaShine {
+  0% {
+    transform: translateX(-120%) skewX(-25deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  38% {
+    transform: translateX(220%) skewX(-25deg);
+    opacity: 1;
+  }
+  39%, 100% {
+    transform: translateX(220%) skewX(-25deg);
+    opacity: 0;
+  }
+}
+
+.pointx-alpha-shine {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.35) 25%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(245, 158, 11, 0.75) 75%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: pointxAlphaShine 4.2s cubic-bezier(0.25, 1, 0.5, 1) infinite;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.8));
+}
+
+/* Esports 3D Hero Floating Keyframes & Grid System */
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(0.5deg);
+  }
+}
+
+@keyframes floatDelayed {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(8px) rotate(-0.5deg);
+  }
+}
+
+@keyframes floatSubtle {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes ambientPulse {
+  0%, 100% {
+    opacity: 0.45;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
+
+.animate-float-slow {
+  animation: floatSlow 6s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: floatDelayed 7s ease-in-out 1s infinite;
+}
+
+.animate-float-subtle {
+  animation: floatSubtle 5s ease-in-out 0.5s infinite;
+}
+
+.animate-ambient-pulse {
+  animation: ambientPulse 8s ease-in-out infinite;
+}
+
+.esports-grid-overlay {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+}
+
+.esports-radar-glow {
+  background: radial-gradient(circle at 50% 50%, rgba(255, 208, 0, 0.12) 0%, rgba(255, 176, 0, 0.04) 45%, transparent 70%);
+}
+
+/* Accessibility: Full Reduced Motion Overrides */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+    transform: none !important;
+  }
+}
