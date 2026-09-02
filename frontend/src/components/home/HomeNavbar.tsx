@@ -23,13 +23,13 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
   const { isAuthenticated, user, theme, toggleTheme } = useAuthStore();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<string>('');
+  const [activeSection, setActiveSection] = useState<string>('live-matrix');
 
   const isDark = theme === 'dark';
 
   const navLinks = [
-    { id: 'tournaments', label: 'Tournaments', href: '#tournaments' },
     { id: 'live-matrix', label: 'Live Matrix', href: '#live-matrix' },
+    { id: 'tournaments', label: 'Tournaments', href: '#tournaments' },
     { id: 'broadcast', label: 'Broadcast', href: '#broadcast' },
     { id: 'features', label: 'Features', href: '#features' },
     { id: 'games', label: 'Games', href: '#games' },
@@ -45,14 +45,14 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
           const scrollY = window.scrollY;
           setIsScrolled(scrollY > 20);
 
-          // Near top (Hero section), no navbar links should be highlighted
+          // Near top (Hero section), default to Live Matrix selected
           if (scrollY < 240) {
-            setActiveSection('');
+            setActiveSection('live-matrix');
             ticking = false;
             return;
           }
 
-          const sectionIds = ['tournaments', 'live-matrix', 'broadcast', 'features', 'games'];
+          const sectionIds = ['live-matrix', 'tournaments', 'broadcast', 'features', 'games'];
           let matched = '';
 
           for (const id of sectionIds) {

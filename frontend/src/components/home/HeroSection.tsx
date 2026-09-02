@@ -49,22 +49,22 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         {/* Hero Centerpiece */}
         <div className="relative z-10 w-full max-w-[1480px] mx-auto flex flex-col items-center text-center">
           
-          {/* Top Status Capsule Badge (without 'OFFICIAL') */}
+          {/* Top Status Capsule Badge */}
           <FadeIn delay={0.05}>
-            <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-[var(--bg-surface-raised)] border border-[var(--border-subtle)] backdrop-blur-2xl text-[var(--text-secondary)] shadow-sm hover:border-[var(--accent-primary)]/40 transition-all cursor-default group mb-4">
-              <span className="flex h-2 w-2 rounded-full bg-[var(--accent-primary)] shadow-[0_0_8px_rgba(255,208,0,0.8)] animate-pulse shrink-0" />
-              <span className="text-[10px] sm:text-[11px] font-mono font-bold tracking-[0.16em] uppercase text-[var(--text-primary)]">
-                FREE FIRE ESPORTS AUTOMATION ENGINE
+            <div className="inline-flex items-center gap-2.5 px-4 sm:px-5 py-2 rounded-full bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/20 dark:border-white/10 backdrop-blur-2xl text-[var(--text-secondary)] shadow-lg hover:border-[var(--accent-primary)]/50 transition-all cursor-default group mb-4">
+              <span className="flex h-2.5 w-2.5 rounded-full bg-[var(--accent-primary)] shadow-[0_0_12px_rgba(255,208,0,0.9)] animate-pulse shrink-0" />
+              <span className="text-[10px] sm:text-[11px] font-mono font-bold tracking-[0.18em] uppercase text-[var(--text-primary)]">
+                NEXT-GEN ESPORTS AUTOMATION ENGINE
               </span>
             </div>
           </FadeIn>
 
           {/* Flagship Brand Logo (Crisp in both Light & Dark themes) */}
           <FadeIn delay={0.1}>
-            <div className="relative flex items-center justify-center my-3 sm:my-5 group">
-              <div className="absolute inset-0 bg-[var(--accent-primary)]/10 dark:bg-[var(--accent-primary)]/20 rounded-full blur-3xl group-hover:bg-[var(--accent-primary)]/25 transition-all duration-700 pointer-events-none" />
+            <div className="relative flex items-center justify-center my-4 sm:my-6 group">
+              <div className="absolute inset-0 bg-[var(--accent-primary)]/15 dark:bg-[var(--accent-primary)]/25 rounded-full blur-3xl group-hover:bg-[var(--accent-primary)]/35 transition-all duration-700 pointer-events-none" />
               <PointXLogo
-                className="h-20 sm:h-28 md:h-36 lg:h-44 w-auto max-w-[280px] sm:max-w-[420px] md:max-w-[560px] object-contain select-none hover:scale-105 transition-transform duration-500 relative z-10 drop-shadow-[0_8px_20px_rgba(0,0,0,0.08)] dark:drop-shadow-[0_16px_48px_rgba(0,0,0,0.95)]"
+                className="h-20 sm:h-28 md:h-36 lg:h-44 w-auto max-w-[280px] sm:max-w-[420px] md:max-w-[560px] object-contain select-none hover:scale-105 transition-transform duration-500 relative z-10 drop-shadow-[0_12px_28px_rgba(0,0,0,0.12)] dark:drop-shadow-[0_20px_60px_rgba(0,0,0,0.98)]"
                 alt="PointX Esports Platform"
                 withShine={true}
               />
@@ -73,12 +73,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
           {/* Main Editorial Headline */}
           <SlideIn direction="up" delay={0.15}>
-            <div className="max-w-4xl mx-auto space-y-3 px-4 text-center mt-2">
-              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black tracking-tight text-[var(--text-primary)] font-display uppercase leading-[1.2]">
-                AUTOMATE FREE FIRE SCORES & BROADCAST LIVE 4K OVERLAYS
+            <div className="max-w-4xl mx-auto space-y-4 px-4 text-center mt-2">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight font-display uppercase leading-[1.15] text-[var(--text-primary)] drop-shadow-md">
+                AUTOMATE ESPORTS SCORES &amp; BROADCAST LIVE 4K OVERLAYS
               </h1>
-              <p className="font-display font-bold text-xs sm:text-sm md:text-base text-[var(--text-primary)]/95 dark:text-zinc-100 max-w-2xl mx-auto leading-relaxed tracking-wide drop-shadow-sm">
-                The real-time tournament engine engineered for Free Fire & battle royale esports. Ingest match stats, calculate 12-team matrices in &lt;50ms, and stream seamless overlays to OBS Studio.
+              <p className="font-display font-bold text-xs sm:text-sm md:text-base text-[var(--text-secondary)] dark:text-zinc-200 max-w-2xl mx-auto leading-relaxed tracking-wide drop-shadow-sm">
+                The real-time tournament engine engineered for competitive Battle Royale &amp; Esports titles. Ingest match stats, calculate multi-team score matrices in &lt;50ms, and stream seamless overlays to OBS Studio.
               </p>
             </div>
           </SlideIn>
@@ -90,7 +90,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               <button
                 type="button"
                 onClick={onNavigateLogin}
-                className="relative w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2 px-7 sm:px-9 py-3.5 sm:py-4 rounded-full text-xs sm:text-sm font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-[0_8px_32px_rgba(255,208,0,0.35)] hover:shadow-[0_0_36px_rgba(255,208,0,0.55)] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer font-display uppercase tracking-wider group overflow-hidden border border-amber-300/80"
+                className="relative w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2 px-7 sm:px-9 py-3.5 sm:py-4 rounded-full text-xs sm:text-sm font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-[0_8px_32px_rgba(255,208,0,0.4)] hover:shadow-[0_0_40px_rgba(255,208,0,0.65)] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer font-display uppercase tracking-wider group overflow-hidden border border-amber-300/80"
               >
                 <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none" />
                 <Zap className="h-4 w-4 fill-black text-black group-hover:rotate-12 transition-transform duration-300 shrink-0" />
@@ -135,11 +135,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   Sub-50ms Calculation Engine
                 </h3>
                 <p className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed">
-                  Automated official 12-9-8-7 points matrix with instant tie-breakers, placement multipliers, and kill points.
+                  Automated competitive points matrix with instant tie-breakers, placement multipliers, and kill points.
                 </p>
               </div>
               <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
-                <span>Rule standard: FFWS 2026</span>
+                <span>Rule standard: Official &amp; Custom Presets</span>
                 <span className="text-[var(--accent-primary)] font-bold">Auto-Ranked</span>
               </div>
             </div>
