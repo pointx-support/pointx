@@ -218,7 +218,12 @@ describe('PointX Full-Stack API — Authentication & Security Test Suite', () =>
     );
     await request(app).post('/api/auth/verify-otp').send({ email: 'reset@pointx.gg', otp: '111222' });
 
-    // Request forgot password
+    // Request forgot password for unregistered email - must be rejected
+    const unregForgotRes = await request(app).post('/api/auth/forgot-password').send({ email: 'unregistered_nobody@pointx.gg' });
+    expect(unregForgotRes.status).toBe(404);
+    expect(unregForgotRes.body.success).toBe(false);
+
+    // Request forgot password for registered user
     const forgotRes = await request(app).post('/api/auth/forgot-password').send({ email: 'reset@pointx.gg' });
     expect(forgotRes.status).toBe(200);
     expect(forgotRes.body.success).toBe(true);

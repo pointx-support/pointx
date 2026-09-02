@@ -307,6 +307,23 @@ export async function verifySignupOtp(data: {
 export async function resendOtpCode(email: string, purpose: 'signup' | 'forgot_password'): Promise<{ success: boolean; message?: string; error?: string }> {
   const cleanEmail = email.toLowerCase().trim();
 
+  // For password resets, strictly verify that the user exists in the database first
+  if (purpose === 'forgot_password') {
+    const user = await User.findOne({ email: cleanEmail });
+    if (!user) {
+      return {
+        success: false,
+        error: 'No registered account found with this email address. Please register first.',
+      };
+    }
+    if (user.status === 'suspended') {
+      return {
+        success: false,
+        error: 'This account has been suspended. Please contact support.',
+      };
+    }
+  }
+
   const existingOtp = await OtpVerification.findOne({ email: cleanEmail, purpose, isUsed: false }).sort({ createdAt: -1 });
 
   if (existingOtp) {
@@ -456,41 +473,70 @@ export async function loginUser(data: {
   };
 }
 
-export async function forgotPasswordInitiate(email: string): Promise<{ success: boolean; message: string }> {
+export async function forgotPasswordInitiate(email: string): Promise<{ success: boolean; message: string; error?: string }> {
   const cleanEmail = email.toLowerCase().trim();
   const user = await User.findOne({ email: cleanEmail });
 
-  // Prevent account enumeration by always returning the same success message
-  if (user && user.status === 'active') {
-    const otp = generateOtp();
-    const otpHash = hashToken(otp);
-    const expiresAt = new Date(Date.now() + OTP_EXPIRATION_MS); // Exactly 5 minutes (300 seconds)
+  if (!user) {
+    return {
+      success: false,
+      error: 'No registered account found with this email address. Please register first.',
+      message: 'No registered account found with this email address.',
+    };
+  }
 
-    await OtpVerification.deleteMany({ email: cleanEmail, purpose: 'forgot_password' });
-    await OtpVerification.create({
-      email: cleanEmail,
-      otpHash,
-      purpose: 'forgot_password',
-      attempts: 0,
-      maxAttempts: 5,
-      resendCount: 0,
-      lastResentAt: new Date(),
-      expiresAt,
-      isUsed: false,
-    });
+  if (user.status === 'suspended') {
+    return {
+      success: false,
+      error: 'This account has been suspended. Please contact support.',
+      message: 'Account suspended.',
+    };
+  }
 
-    const template = getForgotPasswordEmailTemplate(user.name, otp);
-    await sendTransactionalEmail({
-      toEmail: cleanEmail,
-      toName: user.name,
-      subject: template.subject,
-      htmlContent: template.html,
-    });
+  if (user.status === 'pending_verification') {
+    return {
+      success: false,
+      error: 'This account is not yet verified. Please verify your registration OTP first.',
+      message: 'Account pending verification.',
+    };
+  }
+
+  const otp = generateOtp();
+  const otpHash = hashToken(otp);
+  const expiresAt = new Date(Date.now() + OTP_EXPIRATION_MS); // Exactly 5 minutes (300 seconds)
+
+  await OtpVerification.deleteMany({ email: cleanEmail, purpose: 'forgot_password' });
+  await OtpVerification.create({
+    email: cleanEmail,
+    otpHash,
+    purpose: 'forgot_password',
+    attempts: 0,
+    maxAttempts: 5,
+    resendCount: 0,
+    lastResentAt: new Date(),
+    expiresAt,
+    isUsed: false,
+  });
+
+  const template = getForgotPasswordEmailTemplate(user.name, otp);
+  const emailRes = await sendTransactionalEmail({
+    toEmail: cleanEmail,
+    toName: user.name,
+    subject: template.subject,
+    htmlContent: template.html,
+  });
+
+  if (!emailRes.success) {
+    return {
+      success: false,
+      error: emailRes.error || 'Failed to send password reset email. Please try again.',
+      message: 'Failed to send email.',
+    };
   }
 
   return {
     success: true,
-    message: 'If an account exists with this email address, a password reset code has been sent (valid for 5 minutes).',
+    message: `A password reset code has been sent to ${cleanEmail} (valid for 5 minutes).`,
   };
 }
 

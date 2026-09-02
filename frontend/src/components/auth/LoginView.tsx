@@ -620,7 +620,27 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </button>
             </div>
 
-            {errorMessage && <div className="auth-error-banner">{errorMessage}</div>}
+            {errorMessage && (
+              <div className="auth-error-banner space-y-2">
+                <div>{errorMessage}</div>
+                {errorMessage.toLowerCase().includes('not registered') || errorMessage.toLowerCase().includes('register first') ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSignupEmail(forgotEmail.trim());
+                      setIsForgotPasswordOpen(false);
+                      handleToggleMode(true);
+                      setIsOtpStep(false);
+                      setErrorMessage(null);
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-[var(--accent-primary)] text-black text-xs font-black hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer font-display shadow-xs mt-1"
+                  >
+                    <span>Register This Email Now</span>
+                    <Zap className="h-3.5 w-3.5 fill-black" />
+                  </button>
+                ) : null}
+              </div>
+            )}
             {successMessage && (
               <div className="p-3 rounded-xl bg-[var(--status-live)]/15 border border-[var(--status-live)]/30 text-[var(--status-live)] text-xs font-bold flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />

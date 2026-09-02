@@ -184,6 +184,9 @@ export async function forgotPassword(req: Request, res: Response, next: NextFunc
   try {
     const validated = forgotPasswordSchema.parse(req.body);
     const result = await forgotPasswordInitiate(validated.email);
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
     return res.status(200).json(result);
   } catch (error) {
     next(error);
