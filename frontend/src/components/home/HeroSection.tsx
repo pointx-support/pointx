@@ -26,21 +26,23 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       {/* ========================================================================= */}
       <section className="relative w-full min-h-screen flex flex-col items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-12 pt-24 pb-16">
         
-        {/* Cinematic Background Video with 75% Visibility */}
+        {/* Cinematic Background Video with Ultra-Clear Visibility */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
           <video
             autoPlay
             loop
             muted
             playsInline
-            className="w-full h-full object-cover opacity-70 dark:opacity-75 filter saturate-115 contrast-105 transition-opacity duration-700"
+            className="w-full h-full object-cover opacity-90 dark:opacity-95 filter saturate-110 contrast-105 brightness-105 transition-opacity duration-700"
           >
             <source src="/bgvideo.mp4" type="video/mp4" />
           </video>
 
-          {/* Theme-Adaptive Subtle Backdrop Gradients to keep 75% video clear */}
-          <div className="absolute inset-0 bg-gradient-to-b from-[var(--bg-base)]/40 via-[var(--bg-base)]/25 to-[var(--bg-base)]/90 dark:from-[#0B0C0E]/45 dark:via-[#0B0C0E]/25 dark:to-[#0B0C0E]/95" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_85%_65%_at_50%_35%,transparent_35%,var(--bg-base)_95%)]" />
+          {/* Minimal Transparent Scrim for Text Contrast */}
+          <div className="absolute inset-0 bg-black/20 dark:bg-black/25 pointer-events-none" />
+
+          {/* Small Compact Bottom Fade Effect */}
+          <div className="absolute bottom-0 left-0 right-0 h-20 sm:h-28 bg-gradient-to-t from-[var(--bg-base)] via-[var(--bg-base)]/50 to-transparent pointer-events-none" />
         </div>
 
         {/* Ambient Glows */}
