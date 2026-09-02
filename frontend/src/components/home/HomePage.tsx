@@ -42,6 +42,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         {/* Section 1: Hero Section */}
         <HeroSection
           onNavigateLogin={onNavigateLogin}
+          onNavigateDashboard={onNavigateDashboard}
         />
 
         {/* Section 2: Live Gaming Energy Telemetry & Ticker */}
