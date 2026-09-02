@@ -5,7 +5,9 @@ import {
   Moon,
   Sun,
   ChevronDown,
-  Shield
+  Shield,
+  ArrowLeft,
+  Home
 } from 'lucide-react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useAuthStore } from '../../store/authStore';
@@ -18,12 +20,14 @@ export interface NavbarProps {
   viewMode?: 'command-center' | 'workspace' | 'admin-dashboard';
   onBackToDashboard?: () => void;
   onOpenAdminDashboard?: () => void;
+  onNavigateHome?: () => void;
 }
 
 export const Navbar: FC<NavbarProps> = ({
   viewMode = 'command-center',
   onBackToDashboard,
-  onOpenAdminDashboard
+  onOpenAdminDashboard,
+  onNavigateHome,
 }) => {
   const { currentTournament } = useTournamentStore();
   const { user, theme, toggleTheme, logout } = useAuthStore();
@@ -99,7 +103,7 @@ export const Navbar: FC<NavbarProps> = ({
                 </div>
               </div>
             ) : viewMode === 'admin-dashboard' ? (
-              /* Admin Control Center Header */
+              /* Admin Control Center Header with Back Button */
               <div className="flex items-center gap-2 sm:gap-3 min-w-0 border-l border-[var(--border-subtle)] pl-3.5">
                 <div className="flex items-center gap-2 min-w-0">
                   <Shield className="h-4 w-4 text-[var(--accent-primary)] shrink-0" />
@@ -110,6 +114,18 @@ export const Navbar: FC<NavbarProps> = ({
                     GOVERNANCE
                   </Badge>
                 </div>
+
+                {onBackToDashboard && (
+                  <button
+                    type="button"
+                    onClick={onBackToDashboard}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-raised)] hover:bg-[var(--bg-surface-hover)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer shadow-xs ml-1 sm:ml-3 font-mono"
+                    title="Return to Main Dashboard"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5 text-[var(--accent-primary)]" />
+                    <span className="hidden sm:inline">Back to Dashboard</span>
+                  </button>
+                )}
               </div>
             ) : (
               /* Command Center Subtitle */
@@ -124,8 +140,21 @@ export const Navbar: FC<NavbarProps> = ({
             )}
           </div>
 
-        {/* Right: Theme Toggle & User Profile */}
+        {/* Right: Landing Page Link, Theme Toggle & User Profile */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 ml-3">
+          {/* View Landing Page Button for Logged-In Users */}
+          {onNavigateHome && (
+            <button
+              type="button"
+              onClick={onNavigateHome}
+              className="glass-nav-item hidden md:flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] shadow-sm cursor-pointer hover:bg-[var(--bg-surface-hover)] transition-all"
+              title="View Public Landing Page"
+            >
+              <Home className="h-3.5 w-3.5 text-[var(--accent-primary)]" />
+              <span>Landing Page</span>
+            </button>
+          )}
+
           {/* Theme Quick Toggle Button */}
           <button
             onClick={toggleTheme}
@@ -168,6 +197,21 @@ export const Navbar: FC<NavbarProps> = ({
                     </div>
                     <div className="text-xs text-[var(--text-secondary)] font-mono truncate mt-0.5">{user.email}</div>
                   </div>
+
+                  {/* View Landing Page Option */}
+                  {onNavigateHome && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDropdownOpen(false);
+                        onNavigateHome();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-all text-left cursor-pointer font-semibold"
+                    >
+                      <Home className="h-4 w-4 text-[var(--accent-primary)]" />
+                      <span>View Landing Page</span>
+                    </button>
+                  )}
 
                   {/* Switch Role Button - Exclusively for Admins */}
                   {(user.role === 'admin' || (user as any).isOriginalAdmin) && (

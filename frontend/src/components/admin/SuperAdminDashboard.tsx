@@ -343,8 +343,19 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               </div>
             </div>
           ) : (
-            <div className="hidden lg:flex items-center gap-2.5">
-              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20 text-[var(--accent-primary)] text-xs font-mono font-bold uppercase tracking-wider">
+            <div className="flex items-center gap-2.5">
+              {onExitAdmin && (
+                <button
+                  type="button"
+                  onClick={onExitAdmin}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-raised)] hover:bg-[var(--bg-surface-hover)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer shadow-xs font-mono"
+                  title="Back to Dashboard"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5 text-[var(--accent-primary)]" />
+                  <span>Back to Dashboard</span>
+                </button>
+              )}
+              <div className="hidden lg:flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20 text-[var(--accent-primary)] text-xs font-mono font-bold uppercase tracking-wider">
                 <ShieldCheck className="h-4 w-4" />
                 <span>Governance Control Room</span>
               </div>

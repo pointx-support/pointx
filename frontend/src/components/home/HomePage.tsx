@@ -39,10 +39,9 @@ export const HomePage: React.FC<HomePageProps> = ({
 
       {/* Page Content */}
       <main className="flex-1 w-full">
-        {/* Section 1: Minimal Hero with Full-Screen Cinematic Video (LOCKED & UNTOUCHED) */}
+        {/* Section 1: Hero Section */}
         <HeroSection
           onNavigateLogin={onNavigateLogin}
-          onNavigateSignup={onNavigateSignup}
         />
 
         {/* Section 2: Live Gaming Energy Telemetry & Ticker */}
@@ -50,7 +49,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
         {/* Section 3: Tournament Showcase & Championship Brackets */}
         <TournamentShowcase
-          onNavigateSignup={onNavigateSignup}
+          onNavigateSignup={onNavigateLogin}
           onNavigateLogin={onNavigateLogin}
         />
 
@@ -61,17 +60,17 @@ export const HomePage: React.FC<HomePageProps> = ({
         <PlatformFeatures />
 
         {/* Section 6: Multi-Title Supported Games */}
-        <FeaturedGames onNavigateSignup={onNavigateSignup} />
+        <FeaturedGames onNavigateSignup={onNavigateLogin} />
 
         {/* Section 7: Tournament Organizer Production Workflow */}
         <OrganizerExperience
-          onNavigateSignup={onNavigateSignup}
+          onNavigateSignup={onNavigateLogin}
           onNavigateLogin={onNavigateLogin}
         />
 
         {/* Section 8: Dramatic Final Call to Action */}
         <FinalCTA
-          onNavigateSignup={onNavigateSignup}
+          onNavigateSignup={onNavigateLogin}
           onNavigateLogin={onNavigateLogin}
         />
       </main>

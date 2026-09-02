@@ -252,12 +252,12 @@ export function App() {
       );
     }
 
-    // Default public landing page
+    // Default public landing page (Always takes user strictly to signin page)
     return (
       <ToastProvider>
         <HomePage
           onNavigateLogin={() => navigateTo('login')}
-          onNavigateSignup={() => navigateTo('signup')}
+          onNavigateSignup={() => navigateTo('login')}
           onNavigateDashboard={() => navigateTo('command-center', '/dashboard')}
         />
       </ToastProvider>
@@ -273,13 +273,13 @@ export function App() {
     );
   }
 
-  // 4. Authenticated Home Page Viewing (if user navigated to home from console)
+  // 4. Authenticated Home Page Viewing (if logged-in user navigates to landing page)
   if (viewMode === 'home') {
     return (
       <ToastProvider>
         <HomePage
-          onNavigateLogin={() => navigateTo('login')}
-          onNavigateSignup={() => navigateTo('signup')}
+          onNavigateLogin={() => navigateTo('command-center', '/dashboard')}
+          onNavigateSignup={() => navigateTo('command-center', '/dashboard')}
           onNavigateDashboard={() => navigateTo('command-center', '/dashboard')}
         />
       </ToastProvider>
@@ -300,6 +300,7 @@ export function App() {
           viewMode={viewMode}
           onBackToDashboard={() => navigateTo('command-center')}
           onOpenAdminDashboard={() => navigateTo('admin-dashboard')}
+          onNavigateHome={() => navigateTo('home')}
         />
 
         {/* Main Body Container with balanced widescreen proportions */}
