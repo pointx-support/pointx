@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { User, UserSession, AuditActivity, UserPreferences } from '../types/auth';
 import { authApi, userApi, setStoredToken, getStoredToken } from '../services/api';
+import { useTournamentStore } from './tournamentStore';
 
 const AUTH_STORAGE_KEY = 'pointx_auth_session_v1';
 const ACTIVITIES_STORAGE_KEY = 'pointx_audit_activities_v1';
@@ -141,6 +142,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         });
 
         applyThemeToDOM(normalizedTheme);
+        useTournamentStore.getState().sanitizeTournamentsForRole(enrichedUser.role);
       } else {
         setStoredToken(null);
         set({ user: null, isAuthenticated: false, sessionToken: null });
@@ -216,6 +218,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
           });
 
           applyThemeToDOM(normalizedTheme);
+          useTournamentStore.getState().sanitizeTournamentsForRole(enrichedUser.role);
           get().recordActivity('User Login', 'security', `Signed in as ${user.email} (${user.role})`);
         }
         return { success: true };
@@ -389,12 +392,14 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     setStoredToken(null);
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.removeItem(AUTH_STORAGE_KEY);
+      window.localStorage.removeItem('pointx_tournaments_state');
     }
     set({
       user: null,
       isAuthenticated: false,
       sessionToken: null
     });
+    useTournamentStore.getState().clearAllTournaments();
   },
 
   updateProfile: async (data) => {

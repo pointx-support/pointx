@@ -87,6 +87,12 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
     return () => clearInterval(interval);
   }, []);
 
+  React.useEffect(() => {
+    if (user && user.role !== 'admin') {
+      useTournamentStore.getState().sanitizeTournamentsForRole(user.role);
+    }
+  }, [user?.role]);
+
   // Modal / Wizard Triggers
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [cloningTournament, setCloningTournament] = useState<Tournament | null>(null);

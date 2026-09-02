@@ -45,6 +45,7 @@ export interface AppState {
   deleteTournament: (tournamentId: string) => void;
   loadDemoTournaments: () => void;
   clearAllTournaments: () => void;
+  sanitizeTournamentsForRole: (role?: string) => void;
   
   // Active Tournament Shortcuts
   setTournament: (tournament: Tournament) => void;
@@ -531,6 +532,29 @@ export const useTournamentStore = create<AppState>((set, get) => ({
       activeTournamentId: '',
       currentTournament: DEMO_TOURNAMENTS[0]
     });
+  },
+
+  sanitizeTournamentsForRole: (role?: string) => {
+    const isAdmin = role === 'admin';
+    if (!isAdmin) {
+      set((state) => {
+        const nonDemo = state.tournaments.filter(
+          (t) =>
+            t.id !== 'tour-ff-champ-2026' &&
+            t.id !== 'tour-ff-night-scrims' &&
+            t.id !== 'tour-ff-summer-finals' &&
+            !t.id.startsWith('tour-demo-')
+        );
+        const activeId = nonDemo.length > 0 ? nonDemo[0].id : '';
+        const current = nonDemo.length > 0 ? nonDemo[0] : DEMO_TOURNAMENTS[0];
+        persistTournaments(nonDemo);
+        return {
+          tournaments: nonDemo,
+          activeTournamentId: activeId,
+          currentTournament: current
+        };
+      });
+    }
   },
 
   setTournament: (tournament) => {

@@ -22,7 +22,7 @@ export function App() {
   
   // Dynamic Route & View Mode Resolution
   const [viewMode, setViewMode] = useState<'home' | 'command-center' | 'workspace' | 'admin-dashboard'>(() => {
-    if (typeof window === 'undefined') return 'command-center';
+    if (typeof window === 'undefined') return 'home';
     const path = window.location.pathname.toLowerCase();
     if (path.startsWith('/admin') || path.startsWith('/super-admin')) {
       return 'admin-dashboard';
@@ -32,6 +32,9 @@ export function App() {
     }
     if (path.startsWith('/dashboard') || path.startsWith('/tournaments')) {
       return 'command-center';
+    }
+    if (path === '/' || path === '') {
+      return 'home';
     }
     return 'command-center';
   });
@@ -116,6 +119,8 @@ export function App() {
         setViewMode('workspace');
       } else if (path.startsWith('/dashboard') || path.startsWith('/tournaments')) {
         setViewMode('command-center');
+      } else if (path === '/' || path === '') {
+        setViewMode('home');
       }
     } else {
       // If unauthenticated and on /admin, show login
@@ -148,11 +153,8 @@ export function App() {
       } else if (path.startsWith('/dashboard') || path.startsWith('/tournaments')) {
         setViewMode('command-center');
       } else if (path === '/' || path === '') {
-        if (isAuthenticated) {
-          setViewMode('command-center');
-        } else {
-          setPublicRoute('home');
-        }
+        setViewMode('home');
+        setPublicRoute('home');
       }
     };
 
