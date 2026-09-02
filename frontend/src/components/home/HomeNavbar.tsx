@@ -175,21 +175,22 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
             <button
               type="button"
               onClick={onNavigateDashboard}
-              className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[var(--bg-surface-raised)] hover:bg-[var(--bg-surface-hover)] border border-[var(--accent-primary)]/40 hover:border-[var(--accent-primary)] text-[var(--text-primary)] hover:text-[var(--accent-primary)] shadow-sm transition-all duration-200 cursor-pointer font-display uppercase tracking-wider group active:scale-[0.98]"
+              className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full sm:rounded-xl text-[11px] sm:text-sm font-bold bg-[var(--bg-surface-raised)] hover:bg-[var(--bg-surface-hover)] border border-[var(--accent-primary)]/40 hover:border-[var(--accent-primary)] text-[var(--text-primary)] hover:text-[var(--accent-primary)] shadow-sm transition-all duration-200 cursor-pointer font-display uppercase tracking-wider group active:scale-[0.98]"
             >
-              <LayoutDashboard className="h-4 w-4 text-[var(--accent-primary)] group-hover:scale-110 transition-transform" />
+              <LayoutDashboard className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--accent-primary)] group-hover:scale-110 transition-transform shrink-0" />
               <span>Console</span>
-              <ArrowRight className="h-3.5 w-3.5 text-[var(--accent-primary)] group-hover:translate-x-0.5 transition-transform" />
+              <ArrowRight className="hidden sm:inline h-3.5 w-3.5 text-[var(--accent-primary)] group-hover:translate-x-0.5 transition-transform" />
             </button>
           ) : (
-            /* Public Sign In CTA */
+            /* Public Sign In CTA - Capsule shape on mobile */
             <button
               type="button"
               onClick={onNavigateLogin}
-              className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-sm hover:shadow-[0_0_20px_rgba(255,208,0,0.4)] hover:brightness-105 active:scale-[0.98] transition-all duration-200 cursor-pointer font-display uppercase tracking-wider border border-amber-300/60 group"
+              className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full sm:rounded-xl text-[11px] sm:text-sm font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-sm hover:shadow-[0_0_20px_rgba(255,208,0,0.4)] hover:brightness-105 active:scale-[0.98] transition-all duration-200 cursor-pointer font-display uppercase tracking-wider border border-amber-300/60 group"
             >
-              <LogIn className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-              <span>Organizer Sign In</span>
+              <LogIn className="h-3.5 w-3.5 sm:h-4 sm:w-4 group-hover:translate-x-0.5 transition-transform shrink-0" />
+              <span className="hidden sm:inline">Organizer Sign In</span>
+              <span className="sm:hidden">Sign In</span>
             </button>
           )}
 

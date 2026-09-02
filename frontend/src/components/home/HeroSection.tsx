@@ -22,25 +22,25 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     <div className="relative w-full overflow-hidden bg-[var(--bg-base)] transition-colors duration-300">
       
       {/* ========================================================================= */}
-      {/* 1. HERO VIEWPORT WITH FADED BACKGROUND VIDEO                              */}
+      {/* 1. HERO VIEWPORT WITH FADED BACKGROUND VIDEO (100% Viewport Isolated)     */}
       {/* ========================================================================= */}
-      <section className="relative w-full min-h-[85vh] sm:min-h-[90vh] flex flex-col items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-12 pt-28 pb-20">
+      <section className="relative w-full min-h-screen flex flex-col items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-12 pt-24 pb-16">
         
-        {/* Cinematic Faded Background Video */}
+        {/* Cinematic Background Video with 75% Visibility */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
           <video
             autoPlay
             loop
             muted
             playsInline
-            className="w-full h-full object-cover opacity-20 dark:opacity-30 filter saturate-110 contrast-105 transition-opacity duration-700"
+            className="w-full h-full object-cover opacity-70 dark:opacity-75 filter saturate-115 contrast-105 transition-opacity duration-700"
           >
             <source src="/bgvideo.mp4" type="video/mp4" />
           </video>
 
-          {/* Theme-Adaptive Faded Backdrop Gradients */}
-          <div className="absolute inset-0 bg-gradient-to-b from-[var(--bg-base)]/80 via-[var(--bg-base)]/65 to-[var(--bg-base)] dark:from-[#0B0C0E]/85 dark:via-[#0B0C0E]/70 dark:to-[#0B0C0E]" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_35%,transparent_20%,var(--bg-base)_95%)]" />
+          {/* Theme-Adaptive Subtle Backdrop Gradients to keep 75% video clear */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[var(--bg-base)]/40 via-[var(--bg-base)]/25 to-[var(--bg-base)]/90 dark:from-[#0B0C0E]/45 dark:via-[#0B0C0E]/25 dark:to-[#0B0C0E]/95" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_85%_65%_at_50%_35%,transparent_35%,var(--bg-base)_95%)]" />
         </div>
 
         {/* Ambient Glows */}
