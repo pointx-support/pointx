@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { Tournament } from '../models/Tournament';
 
 const router = Router();
 
@@ -17,6 +18,9 @@ export interface TournamentSyncState {
   connectedDevices: RemoteDeviceSession[];
   blockedDeviceIds: string[];
   timestamp: number;
+  squads?: any;
+  highlightedTeamId?: string | null;
+  isVisible?: boolean;
   [key: string]: any;
 }
 
@@ -30,15 +34,33 @@ function getOrCreateSyncState(tournamentId: string): TournamentSyncState {
       connectedDevices: [],
       blockedDeviceIds: [],
       timestamp: Date.now(),
+      isVisible: true,
     };
   }
   return syncStore[tournamentId];
 }
 
 // 1. Get Live State for OBS and Remote
-router.get('/state', (req: Request, res: Response) => {
+router.get('/state', async (req: Request, res: Response) => {
   const tournamentId = (req.query.tournamentId as string) || 'default';
   const state = getOrCreateSyncState(tournamentId);
+
+  // If in-memory tournament is not loaded, try fetching from database
+  if (!state.tournament && tournamentId !== 'default') {
+    try {
+      const idQueries: any[] = [{ customId: tournamentId }];
+      if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
+        idQueries.push({ _id: tournamentId });
+      }
+      const doc = await Tournament.findOne({ $or: idQueries }).lean();
+      if (doc) {
+        state.tournament = {
+          ...doc,
+          id: doc.customId || String(doc._id),
+        };
+      }
+    } catch {}
+  }
 
   // Filter out inactive devices older than 5 minutes
   const now = Date.now();
@@ -49,7 +71,7 @@ router.get('/state', (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     data: state,
-    timestamp: Date.now(),
+    timestamp: state.timestamp || Date.now(),
   });
 });
 
@@ -67,6 +89,18 @@ router.post('/state', (req: Request, res: Response) => {
     blockedDeviceIds: body.blockedDeviceIds || state.blockedDeviceIds || [],
     timestamp: Date.now(),
   };
+
+  // Optional background persist to database if full tournament object is provided
+  if (body.tournament && tourId !== 'default') {
+    const idQueries: any[] = [{ customId: tourId }];
+    if (tourId.match(/^[0-9a-fA-F]{24}$/)) {
+      idQueries.push({ _id: tourId });
+    }
+    Tournament.updateOne(
+      { $or: idQueries },
+      { $set: { matches: body.tournament.matches, teams: body.tournament.teams, status: body.tournament.status || 'Live' } }
+    ).catch(() => {});
+  }
 
   res.status(200).json({
     success: true,

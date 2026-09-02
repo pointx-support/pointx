@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Tournament, TeamMatchResult } from '../../types/tournament';
+import type { Tournament, TeamMatchResult, Match } from '../../types/tournament';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { calculateTournamentStandings } from '../../engine/standingsEngine';
 import {
@@ -326,7 +326,31 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
     return null;
   });
 
-  const activeMatch = tournament.matches[0] || { id: 'm1', matchNumber: 1, mapName: 'Bermuda', results: [] as any };
+  const activeMatch: Match = React.useMemo(() => {
+    if (tournament.matches && tournament.matches.length > 0) {
+      return tournament.matches[0];
+    }
+    const now = new Date().toISOString();
+    return {
+      id: `m_${tournament.id}_1`,
+      tournamentId: tournament.id,
+      matchNumber: 1,
+      mapName: 'Bermuda',
+      status: 'Live' as const,
+      createdAt: now,
+      updatedAt: now,
+      results: tournament.teams.map((t, idx) => ({
+        teamId: t.id,
+        placement: (tournament.teams.length || 12) - idx,
+        kills: 0,
+        placementPoints: 0,
+        killPoints: 0,
+        totalPoints: 0,
+        isBooyah: false
+      }))
+    };
+  }, [tournament.matches, tournament.teams, tournament.id]);
+
   const standings = calculateTournamentStandings(tournament);
 
   // Calculate highest kills across all teams (min 4 for pure fire burn streak activation)
@@ -336,7 +360,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const openMatchReportModal = () => {
     const initialData: Record<string, { placement: number; kills: number; bonus: number; penalty: number }> = {};
     tournament.teams.forEach((team, idx) => {
-      const res = activeMatch?.results.find((r) => r.teamId === team.id);
+      const res = activeMatch?.results.find((r: TeamMatchResult) => r.teamId === team.id);
       const elimIndex = eliminationOrder.indexOf(team.id);
 
       let placement = res?.placement || (12 - idx);
@@ -399,7 +423,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
     const isOnlyOneAlive = aliveSquads.length === 1 && totalTeamsCount > 1;
     const booyahTeamId = isOnlyOneAlive ? aliveSquads[0].id : null;
 
-    const updatedResults = activeMatch.results.map((r) => {
+    const updatedResults = activeMatch.results.map((r: TeamMatchResult) => {
       let placement = r.placement || 12;
 
       if (booyahTeamId && r.teamId === booyahTeamId) {
@@ -426,11 +450,15 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
     updateMatchResults(tournament.id, activeMatch.id, updatedResults as any);
 
+    const matchesList = tournament.matches && tournament.matches.length > 0
+      ? tournament.matches.map((m) =>
+          m.id === activeMatch.id ? { ...m, results: updatedResults as any } : m
+        )
+      : [{ ...activeMatch, results: updatedResults as any }];
+
     const updatedTour = {
       ...tournament,
-      matches: tournament.matches.map((m) =>
-        m.id === activeMatch.id ? { ...m, results: updatedResults as any } : m
-      )
+      matches: matchesList
     };
     setTournament(updatedTour);
     broadcastTournamentUpdate(updatedTour);
@@ -545,10 +573,10 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const handleAdjustKills = (teamId: string, delta: number) => {
     if (!activeMatch) return;
 
-    const currentResult = activeMatch.results.find((r) => r.teamId === teamId);
+    const currentResult = activeMatch.results.find((r: TeamMatchResult) => r.teamId === teamId);
     const newKills = Math.max(0, (currentResult?.kills || 0) + delta);
 
-    const updatedResults = activeMatch.results.map((r) => {
+    const updatedResults = activeMatch.results.map((r: TeamMatchResult) => {
       if (r.teamId === teamId) {
         const placePts = PLACEMENT_POINTS_MAP[r.placement || 12] ?? 0;
         return {
@@ -563,11 +591,15 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
     updateMatchResults(tournament.id, activeMatch.id, updatedResults as any);
     
+    const matchesList = tournament.matches && tournament.matches.length > 0
+      ? tournament.matches.map((m) =>
+          m.id === activeMatch.id ? { ...m, results: updatedResults as any } : m
+        )
+      : [{ ...activeMatch, results: updatedResults as any }];
+
     const updatedTour = {
       ...tournament,
-      matches: tournament.matches.map((m) =>
-        m.id === activeMatch.id ? { ...m, results: updatedResults as any } : m
-      )
+      matches: matchesList
     };
     setTournament(updatedTour);
     broadcastTournamentUpdate(updatedTour);
@@ -577,7 +609,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const executeAddPointToAllTeams = () => {
     if (!activeMatch) return;
 
-    const updatedResults = activeMatch.results.map((r) => {
+    const updatedResults = activeMatch.results.map((r: TeamMatchResult) => {
       const newKills = (r.kills || 0) + 1;
       const placePts = PLACEMENT_POINTS_MAP[r.placement || 12] ?? 0;
       return {
@@ -590,11 +622,15 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
     updateMatchResults(tournament.id, activeMatch.id, updatedResults as any);
 
+    const matchesList = tournament.matches && tournament.matches.length > 0
+      ? tournament.matches.map((m) =>
+          m.id === activeMatch.id ? { ...m, results: updatedResults as any } : m
+        )
+      : [{ ...activeMatch, results: updatedResults as any }];
+
     const updatedTour = {
       ...tournament,
-      matches: tournament.matches.map((m) =>
-        m.id === activeMatch.id ? { ...m, results: updatedResults as any } : m
-      )
+      matches: matchesList
     };
     setTournament(updatedTour);
     broadcastTournamentUpdate(updatedTour);
@@ -1157,7 +1193,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   function renderTeamCard(team: any) {
     const squad = squadStates[team.id] || ['alive', 'alive', 'alive', 'alive'];
     const isHighlighted = highlightedTeamId === team.id;
-    const matchResult = activeMatch?.results.find((r) => r.teamId === team.id);
+    const matchResult = activeMatch?.results.find((r: TeamMatchResult) => r.teamId === team.id);
     const kills = matchResult?.kills || 0;
 
     const aliveCount = squad.filter((p) => p === 'alive').length;

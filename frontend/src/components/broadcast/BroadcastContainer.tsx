@@ -27,7 +27,8 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
     return typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   }, []);
 
-  const requestedTourId = urlParams?.get('tournamentId') || urlParams?.get('tournament');
+  const requestedTourId = urlParams?.get('tournamentId') || urlParams?.get('tournament') || '';
+  const effectiveTourId = requestedTourId || store.currentTournament.id || 'default';
 
   const initialTournament = useMemo(() => {
     if (requestedTourId && requestedTourId !== store.currentTournament.id) {
@@ -49,9 +50,32 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
   const targetMatchNumber = urlParams?.get('match') ? Number(urlParams.get('match')) : undefined;
 
   useEffect(() => {
-    // Subscribe to cross-tab / cross-process real-time IPC updates
+    // Initial fetch from backend sync & tournament API
+    const loadInitialState = async () => {
+      try {
+        const res = await fetch(`/api/sync/state?tournamentId=${effectiveTourId}`);
+        const data = await res.json();
+        if (data?.data?.tournament) {
+          setTournament(data.data.tournament);
+          setLastSyncTime(Date.now());
+          setIsConnected(true);
+        } else if (effectiveTourId && effectiveTourId !== 'default') {
+          const tourRes = await fetch(`/api/tournaments/${effectiveTourId}`);
+          const tourData = await tourRes.json();
+          if (tourData?.data) {
+            setTournament(tourData.data);
+            setLastSyncTime(Date.now());
+            setIsConnected(true);
+          }
+        }
+      } catch {}
+    };
+
+    loadInitialState();
+
+    // Subscribe to cross-tab / cross-network real-time updates
     const unsubscribe = subscribeToTournamentLiveUpdates(
-      tournament.id,
+      effectiveTourId,
       (updatedTournament) => {
         setTournament(updatedTournament);
         setLastSyncTime(Date.now());
@@ -66,7 +90,7 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
     return () => {
       unsubscribe();
     };
-  }, [tournament.id]);
+  }, [effectiveTourId]);
 
   const standings = calculateTournamentStandings(tournament);
 

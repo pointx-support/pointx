@@ -104,6 +104,25 @@ export function subscribeToTournamentLiveUpdates(
   onHeartbeat?: () => void
 ): () => void {
   let lastTimestamp = 0;
+  let lastTournamentHash = '';
+
+  const processTournamentUpdate = (tour: Tournament, ts?: number) => {
+    if (!tour || !tour.id) return;
+    const currentHash = JSON.stringify({
+      id: tour.id,
+      matches: tour.matches,
+      teams: tour.teams,
+      title: tour.title,
+      status: tour.status
+    });
+
+    if (currentHash !== lastTournamentHash || (ts && ts > lastTimestamp)) {
+      lastTournamentHash = currentHash;
+      lastTimestamp = ts || Date.now();
+      onUpdate(tour);
+      if (onHeartbeat) onHeartbeat();
+    }
+  };
 
   // Initial load from network API on mount
   if (typeof window !== 'undefined') {
@@ -111,9 +130,7 @@ export function subscribeToTournamentLiveUpdates(
       .then((res) => res.json())
       .then((res) => {
         if (res?.data?.tournament) {
-          lastTimestamp = res.data.timestamp || Date.now();
-          onUpdate(res.data.tournament);
-          if (onHeartbeat) onHeartbeat();
+          processTournamentUpdate(res.data.tournament, res.data.timestamp);
         }
       })
       .catch(() => {
@@ -124,13 +141,13 @@ export function subscribeToTournamentLiveUpdates(
           window.localStorage.getItem('strikz_live_default');
         if (stored) {
           try {
-            onUpdate(JSON.parse(stored));
+            processTournamentUpdate(JSON.parse(stored));
           } catch {}
         }
       });
   }
 
-  // BroadcastChannel listener
+  // BroadcastChannel listener (Instant tab-to-tab)
   const handleBroadcastMessage = (event: MessageEvent) => {
     if (
       event.data &&
@@ -138,9 +155,7 @@ export function subscribeToTournamentLiveUpdates(
       (!tournamentId || !event.data.tournamentId || event.data.tournamentId === tournamentId || event.data.tournamentId === 'all') &&
       event.data.data
     ) {
-      lastTimestamp = event.data.timestamp || Date.now();
-      onUpdate(event.data.data);
-      if (onHeartbeat) onHeartbeat();
+      processTournamentUpdate(event.data.data, event.data.timestamp);
     }
   };
 
@@ -168,8 +183,7 @@ export function subscribeToTournamentLiveUpdates(
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          onUpdate(parsed);
-          if (onHeartbeat) onHeartbeat();
+          processTournamentUpdate(parsed);
         } catch {
           console.warn('Error parsing storage update');
         }
@@ -181,20 +195,18 @@ export function subscribeToTournamentLiveUpdates(
     window.addEventListener('storage', handleStorageEvent);
   }
 
-  // LAN Network Polling fallback every 500ms
+  // Multi-Network Online Polling every 250ms
   const pollInterval = setInterval(() => {
     if (typeof window === 'undefined') return;
     fetch(`/api/sync/state?tournamentId=${tournamentId}`)
       .then((res) => res.json())
       .then((res) => {
-        if (res?.data?.tournament && res.data.timestamp > lastTimestamp) {
-          lastTimestamp = res.data.timestamp;
-          onUpdate(res.data.tournament);
-          if (onHeartbeat) onHeartbeat();
+        if (res?.data?.tournament) {
+          processTournamentUpdate(res.data.tournament, res.data.timestamp);
         }
       })
       .catch(() => {});
-  }, 500);
+  }, 250);
 
   return () => {
     clearInterval(pollInterval);
@@ -262,6 +274,22 @@ export function subscribeToLiveSquadUpdates(
   onUpdate: (data: LiveSquadSyncState) => void
 ): () => void {
   let lastTimestamp = 0;
+  let lastSquadHash = '';
+
+  const processSquadUpdate = (data: LiveSquadSyncState) => {
+    if (!data) return;
+    const currentHash = JSON.stringify({
+      squads: data.squads,
+      highlightedTeamId: data.highlightedTeamId,
+      isVisible: data.isVisible !== undefined ? data.isVisible : true
+    });
+
+    if (currentHash !== lastSquadHash || (data.timestamp && data.timestamp > lastTimestamp)) {
+      lastSquadHash = currentHash;
+      lastTimestamp = data.timestamp || Date.now();
+      onUpdate(data);
+    }
+  };
 
   // Initial load from network API on mount
   if (typeof window !== 'undefined') {
@@ -269,13 +297,12 @@ export function subscribeToLiveSquadUpdates(
       .then((res) => res.json())
       .then((res) => {
         if (res?.data?.squads || res?.data?.isVisible !== undefined) {
-          lastTimestamp = res.data.timestamp || Date.now();
-          onUpdate({
+          processSquadUpdate({
             tournamentId,
             squads: res.data.squads,
             highlightedTeamId: res.data.highlightedTeamId,
             isVisible: res.data.isVisible !== undefined ? res.data.isVisible : true,
-            timestamp: lastTimestamp
+            timestamp: res.data.timestamp || Date.now()
           });
         }
       })
@@ -287,7 +314,7 @@ export function subscribeToLiveSquadUpdates(
           window.localStorage.getItem('strikz_squads_default');
         if (stored) {
           try {
-            onUpdate(JSON.parse(stored));
+            processSquadUpdate(JSON.parse(stored));
           } catch {}
         }
       });
@@ -300,8 +327,7 @@ export function subscribeToLiveSquadUpdates(
       (!tournamentId || !event.data.tournamentId || event.data.tournamentId === tournamentId || event.data.tournamentId === 'all') &&
       event.data.data
     ) {
-      lastTimestamp = event.data.timestamp || Date.now();
-      onUpdate(event.data.data);
+      processSquadUpdate(event.data.data);
     }
   };
 
@@ -328,7 +354,7 @@ export function subscribeToLiveSquadUpdates(
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          onUpdate(parsed);
+          processSquadUpdate(parsed);
         } catch {
           console.warn('Error parsing storage squad update');
         }
@@ -340,25 +366,24 @@ export function subscribeToLiveSquadUpdates(
     window.addEventListener('storage', handleStorageEvent);
   }
 
-  // LAN Network Polling fallback every 400ms
+  // Multi-Network Online Polling every 250ms
   const pollInterval = setInterval(() => {
     if (typeof window === 'undefined') return;
     fetch(`/api/sync/state?tournamentId=${tournamentId}`)
       .then((res) => res.json())
       .then((res) => {
-        if (res?.data && res.data.timestamp > lastTimestamp) {
-          lastTimestamp = res.data.timestamp;
-          onUpdate({
+        if (res?.data?.squads || res?.data?.isVisible !== undefined) {
+          processSquadUpdate({
             tournamentId,
             squads: res.data.squads,
             highlightedTeamId: res.data.highlightedTeamId,
             isVisible: res.data.isVisible !== undefined ? res.data.isVisible : true,
-            timestamp: lastTimestamp
+            timestamp: res.data.timestamp || Date.now()
           });
         }
       })
       .catch(() => {});
-  }, 400);
+  }, 250);
 
   return () => {
     clearInterval(pollInterval);
