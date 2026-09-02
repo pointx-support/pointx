@@ -393,7 +393,33 @@ export function getPasswordChangedConfirmationEmailTemplate(name: string): { sub
     ],
     ctaText: 'Go to PointX',
     ctaUrl: POINTX_OFFICIAL_URL,
-    disclaimerText: 'If you did NOT perform this change, please immediately contact support@pointx.gg.',
+    disclaimerText: 'If you did NOT perform this change, please immediately contact support@pointx.in.',
+  });
+  return { subject, html };
+}
+
+export function getSupportTicketEmailTemplate(ticket: {
+  senderName: string;
+  senderEmail: string;
+  organizationName?: string;
+  category?: string;
+  subject: string;
+  message: string;
+  tournamentTitle?: string;
+}): { subject: string; html: string } {
+  const subject = `[PointX Support Ticket] ${ticket.category ? `[${ticket.category}] ` : ''}${ticket.subject}`;
+  const html = renderPointXEmailLayout({
+    title: 'New Organizer Support Query',
+    recipientName: 'PointX Admin Team',
+    bodyParagraphs: [
+      `A new support inquiry was submitted by <strong>${ticket.senderName}</strong> (&lt;${ticket.senderEmail}&gt;)${ticket.organizationName ? ` from <strong>${ticket.organizationName}</strong>` : ''}.`,
+      `<strong>Topic:</strong> ${ticket.category || 'General Support'}<br/><strong>Subject:</strong> ${ticket.subject}`,
+      `<strong>Message Details:</strong><br/><div style="background-color: #f8fafc; border-left: 4px solid #ffd000; padding: 14px 18px; margin: 12px 0; font-family: inherit; font-size: 14px; line-height: 1.6; color: #1e293b; border-radius: 4px;">${ticket.message.replace(/\n/g, '<br/>')}</div>`,
+      `<strong>Submitted at:</strong> ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST)`
+    ],
+    ctaText: `Reply Directly to ${ticket.senderName}`,
+    ctaUrl: `mailto:${ticket.senderEmail}?subject=Re: ${encodeURIComponent(ticket.subject)}`,
+    disclaimerText: 'This message was delivered automatically to all PointX platform administrators.',
   });
   return { subject, html };
 }

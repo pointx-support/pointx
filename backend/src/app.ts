@@ -19,6 +19,7 @@ import templateRoutes from './routes/templateRoutes';
 import mediaRoutes from './routes/mediaRoutes';
 import graphicsHistoryRoutes from './routes/graphicsHistoryRoutes';
 import adminRoutes from './routes/adminRoutes';
+import contactRoutes from './routes/contactRoutes';
 import healthRoutes from './routes/healthRoutes';
 import syncRoutes from './routes/syncRoutes';
 
@@ -97,6 +98,7 @@ export function createApp(): Application {
   app.use('/api/media', mediaRoutes);
   app.use('/api/graphics-history', graphicsHistoryRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/contact', contactRoutes);
   app.use('/api/sync', syncRoutes);
   app.use('/api', healthRoutes);
   app.use('/health', healthRoutes); // Root alias for health checks

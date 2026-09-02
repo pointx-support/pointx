@@ -22,7 +22,6 @@ import {
   Users2,
   Copy,
   Check,
-  Phone,
   Mail,
   Send,
   MessageSquare
@@ -94,6 +93,7 @@ export const Navbar: FC<NavbarProps> = ({
   const [quickCopied, setQuickCopied] = useState(false);
 
   // Contact Form State
+  const [contactCategory, setContactCategory] = useState('OBS Overlays & Broadcast Graphics');
   const [contactSubject, setContactSubject] = useState('');
   const [contactMessage, setContactMessage] = useState('');
   const [contactSending, setContactSending] = useState(false);
@@ -195,24 +195,53 @@ export const Navbar: FC<NavbarProps> = ({
     });
   };
 
-  const handleSendContact = (e: React.FormEvent) => {
+  const handleSendContact = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!contactMessage.trim()) {
-      showToast({ type: 'error', title: 'Message Required', message: 'Please write your message.' });
+    if (!contactSubject.trim() || !contactMessage.trim()) {
+      showToast({ type: 'error', title: 'Fields Required', message: 'Please enter a subject and your message.' });
       return;
     }
     setContactSending(true);
-    setTimeout(() => {
-      setContactSending(false);
-      setContactSubject('');
-      setContactMessage('');
-      setShowHelpModal(false);
-      showToast({
-        type: 'success',
-        title: 'Message Sent Successfully',
-        message: 'Our 24/7 tournament operations team will respond via email shortly.'
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: user?.name || 'Tournament Organizer',
+          email: user?.email || 'support@pointx.in',
+          category: contactCategory,
+          subject: contactSubject.trim(),
+          message: contactMessage.trim(),
+          organizationName: user?.organizationName,
+          tournamentTitle: currentTournament?.title
+        })
       });
-    }, 600);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success !== false) {
+        setContactSubject('');
+        setContactMessage('');
+        setShowHelpModal(false);
+        showToast({
+          type: 'success',
+          title: 'Support Query Dispatched',
+          message: 'Your inquiry was delivered directly to all PointX administrators via email.'
+        });
+      } else {
+        showToast({
+          type: 'error',
+          title: 'Dispatch Failed',
+          message: data.error || 'Failed to send query. Please reach out on Telegram @Darklordx69.'
+        });
+      }
+    } catch (err: any) {
+      showToast({
+        type: 'error',
+        title: 'Network Error',
+        message: 'Could not connect to server. Please reach out on Telegram @Darklordx69.'
+      });
+    } finally {
+      setContactSending(false);
+    }
   };
 
   const handleTerminateOtherSessions = async () => {
@@ -797,77 +826,106 @@ export const Navbar: FC<NavbarProps> = ({
       <Modal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} title="Contact Us & Tournament Support Desk" maxWidth="lg">
         <div className="space-y-5 font-sans">
           
-          {/* Support Channels Strip */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* WhatsApp / Phone Channel */}
+          {/* Support Channels Strip (Spacious 2-Card Layout) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {/* Telegram Support Channel */}
             <a
-              href="https://wa.me/919178835469?text=Hello%20PointX%20Support%2C%20I%20need%20assistance%20with%20my%20tournament."
+              href="https://t.me/Darklordx69"
               target="_blank"
               rel="noopener noreferrer"
-              className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20 transition-all flex items-center gap-3 text-left group"
+              className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/25 hover:border-cyan-400 hover:bg-cyan-500/20 transition-all flex flex-col justify-between group shadow-sm text-left"
             >
-              <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 group-hover:scale-110 transition-transform">
-                <Phone className="h-5 w-5" />
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-400 group-hover:scale-110 transition-transform">
+                    <MessageSquare className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-sm text-[var(--text-primary)]">Telegram Support</div>
+                    <div className="text-xs text-cyan-400 font-mono font-bold mt-0.5">@Darklordx69</div>
+                  </div>
+                </div>
+                <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-bold uppercase tracking-wider">
+                  &lt; 5m REPLY
+                </span>
               </div>
-              <div>
-                <div className="font-bold text-xs text-[var(--text-primary)]">WhatsApp Hotline</div>
-                <div className="text-[11px] text-emerald-400 font-mono font-bold">+91 91788 35469</div>
-              </div>
+              <p className="text-[11px] text-[var(--text-secondary)] mt-3 leading-relaxed">
+                Direct 1-on-1 assistance for scoring setup, OBS overlays, and live tournament troubleshooting.
+              </p>
             </a>
 
-            {/* Email Channel */}
+            {/* Official Email Channel */}
             <a
               href="mailto:support@pointx.in"
-              className="p-3.5 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/50 transition-all flex items-center gap-3 text-left group"
+              className="p-4 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/60 transition-all flex flex-col justify-between group shadow-sm text-left"
             >
-              <div className="p-2.5 rounded-xl bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] group-hover:scale-110 transition-transform">
-                <Mail className="h-5 w-5" />
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] group-hover:scale-110 transition-transform">
+                    <Mail className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-sm text-[var(--text-primary)]">Official Email Desk</div>
+                    <div className="text-xs text-[var(--accent-primary)] font-mono font-bold mt-0.5">support@pointx.in</div>
+                  </div>
+                </div>
+                <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-[var(--accent-primary)] font-bold uppercase tracking-wider">
+                  ALL ADMINS
+                </span>
               </div>
-              <div>
-                <div className="font-bold text-xs text-[var(--text-primary)]">Official Email</div>
-                <div className="text-[11px] text-[var(--accent-primary)] font-mono">support@pointx.in</div>
-              </div>
-            </a>
-
-            {/* Telegram Channel */}
-            <a
-              href="https://t.me/pointx_support"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/25 hover:bg-cyan-500/20 transition-all flex items-center gap-3 text-left group"
-            >
-              <div className="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-400 group-hover:scale-110 transition-transform">
-                <MessageSquare className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="font-bold text-xs text-[var(--text-primary)]">Telegram Channel</div>
-                <div className="text-[11px] text-cyan-400 font-mono">@pointx_support</div>
-              </div>
+              <p className="text-[11px] text-[var(--text-secondary)] mt-3 leading-relaxed">
+                Formal queries, billing inquiries, and enterprise feature requests dispatched to all platform admins.
+              </p>
             </a>
           </div>
 
-          {/* Emergency 24/7 Operations Banner */}
+          {/* Emergency 24/7 Operations Ribbon */}
           <div className="p-3.5 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] flex items-center justify-between text-xs font-mono">
             <div className="flex items-center gap-2 text-emerald-400 font-bold">
               <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>24/7 Live Esports Broadcast & Matrix Assistance</span>
+              <span>24/7 Live Esports Broadcast & Matrix Operations</span>
             </div>
-            <span className="text-[var(--text-muted)] text-[10px]">Active Response Desk</span>
+            <span className="text-[var(--text-muted)] text-[10px]">Active Response Team</span>
           </div>
 
           {/* Priority Support Ticket Message Form */}
           <form onSubmit={handleSendContact} className="space-y-3.5 pt-1">
-            <div className="text-xs font-bold font-mono text-[var(--text-secondary)] uppercase">Send Direct Message to Support</div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold font-mono text-[var(--text-secondary)] uppercase">Send Direct Message to Administrators</span>
+              <span className="text-[10px] font-mono text-emerald-400 font-bold flex items-center gap-1">
+                <Sparkles className="h-3 w-3" /> Broadcasts to all admins
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                Support Category / Topic
+              </label>
+              <select
+                value={contactCategory}
+                onChange={(e) => setContactCategory(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] font-sans focus:border-[var(--accent-primary)] outline-none"
+              >
+                <option value="OBS Overlays & Broadcast Graphics">OBS Overlays & Broadcast Graphics (Browser Source, 4K Posters)</option>
+                <option value="Point Matrix & Scoring Calculation">Point Matrix & Scoring Calculation (Free Fire 12-Tier, Tie-breakers)</option>
+                <option value="Staff & Operator Delegation">Staff & Operator Delegation (Scorer / Broadcast Pass URLs)</option>
+                <option value="Team Slots & Tournament Configuration">Team Slots & Tournament Configuration (Slotting & Roster)</option>
+                <option value="Account, Security & 2FA Login">Account, Security & 2FA Login</option>
+                <option value="General Inquiry & Feature Request">General Inquiry & Feature Request</option>
+              </select>
+            </div>
+
             <Input
-              label="Subject / Topic"
+              label="Subject / Topic *"
               value={contactSubject}
               onChange={(e) => setContactSubject(e.target.value)}
-              placeholder="e.g. OBS Overlay configuration assistance or Point Matrix rule inquiry"
+              placeholder="e.g. Assistance setting up transparent OBS browser source for 12-team final"
               required
             />
+
             <div>
-              <label className="block text-xs font-mono font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
-                Your Message / Query *
+              <label className="block text-xs font-mono font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                Your Query / Message Details *
               </label>
               <textarea
                 value={contactMessage}
@@ -881,12 +939,18 @@ export const Navbar: FC<NavbarProps> = ({
 
             <div className="flex justify-between items-center pt-3 border-t border-[var(--border-subtle)]">
               <div className="text-[11px] font-mono text-[var(--text-muted)]">
-                Average reply time: &lt; 15 mins
+                Direct dispatch to: <strong className="text-[var(--text-primary)]">support@pointx.in</strong> &amp; admins
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" type="button" onClick={() => setShowHelpModal(false)}>Close</Button>
-                <Button variant="primary" size="sm" type="submit" disabled={contactSending} leftIcon={<Send className="h-3.5 w-3.5" />}>
-                  {contactSending ? 'Sending Message...' : 'Send Message'}
+                <Button
+                  variant="primary"
+                  size="sm"
+                  type="submit"
+                  disabled={contactSending}
+                  leftIcon={<Send className="h-3.5 w-3.5" />}
+                >
+                  {contactSending ? 'Dispatching to Admins...' : 'Send Query to Admins'}
                 </Button>
               </div>
             </div>
