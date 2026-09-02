@@ -202,12 +202,12 @@ export const GraphicsStudioView: React.FC = () => {
 
   const handleCopyObsLink = () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
-    const obsUrl = `${origin}/?mode=broadcast&tournamentId=${currentTournament.id}&layout=standings`;
+    const obsUrl = `${origin}/?mode=broadcast&tournamentId=${currentTournament.id}&layout=graphic&templateId=${currentTemplate.id}&hue=${hueRotate}&scope=${selectedScope}&title=${encodeURIComponent(customEventTitle)}&org=${encodeURIComponent(customOrgName)}`;
     navigator.clipboard.writeText(obsUrl);
     showToast({
       type: 'success',
-      title: 'OBS Live Link Copied!',
-      message: 'Add this link as a Browser Source in OBS Studio to show the live points table directly on stream without exporting files.'
+      title: 'OBS 4K Graphic Poster Link Copied!',
+      message: `Direct 4K Vector "${currentTemplate.name}" link copied! Paste into OBS Browser Source (${isPortrait ? '1080x1350' : '1920x1080'}) to stream live graphic standings.`
     });
   };
 

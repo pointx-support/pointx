@@ -8,10 +8,11 @@ import { BroadcastMatchResult } from './BroadcastMatchResult';
 import { BroadcastTopFraggers } from './BroadcastTopFraggers';
 import { BroadcastLowerThird } from './BroadcastLowerThird';
 import { BroadcastFreeFireLiveOverlay } from './BroadcastFreeFireLiveOverlay';
+import { BroadcastGraphicPoster } from './BroadcastGraphicPoster';
 import { Activity, Wifi } from 'lucide-react';
 
 interface BroadcastContainerProps {
-  layoutType?: 'standings' | 'match' | 'fraggers' | 'lower-third' | 'live-squads' | 'pro';
+  layoutType?: 'standings' | 'match' | 'fraggers' | 'lower-third' | 'live-squads' | 'pro' | 'graphic' | 'graphic-poster' | 'poster';
   isTransparent?: boolean;
 }
 
@@ -130,6 +131,12 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
         <BroadcastLowerThird
           tournament={tournament}
           standings={standings}
+          isTransparent={resolvedTransparent}
+        />
+      )}
+      {(resolvedLayout === 'graphic' || resolvedLayout === 'graphic-poster' || resolvedLayout === 'poster') && (
+        <BroadcastGraphicPoster
+          tournament={tournament}
           isTransparent={resolvedTransparent}
         />
       )}

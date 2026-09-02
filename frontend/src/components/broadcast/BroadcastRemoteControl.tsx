@@ -29,11 +29,44 @@ import {
   Sun,
   Moon,
   AlertTriangle,
-  HelpCircle
+  HelpCircle,
+  Lock,
+  Ban,
+  Delete
 } from 'lucide-react';
 
 export interface BroadcastRemoteControlProps {
   tournamentId?: string;
+}
+
+function getOrCreateDeviceId(): string {
+  if (typeof window === 'undefined' || !window.localStorage) return 'dev_temp';
+  let id = window.localStorage.getItem('pointx_remote_device_id');
+  if (!id) {
+    id = `dev_${Math.random().toString(36).substr(2, 6)}_${Date.now().toString(36).substr(-4)}`;
+    window.localStorage.setItem('pointx_remote_device_id', id);
+  }
+  return id;
+}
+
+function detectDeviceName(): string {
+  if (typeof navigator === 'undefined') return 'Remote Device';
+  const ua = navigator.userAgent;
+  let device = 'Mobile Browser';
+  if (/iPhone/i.test(ua)) device = 'Apple iPhone';
+  else if (/iPad/i.test(ua)) device = 'Apple iPad';
+  else if (/Android/i.test(ua)) device = 'Android Mobile';
+  else if (/Windows/i.test(ua)) device = 'Windows PC';
+  else if (/Macintosh/i.test(ua)) device = 'Apple Mac';
+  else if (/Linux/i.test(ua)) device = 'Linux PC';
+
+  let browser = 'Browser';
+  if (/Chrome/i.test(ua)) browser = 'Chrome';
+  else if (/Safari/i.test(ua)) browser = 'Safari';
+  else if (/Firefox/i.test(ua)) browser = 'Firefox';
+  else if (/Edge/i.test(ua)) browser = 'Edge';
+
+  return `${device} (${browser})`;
 }
 
 // Official Free Fire Placement Point Matrix
@@ -73,6 +106,114 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(true);
   const [lastSyncTime, setLastSyncTime] = useState<number>(Date.now());
+
+  // Security PIN Verification State
+  const pinStorageKey = `pointx_remote_pin_verified_${targetTournamentId}`;
+  const [isPinVerified, setIsPinVerified] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem(pinStorageKey) === 'true';
+    }
+    return false;
+  });
+  const [pinInput, setPinInput] = useState<string>('');
+  const [pinError, setPinError] = useState<string>('');
+  const [isCheckingPin, setIsCheckingPin] = useState<boolean>(false);
+  const [isDeviceBlocked, setIsDeviceBlocked] = useState<boolean>(false);
+
+  // Send periodic heartbeats across networks
+  useEffect(() => {
+    const deviceId = getOrCreateDeviceId();
+    const deviceName = detectDeviceName();
+
+    const sendHeartbeat = async () => {
+      try {
+        const res = await fetch('/api/sync/device-heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tournamentId: targetTournamentId,
+            deviceId,
+            deviceName
+          })
+        });
+        const data = await res.json();
+        if (data.isBlocked) {
+          setIsDeviceBlocked(true);
+        } else {
+          setIsConnected(true);
+          setLastSyncTime(Date.now());
+        }
+      } catch {}
+    };
+
+    sendHeartbeat();
+    const interval = setInterval(sendHeartbeat, 3000);
+    return () => clearInterval(interval);
+  }, [targetTournamentId]);
+
+  const handleKeypadPress = (digit: string) => {
+    if (pinInput.length < 4) {
+      const next = pinInput + digit;
+      setPinInput(next);
+      setPinError('');
+      if (next.length === 4) {
+        handleVerifyPin(next);
+      }
+    }
+  };
+
+  const handleKeypadBackspace = () => {
+    setPinInput((prev) => prev.slice(0, -1));
+    setPinError('');
+  };
+
+  const handleVerifyPin = async (inputCode?: string) => {
+    const codeToTest = inputCode || pinInput;
+    if (!codeToTest || codeToTest.length !== 4) {
+      setPinError('Please enter 4 digits.');
+      return;
+    }
+
+    setIsCheckingPin(true);
+    setPinError('');
+
+    try {
+      const deviceId = getOrCreateDeviceId();
+      const deviceName = detectDeviceName();
+      const res = await fetch('/api/sync/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tournamentId: targetTournamentId,
+          pin: codeToTest,
+          deviceId,
+          deviceName
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.verified) {
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(pinStorageKey, 'true');
+        }
+        setIsPinVerified(true);
+        showToast({
+          type: 'success',
+          title: 'Remote Unlocked',
+          message: 'Security PIN verified. Live stream match controller is ready.'
+        });
+      } else {
+        if (data.isBlocked) {
+          setIsDeviceBlocked(true);
+        }
+        setPinError(data.error || 'Incorrect security PIN code.');
+        setPinInput('');
+      }
+    } catch {
+      setPinError('Connection error. Please try again.');
+    } finally {
+      setIsCheckingPin(false);
+    }
+  };
 
   // Subscribe to live tournament updates from other tabs / devices
   useEffect(() => {
@@ -554,6 +695,118 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
   // Calculate Booyah team from editable report
   const reportBooyahTeam = tournament.teams.find((t) => editedReportResults[t.id]?.placement === 1) || tournament.teams[0];
+
+  // 1. BLOCKED DEVICE SCREEN
+  if (isDeviceBlocked) {
+    return (
+      <div className="min-h-screen bg-[#0e0c14] text-white flex items-center justify-center p-4 font-sans select-none">
+        <div className="w-full max-w-md p-8 rounded-3xl bg-[#171424] border border-rose-500/40 shadow-2xl text-center space-y-4">
+          <div className="h-16 w-16 mx-auto rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-500">
+            <Ban className="h-8 w-8" />
+          </div>
+          <h2 className="text-xl font-bold font-display uppercase tracking-wide text-rose-400">
+            Remote Access Revoked
+          </h2>
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            This device has been disconnected and barred by the tournament administrator. Contact the host to restore remote control access.
+          </p>
+          <div className="pt-2">
+            <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+              Retry Connection
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. 4-DIGIT SECURITY PIN LOCKSCREEN (VERIFIES ONCE, NEVER PROMPTS AGAIN AFTER REFRESH)
+  if (!isPinVerified) {
+    return (
+      <div className="min-h-screen bg-[#0e0c14] text-white flex items-center justify-center p-4 font-sans select-none">
+        <div className="w-full max-w-sm p-6 sm:p-8 rounded-3xl bg-[#171424] border border-amber-400/30 shadow-2xl text-center space-y-6">
+          <div className="space-y-2">
+            <div className="h-14 w-14 mx-auto rounded-2xl bg-amber-400/15 border border-amber-400/30 flex items-center justify-center text-amber-400 shadow-md">
+              <Lock className="h-7 w-7" />
+            </div>
+            <h2 className="text-lg sm:text-xl font-bold font-display uppercase tracking-wide text-amber-400">
+              Enter Remote Security PIN
+            </h2>
+            <p className="text-xs text-zinc-400">
+              Enter the 4-digit security code for <strong>{tournament.title}</strong> to unlock the stream match controller.
+            </p>
+          </div>
+
+          {/* 4 Masked PIN Slots */}
+          <div className="flex items-center justify-center gap-3 my-2">
+            {[0, 1, 2, 3].map((idx) => {
+              const hasDigit = pinInput.length > idx;
+              return (
+                <div
+                  key={idx}
+                  className={`h-12 w-12 rounded-2xl flex items-center justify-center text-xl font-mono font-bold transition-all border ${
+                    hasDigit
+                      ? 'bg-amber-400/20 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(255,208,0,0.3)]'
+                      : 'bg-black/40 border-white/10 text-zinc-600'
+                  }`}
+                >
+                  {hasDigit ? '●' : ''}
+                </div>
+              );
+            })}
+          </div>
+
+          {pinError && (
+            <div className="text-xs text-rose-400 font-bold flex items-center justify-center gap-1.5 animate-bounce">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              <span>{pinError}</span>
+            </div>
+          )}
+
+          {/* Numerical Keypad */}
+          <div className="grid grid-cols-3 gap-2.5 pt-2">
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((num) => (
+              <button
+                key={num}
+                type="button"
+                onClick={() => handleKeypadPress(num)}
+                className="py-3.5 rounded-2xl bg-white/5 hover:bg-amber-400/20 active:scale-95 border border-white/10 hover:border-amber-400/40 text-lg font-mono font-bold text-white transition-all cursor-pointer shadow-sm"
+              >
+                {num}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={handleKeypadBackspace}
+              className="py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 active:scale-95 border border-white/10 text-zinc-400 hover:text-white transition-all flex items-center justify-center cursor-pointer shadow-sm"
+              title="Delete"
+            >
+              <Delete className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleKeypadPress('0')}
+              className="py-3.5 rounded-2xl bg-white/5 hover:bg-amber-400/20 active:scale-95 border border-white/10 hover:border-amber-400/40 text-lg font-mono font-bold text-white transition-all cursor-pointer shadow-sm"
+            >
+              0
+            </button>
+            <button
+              type="button"
+              onClick={() => handleVerifyPin()}
+              disabled={isCheckingPin || pinInput.length !== 4}
+              className="py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 disabled:opacity-40 disabled:hover:bg-amber-400 active:scale-95 border border-amber-300 text-black font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center cursor-pointer shadow-md"
+            >
+              {isCheckingPin ? '...' : 'Unlock'}
+            </button>
+          </div>
+
+          <div className="text-[10px] text-zinc-500 font-mono">
+            Default PIN: 1234 • Verified securely on device
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] p-3 sm:p-6 font-sans select-none transition-colors">
