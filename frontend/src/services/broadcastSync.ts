@@ -1,6 +1,6 @@
 import type { Tournament } from '../types/tournament';
 
-const SYNC_CHANNEL_NAME = 'strikz_live_sync_channel';
+const SYNC_CHANNEL_NAME = 'pointx_live_sync_channel';
 
 // In-memory fallback map for non-browser/test environments
 const memoryTokenMap = new Map<string, string>();
@@ -25,19 +25,19 @@ export interface BroadcastTokenInfo {
 export function generateBroadcastToken(tournamentId: string): string {
   const token = `obs_${tournamentId.slice(0, 8)}_${Math.random().toString(36).substr(2, 8)}`;
   if (typeof window !== 'undefined' && window.localStorage) {
-    window.localStorage.setItem(`strikz_token_${tournamentId}`, token);
+    window.localStorage.setItem(`pointx_token_${tournamentId}`, token);
   } else {
-    memoryTokenMap.set(`strikz_token_${tournamentId}`, token);
+    memoryTokenMap.set(`pointx_token_${tournamentId}`, token);
   }
   return token;
 }
 
 export function getBroadcastToken(tournamentId: string): string {
   if (typeof window !== 'undefined' && window.localStorage) {
-    const existing = window.localStorage.getItem(`strikz_token_${tournamentId}`);
+    const existing = window.localStorage.getItem(`pointx_token_${tournamentId}`) || window.localStorage.getItem(`strikz_token_${tournamentId}`);
     if (existing) return existing;
   } else {
-    const mem = memoryTokenMap.get(`strikz_token_${tournamentId}`);
+    const mem = memoryTokenMap.get(`pointx_token_${tournamentId}`) || memoryTokenMap.get(`strikz_token_${tournamentId}`);
     if (mem) return mem;
   }
   return generateBroadcastToken(tournamentId);
@@ -59,34 +59,35 @@ async function postNetworkSync(payload: any): Promise<void> {
   }
 }
 
+/**
+ * Broadcast live tournament update to all connected OBS browser sources
+ */
 export function broadcastTournamentUpdate(tournament: Tournament): void {
-  const payload = {
-    type: 'TOURNAMENT_UPDATED',
-    tournamentId: tournament.id,
-    timestamp: Date.now(),
-    data: tournament
-  };
-
-  // 1. Sub-millisecond tab-to-OBS IPC
+  // 1. BroadcastChannel (Instant same-browser tabs sync)
   if (broadcastChannel) {
     try {
-      broadcastChannel.postMessage(payload);
+      broadcastChannel.postMessage({
+        type: 'TOURNAMENT_UPDATED',
+        tournamentId: tournament.id,
+        data: tournament,
+        timestamp: Date.now()
+      });
     } catch {
       console.warn('Error posting to BroadcastChannel');
     }
   }
 
-  // 2. LocalStorage sync for same-device cross-window
+  // 2. LocalStorage sync & event trigger for OBS Browser Source
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
-      window.localStorage.setItem(`strikz_live_${tournament.id}`, JSON.stringify(tournament));
-      window.localStorage.setItem('strikz_live_default', JSON.stringify(tournament));
-      window.localStorage.setItem('strikz_live_ping', String(Date.now()));
+      window.localStorage.setItem(`pointx_live_${tournament.id}`, JSON.stringify(tournament));
+      window.localStorage.setItem('pointx_live_default', JSON.stringify(tournament));
+      window.localStorage.setItem('pointx_live_ping', String(Date.now()));
     } catch {
       console.warn('Error writing to localStorage sync');
     }
   } else {
-    memoryStoreMap.set(`strikz_live_${tournament.id}`, JSON.stringify(tournament));
+    memoryStoreMap.set(`pointx_live_${tournament.id}`, JSON.stringify(tournament));
   }
 
   // 3. Local Wi-Fi Network Sync (for Phone <-> PC)
@@ -116,7 +117,11 @@ export function subscribeToTournamentLiveUpdates(
         }
       })
       .catch(() => {
-        const stored = window.localStorage.getItem(`strikz_live_${tournamentId}`) || window.localStorage.getItem('strikz_live_default');
+        const stored =
+          window.localStorage.getItem(`pointx_live_${tournamentId}`) ||
+          window.localStorage.getItem('pointx_live_default') ||
+          window.localStorage.getItem(`strikz_live_${tournamentId}`) ||
+          window.localStorage.getItem('strikz_live_default');
         if (stored) {
           try {
             onUpdate(JSON.parse(stored));
@@ -146,13 +151,19 @@ export function subscribeToTournamentLiveUpdates(
   // Storage event listener
   const handleStorageEvent = (event: StorageEvent) => {
     if (
+      event.key === `pointx_live_${tournamentId}` ||
+      event.key === 'pointx_live_default' ||
+      event.key === 'pointx_live_ping' ||
       event.key === `strikz_live_${tournamentId}` ||
       event.key === 'strikz_live_default' ||
       event.key === 'strikz_live_ping'
     ) {
       const stored = typeof window !== 'undefined' && window.localStorage
-        ? window.localStorage.getItem(`strikz_live_${tournamentId}`) || window.localStorage.getItem('strikz_live_default')
-        : memoryStoreMap.get(`strikz_live_${tournamentId}`);
+        ? window.localStorage.getItem(`pointx_live_${tournamentId}`) ||
+          window.localStorage.getItem('pointx_live_default') ||
+          window.localStorage.getItem(`strikz_live_${tournamentId}`) ||
+          window.localStorage.getItem('strikz_live_default')
+        : memoryStoreMap.get(`pointx_live_${tournamentId}`);
 
       if (stored) {
         try {
@@ -226,14 +237,14 @@ export function broadcastLiveSquadUpdate(data: LiveSquadSyncState): void {
   // 2. LocalStorage sync & persistence
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
-      window.localStorage.setItem(`strikz_squads_${data.tournamentId}`, JSON.stringify(data));
-      window.localStorage.setItem('strikz_squads_default', JSON.stringify(data));
-      window.localStorage.setItem('strikz_squads_ping', String(Date.now()));
+      window.localStorage.setItem(`pointx_squads_${data.tournamentId}`, JSON.stringify(data));
+      window.localStorage.setItem('pointx_squads_default', JSON.stringify(data));
+      window.localStorage.setItem('pointx_squads_ping', String(Date.now()));
     } catch {
       console.warn('Error writing to localStorage sync');
     }
   } else {
-    memoryStoreMap.set(`strikz_squads_${data.tournamentId}`, JSON.stringify(data));
+    memoryStoreMap.set(`pointx_squads_${data.tournamentId}`, JSON.stringify(data));
   }
 
   // 3. Local Wi-Fi Network Sync (Phone -> PC)
@@ -269,7 +280,11 @@ export function subscribeToLiveSquadUpdates(
         }
       })
       .catch(() => {
-        const stored = window.localStorage.getItem(`strikz_squads_${tournamentId}`) || window.localStorage.getItem('strikz_squads_default');
+        const stored =
+          window.localStorage.getItem(`pointx_squads_${tournamentId}`) ||
+          window.localStorage.getItem('pointx_squads_default') ||
+          window.localStorage.getItem(`strikz_squads_${tournamentId}`) ||
+          window.localStorage.getItem('strikz_squads_default');
         if (stored) {
           try {
             onUpdate(JSON.parse(stored));
@@ -296,13 +311,19 @@ export function subscribeToLiveSquadUpdates(
 
   const handleStorageEvent = (event: StorageEvent) => {
     if (
+      event.key === `pointx_squads_${tournamentId}` ||
+      event.key === 'pointx_squads_default' ||
+      event.key === 'pointx_squads_ping' ||
       event.key === `strikz_squads_${tournamentId}` ||
       event.key === 'strikz_squads_default' ||
       event.key === 'strikz_squads_ping'
     ) {
       const stored = typeof window !== 'undefined' && window.localStorage
-        ? window.localStorage.getItem(`strikz_squads_${tournamentId}`) || window.localStorage.getItem('strikz_squads_default')
-        : memoryStoreMap.get(`strikz_squads_${tournamentId}`);
+        ? window.localStorage.getItem(`pointx_squads_${tournamentId}`) ||
+          window.localStorage.getItem('pointx_squads_default') ||
+          window.localStorage.getItem(`strikz_squads_${tournamentId}`) ||
+          window.localStorage.getItem('strikz_squads_default')
+        : memoryStoreMap.get(`pointx_squads_${tournamentId}`);
 
       if (stored) {
         try {

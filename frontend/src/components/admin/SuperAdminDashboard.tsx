@@ -23,6 +23,9 @@ import {
   ShieldCheck,
   Activity,
   Eye,
+  Palette,
+  ArrowLeft,
+  User,
 } from 'lucide-react';
 import { PointXLogo } from '../ui/PointXLogo';
 import { useAuthStore } from '../../store/authStore';
@@ -35,9 +38,18 @@ import { CloudinaryMonitorPanel } from './CloudinaryMonitorPanel';
 import { SystemHealthPanel } from './SystemHealthPanel';
 import { AdminAuditLogsView } from './views/AdminAuditLogsView';
 import { AdminSettingsView } from './views/AdminSettingsView';
+import { AdminTemplatesView } from './views/AdminTemplatesView';
 import { cn } from '../../lib/utils';
 
-export const SuperAdminDashboard: React.FC = () => {
+export interface SuperAdminDashboardProps {
+  onExitAdmin?: () => void;
+  onOpenTemplateStudio?: () => void;
+}
+
+export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
+  onExitAdmin,
+  onOpenTemplateStudio,
+}) => {
   const { user, theme, toggleTheme, logout } = useAuthStore();
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   
@@ -200,6 +212,38 @@ export const SuperAdminDashboard: React.FC = () => {
     }
   };
 
+  const handlePromoteToAdmin = async (id: string) => {
+    try {
+      const res = await adminApi.updateOrganizer(id, { role: 'admin' });
+      if (res.success) {
+        showToast('success', 'User promoted to Admin / Super Admin.');
+        fetchOrganizers();
+        fetchOverview();
+        if (selectedOrganizer && (selectedOrganizer.id === id || (selectedOrganizer as any)._id === id)) {
+          setSelectedOrganizer({ ...selectedOrganizer, role: 'admin' });
+        }
+      }
+    } catch (err: any) {
+      showToast('error', err.message || 'Failed to promote user to admin.');
+    }
+  };
+
+  const handleDemoteToOrganizer = async (id: string) => {
+    try {
+      const res = await adminApi.updateOrganizer(id, { role: 'organizer' });
+      if (res.success) {
+        showToast('success', 'User role changed to Organizer.');
+        fetchOrganizers();
+        fetchOverview();
+        if (selectedOrganizer && (selectedOrganizer.id === id || (selectedOrganizer as any)._id === id)) {
+          setSelectedOrganizer({ ...selectedOrganizer, role: 'organizer' });
+        }
+      }
+    } catch (err: any) {
+      showToast('error', err.message || 'Failed to change user role.');
+    }
+  };
+
   const handleLogout = () => {
     logout();
     if (typeof window !== 'undefined') {
@@ -210,6 +254,7 @@ export const SuperAdminDashboard: React.FC = () => {
   const NAV_ITEMS: { id: AdminTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'organizers', label: 'Organizers', icon: Users },
+    { id: 'templates', label: 'Templates', icon: Palette },
     { id: 'requests', label: 'Verification Queue', icon: Clock },
     { id: 'mongodb', label: 'MongoDB Atlas', icon: Database },
     { id: 'cloudinary', label: 'Cloudinary CDN', icon: Cloud },
@@ -351,6 +396,18 @@ export const SuperAdminDashboard: React.FC = () => {
               </div>
             </div>
 
+            {/* Exit to Workspace Button */}
+            {onExitAdmin && (
+              <button
+                type="button"
+                onClick={onExitAdmin}
+                className="px-4 py-2 rounded-full border border-black/[0.08] dark:border-white/[0.1] bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs hover:opacity-90"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                <span>Workspace</span>
+              </button>
+            )}
+
             {/* Sign Out Button */}
             <button
               type="button"
@@ -358,7 +415,7 @@ export const SuperAdminDashboard: React.FC = () => {
               className="px-4 py-2 rounded-full border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <LogOut className="h-3.5 w-3.5" />
-              <span>Exit</span>
+              <span>Sign Out</span>
             </button>
           </div>
 
@@ -903,6 +960,26 @@ export const SuperAdminDashboard: React.FC = () => {
 
                           <td className="py-3.5 px-4 text-right">
                             <div className="inline-flex items-center gap-1.5">
+                              {org.role === 'admin' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDemoteToOrganizer(id)}
+                                  className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-[11px] transition-colors cursor-pointer"
+                                  title="Demote to standard organizer"
+                                >
+                                  Demote
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handlePromoteToAdmin(id)}
+                                  className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                                  title="Promote to Admin / Super Admin"
+                                >
+                                  <ShieldCheck className="h-3 w-3" />
+                                  <span>Make Admin</span>
+                                </button>
+                              )}
                               {isPending && (
                                 <button
                                   type="button"
@@ -1062,6 +1139,28 @@ export const SuperAdminDashboard: React.FC = () => {
 
                           <td className="py-4 px-4 text-right">
                             <div className="inline-flex items-center gap-2">
+                              {org.role === 'admin' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDemoteToOrganizer(id)}
+                                  className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-xs transition-colors cursor-pointer flex items-center gap-1"
+                                  title="Demote to standard organizer"
+                                >
+                                  <User className="h-3.5 w-3.5" />
+                                  <span>Demote</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handlePromoteToAdmin(id)}
+                                  className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition-colors cursor-pointer flex items-center gap-1 shadow-sm"
+                                  title="Promote account to Admin / Super Admin"
+                                >
+                                  <ShieldCheck className="h-3.5 w-3.5" />
+                                  <span>Promote to Admin</span>
+                                </button>
+                              )}
+
                               {isPending && (
                                 <>
                                   <button
@@ -1148,7 +1247,16 @@ export const SuperAdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* 4. SUB-PANELS: MONGODB, CLOUDINARY, BREVO, HEALTH, AUDIT LOGS, SETTINGS */}
+        {/* 4. SUB-PANELS: TEMPLATES, MONGODB, CLOUDINARY, BREVO, HEALTH, AUDIT LOGS, SETTINGS */}
+        {activeTab === 'templates' && (
+          <AdminTemplatesView
+            onOpenTemplateStudio={() => {
+              if (onOpenTemplateStudio) {
+                onOpenTemplateStudio();
+              }
+            }}
+          />
+        )}
         {activeTab === 'mongodb' && <MongoDbMonitorPanel />}
         {activeTab === 'cloudinary' && <CloudinaryMonitorPanel />}
         {activeTab === 'brevo' && <BrevoConfigPanel />}
@@ -1168,6 +1276,8 @@ export const SuperAdminDashboard: React.FC = () => {
           onSuspend={handleSuspend}
           onRestore={handleRestore}
           onDelete={handleDelete}
+          onPromote={handlePromoteToAdmin}
+          onDemote={handleDemoteToOrganizer}
           onEdit={(updated) => {
             setSelectedOrganizer(updated);
             fetchOrganizers();

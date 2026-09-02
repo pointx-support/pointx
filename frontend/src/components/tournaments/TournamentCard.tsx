@@ -137,7 +137,7 @@ export const TournamentCard: React.FC<TournamentCardProps> = ({
 
             {/* Authoritative Single Organizer / Branding Line */}
             <p className="text-xs text-[var(--text-secondary)] truncate">
-              By <strong className="text-[var(--text-primary)] font-medium">{tournament.organizer || 'Strikz Esports Network'}</strong>
+              By <strong className="text-[var(--text-primary)] font-medium">{tournament.organizer || 'PointX Esports Network'}</strong>
             </p>
           </div>
         </div>

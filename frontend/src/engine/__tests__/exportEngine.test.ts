@@ -18,11 +18,11 @@ describe('Export, Download & Sharing System (Phase 10 Verification)', () => {
     const filenamePage2 = sanitizeGraphicFilename(
       'Apex League / Night Scrims',
       'OVERALL_STANDINGS',
-      'Strikz Scrims',
+      'PointX Scrims',
       2,
       'jpeg'
     );
-    expect(filenamePage2).toBe('APEX_LEAGUE_NIGHT_SCRIMS_OVERALL_STANDINGS_STRIKZ_SCRIMS_P2.jpg');
+    expect(filenamePage2).toBe('APEX_LEAGUE_NIGHT_SCRIMS_OVERALL_STANDINGS_POINTX_SCRIMS_P2.jpg');
   });
 
   // Test 2: Graphics History Store Lifecycle

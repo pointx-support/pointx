@@ -60,7 +60,7 @@ export const GraphicsStudioView: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<GraphicCategoryTab>('standings');
   const [selectedScope, setSelectedScope] = useState<'overall' | number>('overall');
   const [formatFilter, setFormatFilter] = useState<'all' | 'portrait' | 'landscape'>('all');
-  const [customOrgName, setCustomOrgName] = useState(currentTournament.organizer || 'Strikz Arena');
+  const [customOrgName, setCustomOrgName] = useState(currentTournament.organizer || 'PointX Arena');
   const [customEventTitle, setCustomEventTitle] = useState(currentTournament.title || 'Free Fire Masters');
   const [isExporting, setIsExporting] = useState(false);
 

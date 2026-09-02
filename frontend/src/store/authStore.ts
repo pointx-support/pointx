@@ -2,9 +2,9 @@ import { create } from 'zustand';
 import type { User, UserSession, AuditActivity, UserPreferences } from '../types/auth';
 import { authApi, userApi, setStoredToken, getStoredToken } from '../services/api';
 
-const AUTH_STORAGE_KEY = 'strikz_auth_session_v1';
-const ACTIVITIES_STORAGE_KEY = 'strikz_audit_activities_v1';
-const THEME_STORAGE_KEY = 'strikz_theme_mode_v1';
+const AUTH_STORAGE_KEY = 'pointx_auth_session_v1';
+const ACTIVITIES_STORAGE_KEY = 'pointx_audit_activities_v1';
+const THEME_STORAGE_KEY = 'pointx_theme_mode_v1';
 
 export interface AuthStoreState {
   user: User | null;
@@ -61,9 +61,9 @@ function applyThemeToDOM(theme: 'light' | 'dark') {
 function loadStoredTheme(): 'light' | 'dark' {
   if (typeof window === 'undefined' || !window.localStorage) return 'dark';
   try {
-    const directTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    const directTheme = window.localStorage.getItem(THEME_STORAGE_KEY) || window.localStorage.getItem('strikz_theme_mode_v1');
     if (directTheme === 'light' || directTheme === 'dark') return directTheme;
-    const rawUser = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    const rawUser = window.localStorage.getItem(AUTH_STORAGE_KEY) || window.localStorage.getItem('strikz_auth_session_v1');
     if (rawUser) {
       const parsed = JSON.parse(rawUser);
       if (parsed?.preferences?.theme === 'light' || parsed?.preferences?.theme === 'dark') {
@@ -79,7 +79,7 @@ function loadStoredTheme(): 'light' | 'dark' {
 function loadStoredUser(): User | null {
   if (typeof window === 'undefined' || !window.localStorage) return null;
   try {
-    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY) || window.localStorage.getItem('strikz_auth_session_v1');
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -89,7 +89,7 @@ function loadStoredUser(): User | null {
 function loadStoredActivities(): AuditActivity[] {
   if (typeof window === 'undefined' || !window.localStorage) return INITIAL_ACTIVITIES;
   try {
-    const raw = window.localStorage.getItem(ACTIVITIES_STORAGE_KEY);
+    const raw = window.localStorage.getItem(ACTIVITIES_STORAGE_KEY) || window.localStorage.getItem('strikz_audit_activities_v1');
     return raw ? JSON.parse(raw) : INITIAL_ACTIVITIES;
   } catch {
     return INITIAL_ACTIVITIES;
@@ -124,13 +124,17 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       if (res.success && user) {
         const rawTheme = user.preferences?.theme;
         const normalizedTheme: 'light' | 'dark' = rawTheme === 'light' ? 'light' : 'dark';
+        const enrichedUser: User = {
+          ...user,
+          isOriginalAdmin: user.role === 'admin' || user.isOriginalAdmin
+        };
 
         if (typeof window !== 'undefined' && window.localStorage) {
-          window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+          window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(enrichedUser));
         }
 
         set({
-          user,
+          user: enrichedUser,
           isAuthenticated: true,
           sessions: res.sessions || (res.data && res.data.sessions) || [],
           theme: normalizedTheme
@@ -195,13 +199,17 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         if (user) {
           const rawTheme = user.preferences?.theme;
           const normalizedTheme: 'light' | 'dark' = rawTheme === 'light' ? 'light' : 'dark';
+          const enrichedUser: User = {
+            ...user,
+            isOriginalAdmin: user.role === 'admin' || user.isOriginalAdmin
+          };
 
           if (typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+            window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(enrichedUser));
           }
 
           set({
-            user,
+            user: enrichedUser,
             isAuthenticated: true,
             sessionToken: token || getStoredToken(),
             theme: normalizedTheme
@@ -443,7 +451,14 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   setRole: (role) => {
     const currentUser = get().user;
     if (!currentUser) return;
-    const updatedUser = { ...currentUser, role };
+    const hasAdminPrivilege = currentUser.role === 'admin' || currentUser.isOriginalAdmin;
+    if (!hasAdminPrivilege) return;
+
+    const updatedUser: User = {
+      ...currentUser,
+      role,
+      isOriginalAdmin: true
+    };
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedUser));
     }
@@ -452,8 +467,11 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   },
 
   toggleRole: () => {
-    const current = get().user?.role || 'admin';
-    const nextRole = current === 'admin' ? 'organizer' : 'admin';
+    const currentUser = get().user;
+    if (!currentUser) return;
+    const hasAdminPrivilege = currentUser.role === 'admin' || currentUser.isOriginalAdmin;
+    if (!hasAdminPrivilege) return;
+    const nextRole = currentUser.role === 'admin' ? 'organizer' : 'admin';
     get().setRole(nextRole);
   },
 

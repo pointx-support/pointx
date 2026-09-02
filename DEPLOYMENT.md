@@ -1,7 +1,7 @@
-# STRIKZ ARENA — PRODUCTION DEPLOYMENT & OPERATION MANUAL
+# POINTX ARENA — PRODUCTION DEPLOYMENT & OPERATION MANUAL
 
 ## 1. Overview
-Strikz Arena is a production-ready, high-performance esports tournament control center, point calculation engine, OBS Studio live scoreboard broadcast server, and high-resolution graphics generator designed specifically for competitive Free Fire tournaments.
+PointX Arena is a production-ready, high-performance esports tournament control center, point calculation engine, OBS Studio live scoreboard broadcast server, and high-resolution graphics generator designed specifically for competitive Free Fire tournaments.
 
 ---
 
@@ -47,10 +47,10 @@ npm run preview
 
 Follow these simple steps to broadcast real-time standings directly inside OBS Studio:
 
-1. **Open Tournament**: Launch Strikz Arena and select your active tournament from the Command Center.
+1. **Open Tournament**: Launch PointX Arena and select your active tournament from the Command Center.
 2. **Access OBS Studio Panel**: Click **OBS Live** in the navigation bar or sidebar.
 3. **Copy Live URL**: Click **Copy URL** to get the dedicated browser source link.
-   - *Example*: `https://strikzarena.com/?mode=broadcast&tournament=tour-ff-champ-2026&token=obs_tour-ff-_a1b2c3d4&layout=standings&transparent=true`
+   - *Example*: `https://pointx.gg/?mode=broadcast&tournament=tour-ff-champ-2026&token=obs_tour-ff-_a1b2c3d4&layout=standings&transparent=true`
 4. **Open OBS Studio**:
    - In OBS, under the **Sources** dock, click the `+` button.
    - Choose **Browser**.
@@ -63,21 +63,21 @@ Follow these simple steps to broadcast real-time standings directly inside OBS S
    - **Custom CSS**: Leave blank or set `body { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }`
    - Check: `Refresh browser when scene becomes active`.
 6. **Automatic Real-Time Updates**:
-   - Whenever you save or finalize match round scores in the Strikz Arena admin panel, OBS Studio will update automatically within milliseconds without requiring page reloads or scene refreshes.
+   - Whenever you save or finalize match round scores in the PointX Arena admin panel, OBS Studio will update automatically within milliseconds without requiring page reloads or scene refreshes.
 
 ---
 
 ## 5. Database Backup & Disaster Recovery Strategy
 
-Strikz Arena stores tournament records, global squad profiles, and recent exports locally with automatic snapshotting.
+PointX Arena stores tournament records, global squad profiles, and recent exports locally with automatic snapshotting.
 
 ### Backup Strategy:
 1. **JSON Snapshot Backups**:
    - The tournament store maintains complete serialized snapshots under local storage keys:
-     - `strikz_tournament_store_v1`
-     - `strikz_global_teams_v1`
-     - `strikz_auth_session_v1`
-     - `strikz_graphics_history_v1`
+     - `pointx_tournaments_state`
+     - `pointx_global_teams_v1`
+     - `pointx_auth_session_v1`
+     - `pointx_graphics_history_v1`
 2. **Recommended Backup Frequency**:
    - Automatic export after every finalized match day.
    - Organizers can batch export tournament packages into `.zip` archives containing all graphics, standings, and match breakdowns.

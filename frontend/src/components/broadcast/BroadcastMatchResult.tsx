@@ -133,7 +133,7 @@ export const BroadcastMatchResult: FC<BroadcastMatchResultProps> = ({
 
       {/* Footer */}
       <div className="flex items-center justify-between text-[11px] font-mono text-[#a89f91] px-4 py-2 mt-1">
-        <span>STRIKZ ARENA BROADCAST SYSTEM</span>
+        <span>POINTX ARENA BROADCAST SYSTEM</span>
         <span className="text-[#e0684b]">MATCH {targetMatch.matchNumber} OFFICIAL REPORT</span>
       </div>
     </div>

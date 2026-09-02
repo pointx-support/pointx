@@ -54,7 +54,7 @@ export const DEFAULT_LEGIT_ALIGNMENT: TemplateAlignmentConfig = {
   subtitleTextColor: '#ffffff'
 };
 
-export const DEFAULT_STRIKZ_ALIGNMENT: TemplateAlignmentConfig = {
+export const DEFAULT_POINTX_ALIGNMENT: TemplateAlignmentConfig = {
   aspectRatio: '16:9',
   width: 1920,
   height: 1080,
@@ -552,11 +552,11 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
   },
   {
     id: 'strikz-scrims',
-    name: 'Strikz Paid Scrims (16:9)',
-    description: 'Official Strikz Paid Scrims gold & orange theme with white team plates (16:9 Full HD & 4K).',
+    name: 'PointX Scrims (Orange Gold 16:9)',
+    description: 'Official PointX Scrims gold & orange theme with white team plates (16:9 Full HD & 4K).',
     imageUrl: '/templates/strikz_standings.jpg',
     aspectRatio: '16:9',
-    alignment: DEFAULT_STRIKZ_ALIGNMENT,
+    alignment: DEFAULT_POINTX_ALIGNMENT,
     isBuiltIn: true,
     isPublished: true,
     createdAt: '2026-08-18T10:00:00Z',
@@ -820,7 +820,7 @@ export const useTemplateStore = create<TemplateStoreState>()(
       }
     }),
     {
-      name: 'strikz_custom_templates_v4'
+      name: 'pointx_custom_templates_v4'
     }
   )
 );

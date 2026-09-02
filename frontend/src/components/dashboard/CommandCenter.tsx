@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Tournament } from '../../types/tournament';
 import { useTournamentStore } from '../../store/tournamentStore';
+import { useAuthStore } from '../../store/authStore';
 import { TournamentCard } from '../tournaments/TournamentCard';
 import { TournamentWizard } from '../tournaments/TournamentWizard';
 import { CloneTournamentModal } from '../tournaments/CloneTournamentModal';
@@ -55,8 +56,10 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
     importTournaments,
     archiveTournament,
     deleteTournament,
+    loadDemoTournaments,
     highlightDashboardAction
   } = useTournamentStore();
+  const { user } = useAuthStore();
 
   const { showToast } = useToast();
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -251,11 +254,11 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
         {/* --- HERO CONTENT COMPOSITION --- */}
         <div className="relative z-10 flex flex-col items-center justify-center max-w-3xl mx-auto space-y-5 sm:space-y-6">
           
-          {/* 1. Strikz Esports Authority Tag */}
+          {/* 1. PointX Esports Authority Tag */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/25 backdrop-blur-md text-[var(--accent-primary-text)] dark:text-[var(--accent-primary)] shadow-sm">
             <ShieldCheck className="h-3.5 w-3.5 text-[var(--accent-primary)] shrink-0" />
             <span className="text-[10px] sm:text-xs font-mono font-bold tracking-[0.22em] uppercase">
-              By Strikz Esports • Tournament OS
+              PointX Esports • Tournament OS
             </span>
           </div>
 
@@ -567,14 +570,33 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
                 ? 'No events match your search query. Try clearing the filter.'
                 : 'Get started by creating your first tournament or importing a JSON backup.'}
             </p>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsWizardOpen(true)}
-              leftIcon={<Plus className="h-4 w-4" />}
-            >
-              Create Tournament
-            </Button>
+            <div className="flex items-center justify-center gap-2.5 pt-1">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsWizardOpen(true)}
+                leftIcon={<Plus className="h-4 w-4" />}
+              >
+                Create Tournament
+              </Button>
+              {user?.role === 'admin' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    loadDemoTournaments();
+                    showToast({
+                      type: 'info',
+                      title: 'Demo Tournaments Loaded',
+                      message: 'Loaded 3 official sample tournaments for testing.'
+                    });
+                  }}
+                  leftIcon={<Sparkles className="h-4 w-4 text-[var(--accent-primary)]" />}
+                >
+                  Load Demo Tournaments
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </section>

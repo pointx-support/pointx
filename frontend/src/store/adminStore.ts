@@ -11,7 +11,7 @@ import type { AuditActivity } from '../types/auth';
 import { adminApi } from '../services/api';
 
 const ADMIN_SETTINGS_STORAGE_KEY = 'pointx_admin_platform_settings_v1';
-const ACTIVITIES_STORAGE_KEY = 'strikz_audit_activities_v1';
+const ACTIVITIES_STORAGE_KEY = 'pointx_audit_activities_v1';
 
 const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
   maintenanceMode: false,

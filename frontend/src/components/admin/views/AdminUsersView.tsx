@@ -148,7 +148,7 @@ export const AdminUsersView: React.FC = () => {
                 </tr>
               ) : (
                 filteredUsers.map((u) => {
-                  const isRootAdmin = u.email === 'shakti@strikzesports.com' || u.role === 'admin';
+                  const isRootAdmin = u.role === 'admin';
 
                   return (
                     <tr key={u.id} className="hover:bg-[var(--bg-surface-hover)] transition-colors">

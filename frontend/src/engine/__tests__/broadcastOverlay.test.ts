@@ -32,7 +32,7 @@ describe('OBS Studio Live Scoreboard System (Phase 9 Verification)', () => {
   const testTournament: Tournament = {
     id: 'tour-obs-test-123',
     title: 'OBS Broadcast Championship',
-    organizer: 'Strikz Broadcast Network',
+    organizer: 'PointX Broadcast Network',
     game: 'Free Fire',
     tournamentType: 'Battle Royale',
     status: 'Live',

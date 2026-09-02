@@ -8,7 +8,6 @@ import { BroadcastContainer } from './components/broadcast/BroadcastContainer';
 import { BroadcastRemoteControl } from './components/broadcast/BroadcastRemoteControl';
 import { LoginView } from './components/auth/LoginView';
 import { OnboardingModal } from './components/onboarding/OnboardingModal';
-import { AdminLayout } from './components/admin/AdminLayout';
 import { HomePage } from './components/home/HomePage';
 import { ToastProvider } from './components/ui/Toast';
 import { useTournamentStore } from './store/tournamentStore';
@@ -39,8 +38,12 @@ export function App() {
   }, []);
 
   // Super Admin Path Checks
-  const isSuperAdminLoginRoute = currentPath.startsWith('/super-admin/login');
-  const isSuperAdminDashboardRoute = currentPath === '/super-admin' || currentPath === '/super-admin/';
+  const isSuperAdminLoginRoute = currentPath.startsWith('/super-admin/login') || currentPath.startsWith('/admin/login');
+  const isSuperAdminDashboardRoute =
+    currentPath === '/super-admin' ||
+    currentPath === '/super-admin/' ||
+    currentPath === '/admin' ||
+    currentPath === '/admin/';
 
   // Dedicated Super Admin Login Route
   if (isSuperAdminLoginRoute) {
@@ -56,7 +59,23 @@ export function App() {
     if (isAuthenticated && user?.role === 'admin') {
       return (
         <ToastProvider>
-          <SuperAdminDashboard />
+          <SuperAdminDashboard
+            onExitAdmin={() => {
+              if (typeof window !== 'undefined') {
+                window.history.pushState({}, '', '/');
+              }
+              setCurrentPath('/');
+              setViewMode('command-center');
+            }}
+            onOpenTemplateStudio={() => {
+              if (typeof window !== 'undefined') {
+                window.history.pushState({}, '', '/');
+              }
+              setCurrentPath('/');
+              setViewMode('workspace');
+              setActiveTab('template-studio');
+            }}
+          />
         </ToastProvider>
       );
     }
@@ -254,7 +273,7 @@ export function App() {
   if (viewMode === 'admin-dashboard' && user?.role === 'admin') {
     return (
       <ToastProvider>
-        <AdminLayout
+        <SuperAdminDashboard
           onExitAdmin={() => setViewMode('command-center')}
           onOpenTemplateStudio={() => {
             setViewMode('workspace');

@@ -64,12 +64,12 @@ beforeEach(async () => {
   // Create test Admin and Organizer
   adminUser = await User.create({
     name: 'Lead Admin Shakti',
-    email: 'shakti@strikzesports.com',
+    email: 'admin@pointx.gg',
     passwordHash: 'hashed_admin_pass',
     role: 'admin',
     status: 'active',
     isEmailVerified: true,
-    organizationName: 'Strikz Esports Network',
+    organizationName: 'PointX Esports Network',
     isOnboarded: true,
   });
   adminToken = generateJwtToken(adminUser);

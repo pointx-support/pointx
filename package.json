@@ -1,7 +1,7 @@
 {
-  "name": "pointstablestrikz",
+  "name": "pointx",
   "private": true,
-  "version": "2.4.0",
+  "version": "2.5.0",
   "type": "module",
   "workspaces": [
     "frontend",

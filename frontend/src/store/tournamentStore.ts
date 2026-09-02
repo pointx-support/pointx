@@ -43,6 +43,7 @@ export interface AppState {
   importTournaments: (incoming: Tournament[]) => number;
   archiveTournament: (tournamentId: string) => void;
   deleteTournament: (tournamentId: string) => void;
+  loadDemoTournaments: () => void;
   
   // Active Tournament Shortcuts
   setTournament: (tournament: Tournament) => void;
@@ -162,10 +163,10 @@ const SEED_MATCHES: Match[] = [
   }
 ];
 
-const INITIAL_TOURNAMENT_1: Tournament = {
+const DEMO_TOURNAMENT_1: Tournament = {
   id: 'tour-ff-champ-2026',
   title: 'Free Fire Grand Championship — Season 5',
-  organizer: 'Strikz Esports Network',
+  organizer: 'PointX Esports Network',
   game: 'Free Fire',
   description: 'Official Tier-1 National League featuring top 12 pro battle royale rosters.',
   tournamentType: 'Battle Royale',
@@ -183,7 +184,7 @@ const INITIAL_TOURNAMENT_1: Tournament = {
   updatedAt: '2026-08-18T19:30:00Z',
 };
 
-const INITIAL_TOURNAMENT_2: Tournament = {
+const DEMO_TOURNAMENT_2: Tournament = {
   id: 'tour-ff-night-scrims',
   title: 'Free Fire Tier-1 Pro Scrims — Night Showdown',
   organizer: 'Apex Gaming League',
@@ -204,10 +205,10 @@ const INITIAL_TOURNAMENT_2: Tournament = {
   updatedAt: '2026-08-18T10:00:00Z',
 };
 
-const INITIAL_TOURNAMENT_3: Tournament = {
+const DEMO_TOURNAMENT_3: Tournament = {
   id: 'tour-ff-summer-finals',
-  title: 'Strikz Winter Invitational — Season 4',
-  organizer: 'Strikz Esports Network',
+  title: 'PointX Winter Invitational — Season 4',
+  organizer: 'PointX Championship Series',
   game: 'Free Fire',
   description: 'Archived season 4 tournament finals results and certificate archives.',
   tournamentType: 'League',
@@ -226,14 +227,14 @@ const INITIAL_TOURNAMENT_3: Tournament = {
   updatedAt: '2026-08-05T22:00:00Z',
 };
 
-const INITIAL_TOURNAMENTS = [INITIAL_TOURNAMENT_1, INITIAL_TOURNAMENT_2, INITIAL_TOURNAMENT_3];
+export const DEMO_TOURNAMENTS = [DEMO_TOURNAMENT_1, DEMO_TOURNAMENT_2, DEMO_TOURNAMENT_3];
 
-const STORAGE_KEY = 'strikz_tournaments_state';
+const STORAGE_KEY = 'pointx_tournaments_state';
 
 function loadStoredTournaments(): { tournaments: Tournament[]; activeTournamentId: string; currentTournament: Tournament } {
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const raw = window.localStorage.getItem(STORAGE_KEY) || window.localStorage.getItem('strikz_tournaments_state');
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -242,14 +243,43 @@ function loadStoredTournaments(): { tournaments: Tournament[]; activeTournamentI
             activeTournamentId: parsed[0].id,
             currentTournament: parsed[0]
           };
+        } else if (Array.isArray(parsed) && parsed.length === 0) {
+          return {
+            tournaments: [],
+            activeTournamentId: '',
+            currentTournament: DEMO_TOURNAMENTS[0]
+          };
         }
       }
     } catch {}
   }
+
+  // Check if admin is currently authenticated in storage
+  let isAdmin = false;
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const rawUser = window.localStorage.getItem('pointx_auth_session_v1') || window.localStorage.getItem('strikz_auth_session_v1');
+      if (rawUser) {
+        const parsed = JSON.parse(rawUser);
+        if (parsed?.role === 'admin' || parsed?.isOriginalAdmin) {
+          isAdmin = true;
+        }
+      }
+    } catch {}
+  }
+
+  if (isAdmin) {
+    return {
+      tournaments: DEMO_TOURNAMENTS,
+      activeTournamentId: DEMO_TOURNAMENTS[0].id,
+      currentTournament: DEMO_TOURNAMENTS[0]
+    };
+  }
+
   return {
-    tournaments: INITIAL_TOURNAMENTS,
-    activeTournamentId: INITIAL_TOURNAMENT_1.id,
-    currentTournament: INITIAL_TOURNAMENT_1
+    tournaments: [],
+    activeTournamentId: '',
+    currentTournament: DEMO_TOURNAMENTS[0]
   };
 }
 
@@ -462,7 +492,7 @@ export const useTournamentStore = create<AppState>((set, get) => ({
   deleteTournament: (tournamentId) => {
     set((state) => {
       const filtered = state.tournaments.filter((t) => t.id !== tournamentId);
-      const nextActive = filtered[0] || INITIAL_TOURNAMENT_1;
+      const nextActive = filtered[0] || DEMO_TOURNAMENT_1;
       persistTournaments(filtered);
       return {
         tournaments: filtered,
@@ -471,6 +501,15 @@ export const useTournamentStore = create<AppState>((set, get) => ({
       };
     });
     tournamentsApi.delete(tournamentId).catch(() => {});
+  },
+
+  loadDemoTournaments: () => {
+    persistTournaments(DEMO_TOURNAMENTS);
+    set({
+      tournaments: DEMO_TOURNAMENTS,
+      activeTournamentId: DEMO_TOURNAMENTS[0].id,
+      currentTournament: DEMO_TOURNAMENTS[0]
+    });
   },
 
   setTournament: (tournament) => {

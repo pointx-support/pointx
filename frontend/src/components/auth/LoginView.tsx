@@ -13,7 +13,6 @@ import {
   RefreshCw,
   ArrowLeft,
   Loader2,
-  ShieldCheck,
 } from 'lucide-react';
 import { PointXLogo } from '../ui/PointXLogo';
 import { cn } from '../../lib/utils';
@@ -206,7 +205,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </div>
           <div className="flex flex-col border-l border-[var(--border-subtle)] pl-3">
             <span className="font-bold text-xs font-mono text-[var(--accent-primary)] uppercase tracking-wider">
-              By Strikz Esports
+              PointX Esports
             </span>
             <span className="text-[10px] font-mono font-bold tracking-widest text-[var(--text-muted)] uppercase -mt-0.5">
               Tournament Operating System
@@ -364,16 +363,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   Register Now
                 </button>
               </p>
-            </div>
-
-            <div className="pt-3 mt-3 border-t border-slate-800/40 text-center slide-element">
-              <a
-                href="/super-admin/login"
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 hover:text-cyan-200 hover:bg-cyan-900/50 text-xs font-mono font-medium transition-all group"
-              >
-                <ShieldCheck className="h-3.5 w-3.5 group-hover:scale-110 transition-transform" />
-                <span>Super Admin Access</span>
-              </a>
             </div>
           </form>
         </div>

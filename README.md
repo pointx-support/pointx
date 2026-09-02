@@ -179,4 +179,4 @@ NODE_ENV=production npm run server
 ---
 
 ## 📄 License
-PointX Esports Tournament OS is proprietary software developed by **Strikz Esports Network**. All rights reserved.
+PointX Esports Tournament OS is proprietary software developed by **PointX Esports Network**. All rights reserved.

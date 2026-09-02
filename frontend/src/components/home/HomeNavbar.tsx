@@ -94,7 +94,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
             <PointXLogo className="h-8 sm:h-9 w-auto max-w-[115px] object-contain group-hover:scale-105 transition-transform" />
             <div className="hidden sm:flex flex-col border-l border-[var(--border-subtle)] pl-3">
               <span className="font-bold text-[11px] font-mono text-[var(--accent-primary)] uppercase tracking-wider">
-                By Strikz Esports
+                PointX Esports
               </span>
               <span className="text-[9px] font-mono font-bold tracking-widest text-[var(--text-muted)] uppercase -mt-0.5">
                 Tournament OS

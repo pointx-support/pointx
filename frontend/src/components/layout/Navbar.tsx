@@ -102,7 +102,7 @@ export const Navbar: FC<NavbarProps> = ({
               /* Command Center Subtitle */
               <div className="flex flex-col border-l border-[var(--border-subtle)] pl-3.5 hidden sm:flex">
                 <span className="font-bold text-xs font-mono text-[var(--accent-primary)] uppercase tracking-wider">
-                  By Strikz Esports
+                  PointX Esports
                 </span>
                 <span className="text-[9px] font-mono font-bold tracking-widest text-[var(--text-muted)] uppercase -mt-0.5">
                   Official Esports Platform
@@ -150,26 +150,28 @@ export const Navbar: FC<NavbarProps> = ({
                       <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold uppercase ${
                         user.role === 'admin' ? 'bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30' : 'bg-[var(--bg-surface-inset)] text-[var(--text-secondary)] border border-[var(--border-subtle)]'
                       }`}>
-                        {user.role === 'admin' ? 'Admin' : 'User'}
+                        {user.role === 'admin' ? 'Admin' : 'Organizer'}
                       </span>
                     </div>
                     <div className="text-xs text-[var(--text-secondary)] font-mono truncate mt-0.5">{user.email}</div>
                   </div>
 
-                  {/* Switch Role Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = user.role === 'admin' ? 'organizer' : 'admin';
-                      useAuthStore.getState().setRole(next);
-                    }}
-                    className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs sm:text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-all text-left cursor-pointer font-semibold"
-                  >
-                    <span>Switch Role</span>
-                    <span className="text-xs font-mono font-bold text-[var(--accent-primary)]">
-                      {user.role === 'admin' ? '→ Normal User' : '→ Admin Mode'}
-                    </span>
-                  </button>
+                  {/* Switch Role Button - Exclusively for Admins */}
+                  {(user.role === 'admin' || (user as any).isOriginalAdmin) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = user.role === 'admin' ? 'organizer' : 'admin';
+                        useAuthStore.getState().setRole(next);
+                      }}
+                      className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs sm:text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-all text-left cursor-pointer font-semibold"
+                    >
+                      <span>Switch Role</span>
+                      <span className="text-xs font-mono font-bold text-[var(--accent-primary)]">
+                        {user.role === 'admin' ? '→ Normal User' : '→ Admin Mode'}
+                      </span>
+                    </button>
+                  )}
 
                   {/* Admin Dashboard Entry Point (Only for Admins) */}
                   {user?.role === 'admin' && (

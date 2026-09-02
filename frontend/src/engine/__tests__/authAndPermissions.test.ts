@@ -28,9 +28,9 @@ beforeEach(() => {
             user: {
               id: 'usr-test',
               name: 'Shakti',
-              email: body.email || 'organizer@strikzesports.com',
+              email: body.email || 'organizer@pointx.gg',
               role: body.email?.includes('shakti') ? 'admin' : 'organizer',
-              organizationName: 'Strikz Esports Network',
+              organizationName: 'PointX Esports Network',
               isOnboarded: true,
               preferences: { theme: 'dark', broadcastResolution: '1080p' },
             },
@@ -78,9 +78,9 @@ describe('Authentication, Admin & Permissions System (Phase 11 Verification)', (
   const adminUser: User = {
     id: 'usr-admin-test',
     name: 'Shakti Admin',
-    email: 'admin@strikzesports.com',
+    email: 'admin@pointx.gg',
     role: 'admin',
-    organizationName: 'Strikz Network',
+    organizationName: 'PointX Network',
     createdAt: '2026-08-18T00:00:00Z',
     lastLoginAt: '2026-08-18T00:00:00Z',
     preferences: {
@@ -133,10 +133,10 @@ describe('Authentication, Admin & Permissions System (Phase 11 Verification)', (
     expect(invalidLogin.success).toBe(false);
 
     // 2. Login with valid email succeeds
-    const validLogin = await store.login('organizer@strikzesports.com', 'securepass123');
+    const validLogin = await store.login('organizer@pointx.gg', 'securepass123');
     expect(validLogin.success).toBe(true);
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
-    expect(useAuthStore.getState().user?.email).toBe('organizer@strikzesports.com');
+    expect(useAuthStore.getState().user?.email).toBe('organizer@pointx.gg');
 
     // 3. Logout clears user & session
     await store.logout();
@@ -152,11 +152,11 @@ describe('Authentication, Admin & Permissions System (Phase 11 Verification)', (
   // Test 2: Profile and Preference updates
   it('Test 2: should update profile and user theme preferences', async () => {
     const store = useAuthStore.getState();
-    await store.login('shakti@strikzesports.com', 'admin123');
+    await store.login('shakti@pointx.gg', 'admin123');
 
-    await store.updateProfile({ name: 'Shakti Lead Director', organizationName: 'Strikz Global' });
+    await store.updateProfile({ name: 'Shakti Lead Director', organizationName: 'PointX Global' });
     expect(useAuthStore.getState().user?.name).toBe('Shakti Lead Director');
-    expect(useAuthStore.getState().user?.organizationName).toBe('Strikz Global');
+    expect(useAuthStore.getState().user?.organizationName).toBe('PointX Global');
 
     await store.updatePreferences({ theme: 'light', broadcastResolution: '4k' });
     expect(useAuthStore.getState().user?.preferences.theme).toBe('light');
@@ -166,7 +166,7 @@ describe('Authentication, Admin & Permissions System (Phase 11 Verification)', (
   // Test 3: Password validation
   it('Test 3: should enforce security password rules', async () => {
     const store = useAuthStore.getState();
-    await store.login('shakti@strikzesports.com', 'admin123');
+    await store.login('shakti@pointx.gg', 'admin123');
 
     const shortPass = await store.changePassword('admin123', '123');
     expect(shortPass.success).toBe(false);
@@ -194,7 +194,7 @@ describe('Authentication, Admin & Permissions System (Phase 11 Verification)', (
   // Test 5: Audit Activity Logging
   it('Test 5: should log sensitive organizer activities in audit trail', () => {
     const store = useAuthStore.getState();
-    store.login('shakti@strikzesports.com', 'admin');
+    store.login('shakti@pointx.gg', 'admin');
 
     store.recordActivity('Match #4 Finalized', 'match', 'Official scores verified.');
     const activities = useAuthStore.getState().activities;

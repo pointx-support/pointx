@@ -21,7 +21,7 @@ export const HomeFooter: React.FC = () => {
               <PointXLogo className="h-8 sm:h-9 w-auto max-w-[120px] object-contain select-none" />
               <div className="flex flex-col border-l border-[var(--border-subtle)] pl-3">
                 <span className="font-bold text-xs font-mono text-[var(--accent-primary)] uppercase tracking-wider">
-                  By Strikz Esports
+                  PointX Esports
                 </span>
                 <span className="text-[9px] font-mono font-bold tracking-widest text-[var(--text-muted)] uppercase -mt-0.5">
                   Tournament Operating System
@@ -76,7 +76,7 @@ export const HomeFooter: React.FC = () => {
                 <li><span className="text-[var(--text-muted)] font-mono">Version 2.4.0 (Stable)</span></li>
                 <li><span className="text-[var(--text-muted)] font-mono">FFWS Official Rules</span></li>
                 <li><span className="text-[var(--text-muted)] font-mono">OBS Studio Ready</span></li>
-                <li><span className="text-[var(--text-muted)] font-mono">Strikz Esports Hub</span></li>
+                <li><span className="text-[var(--text-muted)] font-mono">PointX Esports Hub</span></li>
               </ul>
             </div>
           </div>

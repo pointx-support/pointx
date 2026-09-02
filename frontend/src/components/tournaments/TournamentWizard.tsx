@@ -220,7 +220,7 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
     const newTournament: Tournament = {
       id: newId,
       title: title.trim(),
-      organizer: organizer.trim() || 'Strikz Arena',
+      organizer: organizer.trim() || 'PointX Arena',
       logoUrl: tournamentLogoUrl.trim() || undefined,
       organizerLogoUrl: organizerLogoUrl.trim() || undefined,
       game: 'Free Fire',
@@ -975,7 +975,7 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
                       </div>
                       <h2 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] mt-1.5 font-display">{title}</h2>
                       <p className="text-xs sm:text-sm text-[var(--text-secondary)] font-mono">
-                        Organized by <strong className="text-[var(--text-primary)] font-sans">{organizer || 'Strikz Arena'}</strong> • {tournamentType}
+                        Organized by <strong className="text-[var(--text-primary)] font-sans">{organizer || 'PointX Arena'}</strong> • {tournamentType}
                       </p>
                     </div>
                   </div>

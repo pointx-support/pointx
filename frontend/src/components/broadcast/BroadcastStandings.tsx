@@ -174,7 +174,7 @@ export const BroadcastStandings: FC<BroadcastStandingsProps> = ({
 
       {/* Broadcast Watermark Footer */}
       <div className="flex items-center justify-between text-[11px] font-mono text-[#a89f91] px-4 py-2 mt-1">
-        <span>STRIKZ ARENA BROADCAST ENGINE</span>
+        <span>POINTX ARENA BROADCAST ENGINE</span>
         <span className="text-[#e0684b]">1920 × 1080 60FPS OBS OVERLAY</span>
       </div>
     </div>

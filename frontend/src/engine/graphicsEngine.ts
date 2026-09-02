@@ -27,7 +27,7 @@ export const GRAPHIC_TEMPLATES: GraphicsTemplateDefinition[] = [
   },
   {
     id: 'overall-standings-strikz',
-    name: 'Strikz Paid Scrims (Orange Gold)',
+    name: 'PointX Scrims (Orange Gold)',
     category: 'overall-standings',
     description: 'Warm fiery battleground aesthetic with 3D heraldic crest, gold header bars, and high-contrast white team boxes.',
     aspectRatio: '16:9',
@@ -75,7 +75,7 @@ export function prepareGraphicsRenderData(
   return {
     tournamentTitle: options?.customTitle?.trim() || tournament.title,
     tournamentLogo: tournament.logoUrl,
-    organizerName: options?.organizerName?.trim() || tournament.organizer || 'STRIKZ ESPORTS',
+    organizerName: options?.organizerName?.trim() || tournament.organizer || 'POINTX ESPORTS',
     subtitle: options?.customSubtitle?.trim() || `OFFICIAL OVERALL STANDINGS • ${completedMatches.length} MATCHES`,
     page: currentPage,
     totalPages,

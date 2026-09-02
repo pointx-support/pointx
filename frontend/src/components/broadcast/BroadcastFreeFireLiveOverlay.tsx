@@ -41,7 +41,11 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
   const [isOverlayVisible, setIsOverlayVisible] = useState<boolean>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        const stored = window.localStorage.getItem(`strikz_squads_${tournament.id}`) || window.localStorage.getItem('strikz_squads_default');
+        const stored =
+          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
+          window.localStorage.getItem('pointx_squads_default') ||
+          window.localStorage.getItem(`strikz_squads_${tournament.id}`) ||
+          window.localStorage.getItem('strikz_squads_default');
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed.isVisible !== undefined) return parsed.isVisible;

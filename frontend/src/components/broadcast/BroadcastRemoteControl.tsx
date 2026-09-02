@@ -95,7 +95,9 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = () 
   const [eliminationOrder, setEliminationOrder] = useState<string[]>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        const stored = window.localStorage.getItem(`strikz_elim_order_${tournament.id}`);
+        const stored =
+          window.localStorage.getItem(`pointx_elim_order_${tournament.id}`) ||
+          window.localStorage.getItem(`strikz_elim_order_${tournament.id}`);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) return parsed;
@@ -109,7 +111,11 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = () 
   const [squadStates, setSquadStates] = useState<Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]>>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        const stored = window.localStorage.getItem(`strikz_squads_${tournament.id}`) || window.localStorage.getItem('strikz_squads_default');
+        const stored =
+          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
+          window.localStorage.getItem('pointx_squads_default') ||
+          window.localStorage.getItem(`strikz_squads_${tournament.id}`) ||
+          window.localStorage.getItem('strikz_squads_default');
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed?.squads) return parsed.squads;
@@ -127,7 +133,11 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = () 
   const [highlightedTeamId, setHighlightedTeamId] = useState<string | null>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        const stored = window.localStorage.getItem(`strikz_squads_${tournament.id}`) || window.localStorage.getItem('strikz_squads_default');
+        const stored =
+          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
+          window.localStorage.getItem('pointx_squads_default') ||
+          window.localStorage.getItem(`strikz_squads_${tournament.id}`) ||
+          window.localStorage.getItem('strikz_squads_default');
         if (stored) {
           const parsed = JSON.parse(stored);
           return parsed?.highlightedTeamId || null;
@@ -249,7 +259,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = () 
     // Save elim order locally
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        window.localStorage.setItem(`strikz_elim_order_${tournament.id}`, JSON.stringify(currentElimOrder));
+        window.localStorage.setItem(`pointx_elim_order_${tournament.id}`, JSON.stringify(currentElimOrder));
       } catch {}
     }
 

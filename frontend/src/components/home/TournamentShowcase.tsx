@@ -33,11 +33,11 @@ export const TournamentShowcase: React.FC<TournamentShowcaseProps> = ({
       date: 'Tonight • 8:00 PM IST',
       mapRotation: ['Bermuda', 'Purgatory', 'Kalahari', 'Alpine'],
       featured: true,
-      organizer: 'Strikz Esports Official',
+      organizer: 'PointX Esports Official',
     },
     {
       id: 'tour-2',
-      title: 'Strikz All-Star Battle Royale Invitational',
+      title: 'PointX All-Star Battle Royale Invitational',
       game: 'Free Fire MAX',
       status: 'Upcoming' as const,
       prizePool: '₹100,000',
@@ -72,7 +72,7 @@ export const TournamentShowcase: React.FC<TournamentShowcaseProps> = ({
       date: 'Finalized Yesterday',
       mapRotation: ['Bermuda', 'Purgatory'],
       featured: false,
-      organizer: 'Strikz Esports Hub',
+      organizer: 'PointX Esports Hub',
     },
   ];
 

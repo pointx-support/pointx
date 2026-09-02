@@ -9,12 +9,12 @@ interface GraphicsHistoryState {
   getTournamentGraphics: (tournamentId: string) => GeneratedGraphicRecord[];
 }
 
-const STORAGE_KEY = 'strikz_graphics_history_v1';
+const STORAGE_KEY = 'pointx_graphics_history_v1';
 
 function loadInitialHistory(): GeneratedGraphicRecord[] {
   if (typeof window === 'undefined' || !window.localStorage) return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(STORAGE_KEY) || window.localStorage.getItem('strikz_graphics_history_v1');
     return raw ? JSON.parse(raw) : [];
   } catch (e) {
     console.warn('Failed to load graphics history', e);

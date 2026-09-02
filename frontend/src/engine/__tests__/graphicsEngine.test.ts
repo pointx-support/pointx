@@ -35,7 +35,7 @@ describe('Graphics Template Engine (Phase 8 Verification)', () => {
   const testTournament: Tournament = {
     id: 'tour-graphics-test',
     title: 'Free Fire Graphics Championship',
-    organizer: 'Strikz Network',
+    organizer: 'PointX Network',
     game: 'Free Fire',
     tournamentType: 'Battle Royale',
     status: 'Live',
@@ -48,7 +48,7 @@ describe('Graphics Template Engine (Phase 8 Verification)', () => {
   };
 
   // Test 1: Template Registry Verification
-  it('Test 1: should register both production templates (Legit Showdown & Strikz Paid Scrims)', () => {
+  it('Test 1: should register both production templates (Legit Showdown & PointX Scrims)', () => {
     expect(GRAPHIC_TEMPLATES.length).toBe(2);
 
     const legitTemplate = getTemplateDefinition('overall-standings-legit');
@@ -60,7 +60,7 @@ describe('Graphics Template Engine (Phase 8 Verification)', () => {
 
     const strikzTemplate = getTemplateDefinition('overall-standings-strikz');
     expect(strikzTemplate.id).toBe('overall-standings-strikz');
-    expect(strikzTemplate.name).toContain('Strikz Paid Scrims');
+    expect(strikzTemplate.name).toContain('PointX Scrims');
     expect(strikzTemplate.width).toBe(1920);
     expect(strikzTemplate.height).toBe(1080);
   });
@@ -70,7 +70,7 @@ describe('Graphics Template Engine (Phase 8 Verification)', () => {
     const renderData = prepareGraphicsRenderData(testTournament, 'overall-standings-legit');
 
     expect(renderData.tournamentTitle).toBe('Free Fire Graphics Championship');
-    expect(renderData.organizerName).toBe('Strikz Network');
+    expect(renderData.organizerName).toBe('PointX Network');
     expect(renderData.totalMatchesCount).toBe(1);
 
     // Verify first row is #1 with Booyah and matching points

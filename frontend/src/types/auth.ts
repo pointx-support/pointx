@@ -42,6 +42,7 @@ export interface User {
   orgSize?: '200+' | '500+' | '1000+' | '5000+' | '10,000+' | '20,000+' | string;
   heardFrom?: string;
   isOnboarded?: boolean;
+  isOriginalAdmin?: boolean;
   createdAt: string;
   lastLoginAt: string;
   preferences: UserPreferences;

@@ -26,6 +26,8 @@ export interface OrganizerDrawerProps {
   onRestore: (id: string) => void;
   onDelete: (id: string) => void;
   onEdit: (organizer: AdminUserRecord) => void;
+  onPromote?: (id: string) => void;
+  onDemote?: (id: string) => void;
 }
 
 export const OrganizerDrawer: React.FC<OrganizerDrawerProps> = ({
@@ -37,6 +39,8 @@ export const OrganizerDrawer: React.FC<OrganizerDrawerProps> = ({
   onRestore,
   onDelete,
   onEdit,
+  onPromote,
+  onDemote,
 }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'organization' | 'activity'>('profile');
   const [rejectReason, setRejectReason] = useState('');
@@ -138,8 +142,41 @@ export const OrganizerDrawer: React.FC<OrganizerDrawerProps> = ({
 
         {/* Sub-header Banner */}
         <div className="p-5 bg-slate-900/60 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
-          <div>{getStatusBadge(organizer.status)}</div>
           <div className="flex items-center gap-2">
+            {getStatusBadge(organizer.status)}
+            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-mono font-bold ${
+              organizer.role === 'admin'
+                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                : 'bg-slate-800 text-slate-300 border border-slate-700'
+            }`}>
+              <ShieldCheck className="h-3.5 w-3.5 text-purple-400" />
+              <span>{organizer.role === 'admin' ? 'Admin / Super Admin' : 'Organizer'}</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {organizer.role === 'admin' ? (
+              onDemote && (
+                <button
+                  type="button"
+                  onClick={() => onDemote(organizer.id || (organizer as any)._id)}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs font-bold flex items-center gap-1.5 border border-amber-500/30 transition-all cursor-pointer"
+                  title="Demote to standard organizer"
+                >
+                  <User className="h-3.5 w-3.5" /> Demote to Organizer
+                </button>
+              )
+            ) : (
+              onPromote && (
+                <button
+                  type="button"
+                  onClick={() => onPromote(organizer.id || (organizer as any)._id)}
+                  className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  title="Promote account to Admin / Super Admin"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" /> Promote to Admin
+                </button>
+              )
+            )}
             <button
               onClick={() => onEdit(organizer)}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition-all cursor-pointer"

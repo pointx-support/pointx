@@ -32,7 +32,7 @@ export const MyOrganizationView: React.FC<MyOrganizationViewProps> = ({ onBackTo
   };
 
   const [organizationName, setOrganizationName] = useState(
-    user?.organizationName || currentTournament?.organizer || 'STRIKZ ESPORTS'
+    user?.organizationName || currentTournament?.organizer || 'POINTX ESPORTS'
   );
   const [organizationLogoUrl, setOrganizationLogoUrl] = useState<string | undefined>(
     user?.organizationLogoUrl || currentTournament?.organizerLogoUrl

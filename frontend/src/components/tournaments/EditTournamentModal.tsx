@@ -34,7 +34,7 @@ export const EditTournamentModal: React.FC<EditTournamentModalProps> = ({
 
     onSave(tournament.id, {
       title: title.trim(),
-      organizer: organizer.trim() || 'Strikz Arena',
+      organizer: organizer.trim() || 'PointX Arena',
       description: description.trim(),
       status,
       tournamentType,

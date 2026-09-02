@@ -138,7 +138,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
   const renderData: GraphicsRenderData = {
     tournamentTitle: currentTournament?.title || user?.defaultTournamentTitle || 'TOURNAMENT CHAMPIONSHIP',
     tournamentLogo: currentTournament?.logoUrl || user?.tournamentLogoUrl,
-    organizerName: currentTournament?.organizer || user?.organizationName || 'STRIKZ ARENA',
+    organizerName: currentTournament?.organizer || user?.organizationName || 'POINTX ARENA',
     organizerLogo: currentTournament?.organizerLogoUrl || user?.organizationLogoUrl,
     rows: standings,
     page: 1,

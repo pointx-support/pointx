@@ -121,12 +121,16 @@ export function createApp(): Application {
     // Serve static frontend assets (JS, CSS, images, bgvideo.mp4, fonts)
     app.use(
       express.static(frontendDistPath, {
-        maxAge: '1d',
         setHeaders: (res, filePath) => {
           if (filePath.endsWith('index.html')) {
-            res.setHeader('Cache-Control', 'no-cache');
-          } else if (filePath.includes('/assets/')) {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+            res.setHeader('Surrogate-Control', 'no-store');
+          } else if (filePath.includes('/assets/') || filePath.includes('\\assets\\')) {
             res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          } else {
+            res.setHeader('Cache-Control', 'public, max-age=86400');
           }
         },
       })
@@ -139,6 +143,10 @@ export function createApp(): Application {
       }
       const indexPath = path.join(frontendDistPath, 'index.html');
       if (fs.existsSync(indexPath)) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Surrogate-Control', 'no-store');
         return res.sendFile(indexPath);
       }
       return next();

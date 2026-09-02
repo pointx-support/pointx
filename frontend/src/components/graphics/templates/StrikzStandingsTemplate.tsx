@@ -151,7 +151,7 @@ export const StrikzStandingsTemplate: React.FC<StrikzStandingsTemplateProps> = (
       className="w-full h-full block select-none"
     >
       <defs>
-        <filter id="strikzTextGlow" x="-20%" y="-20%" width="140%" height="140%">
+        <filter id="pointxTextGlow" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#f59e0b" floodOpacity="0.4" />
         </filter>
       </defs>
@@ -186,7 +186,7 @@ export const StrikzStandingsTemplate: React.FC<StrikzStandingsTemplateProps> = (
             fontWeight="700"
             fontSize="64"
             letterSpacing="8"
-            filter="url(#strikzTextGlow)"
+            filter="url(#pointxTextGlow)"
           >
             {subtitle}
           </text>
