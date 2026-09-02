@@ -118,7 +118,7 @@ export const Sidebar: FC<SidebarProps> = ({
       return;
     }
 
-    if (tabId === 'account' || tabId === 'organization') {
+    if (tabId === 'account' || tabId === 'organization' || tabId === 'settings') {
       if (onSelectWorkspaceTab) onSelectWorkspaceTab(tabId as any);
       else setActiveTab(tabId as any);
       return;

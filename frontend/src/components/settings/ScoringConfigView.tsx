@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
 import type { ScoringPreset, PlacementRule, RawMatchTeamResult } from '../../types/scoring';
 import { useTournamentStore } from '../../store/tournamentStore';
-import { calculateTeamMatchScore, DEFAULT_FREE_FIRE_SCORING, FREE_FIRE_AGGRESSIVE_SCORING, FREE_FIRE_SURVIVAL_BOOST_SCORING } from '../../engine/scoringEngine';
+import {
+  calculateTeamMatchScore,
+  normalizeScoringConfig,
+  OFFICIAL_FF_PLACEMENT_TABLE,
+  DEFAULT_FREE_FIRE_SCORING,
+  FREE_FIRE_AGGRESSIVE_SCORING,
+  FREE_FIRE_SURVIVAL_BOOST_SCORING
+} from '../../engine/scoringEngine';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Input } from '../ui/Input';
@@ -12,7 +19,8 @@ import {
   Calculator,
   Save,
   RotateCcw,
-  ArrowLeft
+  ArrowLeft,
+  Trophy
 } from 'lucide-react';
 
 const PRESET_LIST: ScoringPreset[] = [
@@ -22,13 +30,26 @@ const PRESET_LIST: ScoringPreset[] = [
 ];
 
 export const ScoringConfigView: React.FC = () => {
-  const { currentTournament, updateTournament, goBackTab } = useTournamentStore();
+  const { currentTournament, tournaments, setCurrentTournamentId, updateTournament, goBackTab } = useTournamentStore();
   const { showToast } = useToast();
 
-  const [activePreset, setActivePreset] = useState<ScoringPreset>(() => currentTournament.scoringPreset);
+  const [activePreset, setActivePreset] = useState<ScoringPreset>(() =>
+    normalizeScoringConfig(currentTournament?.scoringPreset)
+  );
   const [testPlacement, setTestPlacement] = useState<number>(1);
   const [testKills, setTestKills] = useState<number>(6);
   const [testBooyah, setTestBooyah] = useState<boolean>(true);
+
+  // Sync when current tournament changes
+  React.useEffect(() => {
+    if (currentTournament?.scoringPreset) {
+      setActivePreset(normalizeScoringConfig(currentTournament.scoringPreset));
+    }
+  }, [currentTournament?.id]);
+
+  const placementRules: PlacementRule[] = Array.isArray(activePreset?.placementTable) && activePreset.placementTable.length > 0
+    ? activePreset.placementTable
+    : OFFICIAL_FF_PLACEMENT_TABLE;
 
   // Live test calculation sandbox
   const testRaw: RawMatchTeamResult = {
@@ -39,7 +60,12 @@ export const ScoringConfigView: React.FC = () => {
     booyah: testBooyah
   };
 
-  const sandboxResult = calculateTeamMatchScore(testRaw, activePreset);
+  const safePresetForCalc: ScoringPreset = {
+    ...activePreset,
+    placementTable: placementRules
+  };
+
+  const sandboxResult = calculateTeamMatchScore(testRaw, safePresetForCalc);
 
   const handleSelectPreset = (presetId: string) => {
     const found = PRESET_LIST.find((p: ScoringPreset) => p.id === presetId);
@@ -50,13 +76,16 @@ export const ScoringConfigView: React.FC = () => {
 
   const handlePlacementPointsChange = (rank: number, points: number) => {
     setActivePreset((prev: ScoringPreset) => {
-      const updatedRules: PlacementRule[] = prev.placementTable.map((r: PlacementRule) =>
-        r.place === rank ? { ...r, points: Math.max(0, points) } : r
+      const currentRules = Array.isArray(prev?.placementTable) && prev.placementTable.length > 0
+        ? prev.placementTable
+        : OFFICIAL_FF_PLACEMENT_TABLE;
+      const updatedRules: PlacementRule[] = currentRules.map((r: PlacementRule) =>
+        r.place === rank ? { ...r, points: Math.max(0, Math.floor(points)) } : r
       );
       return {
         ...prev,
         isOfficial: false,
-        name: prev.name.includes('Custom') ? prev.name : `${prev.name} (Customized)`,
+        name: prev?.name?.includes('Custom') ? prev.name : `${prev?.name || 'Custom'} (Customized)`,
         placementTable: updatedRules
       };
     });
@@ -66,23 +95,35 @@ export const ScoringConfigView: React.FC = () => {
     setActivePreset((prev: ScoringPreset) => ({
       ...prev,
       isOfficial: false,
-      name: prev.name.includes('Custom') ? prev.name : `${prev.name} (Customized)`,
+      name: prev?.name?.includes('Custom') ? prev.name : `${prev?.name || 'Custom'} (Customized)`,
       killPoints: Math.max(0, points)
     }));
   };
 
   const handleSaveToTournament = () => {
-    const updated = {
+    const updated: ScoringPreset = {
       ...activePreset,
+      placementTable: placementRules,
       version: (activePreset.version || 1) + 1
     };
 
-    updateTournament(currentTournament.id, { scoringPreset: updated });
-    showToast({
-      type: 'success',
-      title: 'Scoring Rules Applied',
-      message: 'New points matrix saved and active for this tournament.'
-    });
+    if (currentTournament) {
+      updateTournament(currentTournament.id, { scoringPreset: updated });
+      showToast({
+        type: 'success',
+        title: 'Scoring Rules Applied',
+        message: `New points matrix saved and active for "${currentTournament.title || (currentTournament as any).name || 'Tournament'}".`
+      });
+    } else {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('pointx_default_scoring_preset', JSON.stringify(updated));
+      }
+      showToast({
+        type: 'success',
+        title: 'Default Rules Saved',
+        message: 'Saved as default scoring matrix for all upcoming tournaments.'
+      });
+    }
   };
 
   const handleResetDefaults = () => {
@@ -116,6 +157,35 @@ export const ScoringConfigView: React.FC = () => {
             <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-0.5">
               Configure placement points and elimination frag values for tournament standings calculations.
             </p>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {currentTournament ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30 text-xs font-mono font-bold">
+                  <Trophy className="h-3 w-3" />
+                  Tournament: {currentTournament.title || (currentTournament as any).name}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-mono font-bold">
+                  Organization Global Default Rules
+                </span>
+              )}
+              {tournaments && tournaments.length > 0 && (
+                <select
+                  value={currentTournament?.id || ''}
+                  onChange={(e) => {
+                    const selected = tournaments.find((t) => t.id === e.target.value);
+                    if (selected) setCurrentTournamentId(selected.id);
+                  }}
+                  className="text-xs font-mono px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-inset)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                >
+                  <option value="">-- Apply to specific tournament --</option>
+                  {tournaments.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.title || (t as any).name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
         </div>
 
@@ -182,7 +252,7 @@ export const ScoringConfigView: React.FC = () => {
               Placement Points Table
             </h3>
             <Badge variant="official" size="sm">
-              {activePreset.placementTable.length} Placements
+              {placementRules.length} Placements
             </Badge>
           </div>
 
@@ -195,7 +265,7 @@ export const ScoringConfigView: React.FC = () => {
                 <input
                   type="number"
                   min={0}
-                  value={activePreset.killPoints}
+                  value={activePreset.killPoints ?? 1}
                   onChange={(e) => handleKillPointsChange(Number(e.target.value))}
                   className="w-28 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-inset)] px-3 py-2 text-sm sm:text-base font-bold text-[var(--status-danger)] text-center shadow-[var(--shadow-inset)] focus:outline-none focus:border-[var(--accent-primary)] font-numbers"
                 />
@@ -204,7 +274,7 @@ export const ScoringConfigView: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
-              {activePreset.placementTable.map((rule: PlacementRule) => (
+              {placementRules.map((rule: PlacementRule) => (
                 <div
                   key={rule.place}
                   className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] shadow-[var(--shadow-inset)] font-mono"

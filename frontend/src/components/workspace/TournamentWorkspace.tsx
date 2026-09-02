@@ -25,7 +25,8 @@ export const TournamentWorkspace: React.FC<TournamentWorkspaceProps> = ({
   tournament,
   onBackToDashboard
 }) => {
-  const { activeTab, goBackTab, previousTab } = useTournamentStore();
+  const { currentTournament, activeTab, goBackTab, previousTab } = useTournamentStore();
+  const effectiveTournament = tournament || currentTournament;
 
   const previousTabLabel = {
     standings: 'Point Table',
@@ -83,8 +84,8 @@ export const TournamentWorkspace: React.FC<TournamentWorkspaceProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {tournament.teams.flatMap((team: any) =>
-                team.players.map((player: any) => (
+              {(effectiveTournament?.teams || []).flatMap((team: any) =>
+                (team.players || []).map((player: any) => (
                   <div
                     key={player.id}
                     className="p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-[var(--shadow-flat)] flex items-center justify-between"
