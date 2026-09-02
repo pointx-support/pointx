@@ -107,11 +107,16 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const [isConnected, setIsConnected] = useState<boolean>(true);
   const [lastSyncTime, setLastSyncTime] = useState<number>(Date.now());
 
-  // Security PIN Verification State
+  // Security PIN Verification State (Valid for at least 6 hours)
+  const PIN_TTL_MS = 6 * 60 * 60 * 1000;
   const pinStorageKey = `pointx_remote_pin_verified_${targetTournamentId}`;
+  const pinExpiryKey = `pointx_remote_pin_expiry_${targetTournamentId}`;
+
   const [isPinVerified, setIsPinVerified] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      return window.localStorage.getItem(pinStorageKey) === 'true';
+      const verified = window.localStorage.getItem(pinStorageKey) === 'true';
+      const expiry = Number(window.localStorage.getItem(pinExpiryKey)) || 0;
+      return verified && (expiry === 0 || expiry > Date.now());
     }
     return false;
   });
@@ -194,6 +199,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       if (data.success && data.verified) {
         if (typeof window !== 'undefined') {
           window.localStorage.setItem(pinStorageKey, 'true');
+          window.localStorage.setItem(pinExpiryKey, String(Date.now() + PIN_TTL_MS));
         }
         setIsPinVerified(true);
         showToast({
@@ -750,7 +756,9 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   };
 
   const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
-  const liveObsUrl = `${origin}/?mode=broadcast&tournamentId=${tournament.id}&layout=live-squads`;
+  const stableToken = urlParams?.get('token') || (typeof window !== 'undefined' ? window.localStorage.getItem(`pointx_broadcast_token_${tournament.id}`) : '') || '';
+  const tokenQuery = stableToken ? `&token=${encodeURIComponent(stableToken)}` : '';
+  const liveObsUrl = `${origin}/?mode=broadcast&tournamentId=${tournament.id}&layout=live-squads${tokenQuery}`;
 
   // ALIVE TEAMS AT TOP, ELIMINATED TEAMS SINK TO BOTTOM:
   const sortedTeamsBySlot = [...tournament.teams].sort((a, b) => (a.slotNumber || 0) - (b.slotNumber || 0));

@@ -27,12 +27,33 @@ interface RemoteDeviceSession {
   isBlocked: boolean;
 }
 
+const TOKEN_TTL_MS = 6 * 60 * 60 * 1000; // 6 Hours
+
+function getPersistentBroadcastToken(tournamentId: string): string {
+  if (typeof window === 'undefined' || !window.localStorage) return 'px_live_token';
+  const key = `pointx_broadcast_token_${tournamentId}`;
+  const expiryKey = `pointx_broadcast_token_expiry_${tournamentId}`;
+
+  const existing = window.localStorage.getItem(key);
+  const expiry = Number(window.localStorage.getItem(expiryKey)) || 0;
+
+  if (existing && expiry > Date.now()) {
+    return existing;
+  }
+
+  const cleanId = (tournamentId || 'tour').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+  const newToken = `px_${cleanId}_${Math.random().toString(36).substring(2, 8)}`;
+  window.localStorage.setItem(key, newToken);
+  window.localStorage.setItem(expiryKey, String(Date.now() + TOKEN_TTL_MS));
+  return newToken;
+}
+
 export const BroadcastControlView: React.FC = () => {
   const { currentTournament, goBackTab } = useTournamentStore();
   const { showToast } = useToast();
 
   const [overlayType, setOverlayType] = useState<'live-squads' | 'standings' | 'match' | 'mvp' | 'lowerthird' | 'graphic'>('live-squads');
-  const [token] = useState(() => Math.random().toString(36).substring(2, 10));
+  const [token, setToken] = useState<string>(() => getPersistentBroadcastToken(currentTournament.id));
 
   // Security PIN and Devices State
   const [pinCode, setPinCode] = useState<string>('1234');
@@ -48,6 +69,12 @@ export const BroadcastControlView: React.FC = () => {
 
   const standings = calculateTournamentStandings(currentTournament);
 
+  useEffect(() => {
+    if (currentTournament.id) {
+      setToken(getPersistentBroadcastToken(currentTournament.id));
+    }
+  }, [currentTournament.id]);
+
   // Poll live sync state for connected devices and active PIN across all networks
   useEffect(() => {
     let isMounted = true;
@@ -60,6 +87,14 @@ export const BroadcastControlView: React.FC = () => {
           if (data.data.pinCode) setPinCode(data.data.pinCode);
           if (Array.isArray(data.data.connectedDevices)) setConnectedDevices(data.data.connectedDevices);
           if (Array.isArray(data.data.blockedDeviceIds)) setBlockedDeviceIds(data.data.blockedDeviceIds);
+          if (data.data.sessionToken) {
+            setToken(data.data.sessionToken);
+            window.localStorage.setItem(`pointx_broadcast_token_${currentTournament.id}`, data.data.sessionToken);
+            window.localStorage.setItem(
+              `pointx_broadcast_token_expiry_${currentTournament.id}`,
+              String(data.data.tokenExpiresAt || Date.now() + TOKEN_TTL_MS)
+            );
+          }
         }
       } catch {}
     };

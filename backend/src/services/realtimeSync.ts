@@ -18,6 +18,8 @@ export interface TournamentSyncState {
   highlightedTeamId?: string | null;
   isVisible?: boolean;
   pinCode: string;
+  sessionToken?: string;
+  tokenExpiresAt?: number;
   connectedDevices: RemoteDeviceSession[];
   blockedDeviceIds: string[];
   timestamp: number;
@@ -47,15 +49,22 @@ const sseListeners = new Map<string, Set<any>>();
  */
 export async function getOrCreateAuthoritativeState(tournamentId: string): Promise<TournamentSyncState> {
   const tourId = tournamentId || 'default';
+  const now = Date.now();
+  const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
   if (!syncStore[tourId]) {
+    const cleanId = tourId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+    const initialToken = `px_${cleanId}_${Math.random().toString(36).substring(2, 8)}`;
+
     syncStore[tourId] = {
       tournamentId: tourId,
       revision: 1,
       pinCode: '1234',
+      sessionToken: initialToken,
+      tokenExpiresAt: now + SIX_HOURS_MS,
       connectedDevices: [],
       blockedDeviceIds: [],
-      timestamp: Date.now(),
+      timestamp: now,
       isVisible: true,
       squads: {},
       highlightedTeamId: null,
@@ -63,6 +72,13 @@ export async function getOrCreateAuthoritativeState(tournamentId: string): Promi
   }
 
   const state = syncStore[tourId];
+
+  // Guarantee token stays unchanged for at least 6 hours
+  if (!state.sessionToken || !state.tokenExpiresAt || now > state.tokenExpiresAt) {
+    const cleanId = tourId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+    state.sessionToken = `px_${cleanId}_${Math.random().toString(36).substring(2, 8)}`;
+    state.tokenExpiresAt = now + SIX_HOURS_MS;
+  }
 
   // If in-memory tournament is not loaded, try fetching from database
   if (!state.tournament && tourId !== 'default') {
