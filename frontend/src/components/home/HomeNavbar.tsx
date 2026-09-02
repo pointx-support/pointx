@@ -102,10 +102,11 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
       <div
         className={cn(
           'pointer-events-auto w-full max-w-[880px] lg:max-w-[940px] h-13 sm:h-16 rounded-full px-2 sm:px-3 flex items-center justify-between transition-all duration-300 backdrop-blur-2xl',
-          isDark
-            ? 'bg-[#111215]/95 border border-white/15 text-white shadow-[0_16px_40px_rgba(0,0,0,0.6)]'
-            : 'bg-white/95 border border-black/10 text-[#111215] shadow-[0_16px_40px_rgba(0,0,0,0.1)]',
-          isScrolled && (isDark ? 'border-white/25 shadow-[0_20px_50px_rgba(0,0,0,0.8)]' : 'border-black/20 shadow-[0_20px_50px_rgba(0,0,0,0.15)]')
+          !isScrolled
+            ? 'bg-black/50 border border-white/25 text-white shadow-[0_16px_40px_rgba(0,0,0,0.6)]'
+            : isDark
+            ? 'bg-[#111215]/95 border border-white/15 text-white shadow-[0_20px_50px_rgba(0,0,0,0.8)]'
+            : 'bg-white/95 border border-black/10 text-[#111215] shadow-[0_20px_50px_rgba(0,0,0,0.12)]'
         )}
       >
         
@@ -123,8 +124,8 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
           <div
             className={cn(
               'h-9 w-9 sm:h-11 sm:w-11 rounded-full flex items-center justify-center font-black transition-transform duration-300 group-hover:scale-105 shadow-md shrink-0',
-              isDark
-                ? 'bg-white text-black shadow-[0_2px_12px_rgba(255,255,255,0.2)]'
+              !isScrolled || isDark
+                ? 'bg-black/60 border border-white/20 text-white shadow-[0_2px_12px_rgba(255,255,255,0.15)]'
                 : 'bg-[#111215] text-white shadow-[0_2px_12px_rgba(0,0,0,0.2)]'
             )}
           >
@@ -149,8 +150,8 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
                 onClick={(e) => handleScrollTo(e, link.href, link.id)}
                 className={cn(
                   'relative px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-colors duration-200 select-none cursor-pointer',
-                  isDark
-                    ? (isCurrentActive ? 'text-white font-bold' : 'text-zinc-400 hover:text-white')
+                  !isScrolled || isDark
+                    ? (isCurrentActive ? 'text-white font-bold' : 'text-zinc-300 hover:text-white')
                     : (isCurrentActive ? 'text-black font-bold' : 'text-zinc-600 hover:text-black')
                 )}
               >
@@ -160,8 +161,8 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
                     layoutId="navbar-pill-active"
                     className={cn(
                       'absolute inset-0 rounded-full -z-10 shadow-sm',
-                      isDark
-                        ? 'bg-white/12 border border-white/20 shadow-[0_2px_10px_rgba(255,255,255,0.05)]'
+                      !isScrolled || isDark
+                        ? 'bg-white/20 border border-white/30 shadow-[0_2px_10px_rgba(255,255,255,0.1)]'
                         : 'bg-black/8 border border-black/10 shadow-[0_2px_10px_rgba(0,0,0,0.05)]'
                     )}
                     transition={{
@@ -194,7 +195,9 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               onClick={onNavigateDashboard}
               className={cn(
                 'inline-flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 cursor-pointer shadow-md hover:scale-105 active:scale-95 group font-display',
-                isDark
+                !isScrolled
+                  ? 'bg-[#ffd000] text-black hover:bg-[#ffc000] shadow-[0_4px_20px_rgba(255,208,0,0.4)]'
+                  : isDark
                   ? 'bg-white text-black hover:bg-zinc-100 shadow-[0_4px_20px_rgba(255,255,255,0.2)]'
                   : 'bg-[#111215] text-white hover:bg-black shadow-[0_4px_20px_rgba(0,0,0,0.2)]'
               )}
@@ -209,7 +212,9 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               onClick={onNavigateLogin}
               className={cn(
                 'inline-flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 cursor-pointer shadow-md hover:scale-105 active:scale-95 group font-sans',
-                isDark
+                !isScrolled
+                  ? 'bg-white text-black hover:bg-zinc-100 shadow-[0_4px_20px_rgba(255,255,255,0.3)]'
+                  : isDark
                   ? 'bg-white text-black hover:bg-zinc-100 shadow-[0_4px_20px_rgba(255,255,255,0.25)]'
                   : 'bg-[#111215] text-white hover:bg-black shadow-[0_4px_20px_rgba(0,0,0,0.25)]'
               )}
@@ -227,8 +232,8 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className={cn(
                 'h-8 w-8 sm:h-9 sm:w-9',
-                isDark
-                  ? 'text-zinc-300 hover:text-white hover:bg-white/10'
+                !isScrolled || isDark
+                  ? 'text-zinc-200 hover:text-white hover:bg-white/10'
                   : 'text-zinc-700 hover:text-black hover:bg-black/5'
               )}
             />
