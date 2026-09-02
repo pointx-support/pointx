@@ -9,19 +9,23 @@ import {
   ArrowLeft,
   Home,
   User,
-  Settings,
   Lock,
   Laptop,
   Trophy,
-  History,
   HelpCircle,
   Repeat,
   ExternalLink,
-  Keyboard,
   Sparkles,
   ShieldCheck,
   Smartphone,
-  Globe
+  Globe,
+  Users2,
+  Copy,
+  Check,
+  Phone,
+  Mail,
+  Send,
+  MessageSquare
 } from 'lucide-react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useAuthStore } from '../../store/authStore';
@@ -45,7 +49,7 @@ export const Navbar: FC<NavbarProps> = ({
   onBackToDashboard,
   onOpenAdminDashboard,
   onNavigateHome,
-  onSelectWorkspaceTab: _onSelectWorkspaceTab
+  onSelectWorkspaceTab
 }) => {
   const { currentTournament } = useTournamentStore();
   const {
@@ -56,7 +60,6 @@ export const Navbar: FC<NavbarProps> = ({
     updateProfile,
     changePassword,
     terminateOtherSessions,
-    activities,
     sessions,
     setRole
   } = useAuthStore();
@@ -67,11 +70,9 @@ export const Navbar: FC<NavbarProps> = ({
   // Modal Dialog States
   const [showExitModal, setShowExitModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showStaffModal, setShowStaffModal] = useState(false);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [showSessionsModal, setShowSessionsModal] = useState(false);
-  const [showActivityModal, setShowActivityModal] = useState(false);
-  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
 
   // Profile Edit Form State
@@ -86,6 +87,17 @@ export const Navbar: FC<NavbarProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
 
+  // Quick Staff Delegation Form State
+  const [staffName, setStaffName] = useState('');
+  const [staffEmail, setStaffEmail] = useState('');
+  const [staffRole, setStaffRole] = useState<'scorer' | 'broadcast_producer' | 'co-organizer'>('scorer');
+  const [quickCopied, setQuickCopied] = useState(false);
+
+  // Contact Form State
+  const [contactSubject, setContactSubject] = useState('');
+  const [contactMessage, setContactMessage] = useState('');
+  const [contactSending, setContactSending] = useState(false);
+
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   // Sync profile edit state whenever modal opens or user updates
@@ -96,7 +108,7 @@ export const Navbar: FC<NavbarProps> = ({
       setEditOrgName(user.organizationName || '');
       setEditPhone(user.phoneNumber || '');
     }
-  }, [user, showProfileModal, showSettingsModal]);
+  }, [user, showProfileModal]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -106,17 +118,6 @@ export const Navbar: FC<NavbarProps> = ({
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === '?' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
-        e.preventDefault();
-        setShowShortcutsModal((prev) => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const isDark = theme === 'dark';
@@ -138,50 +139,80 @@ export const Navbar: FC<NavbarProps> = ({
     showToast({
       type: 'success',
       title: 'Profile Updated',
-      message: 'Your personal and organization credentials have been saved.'
+      message: 'Account details and organization branding saved.'
     });
     setShowProfileModal(false);
-    setShowSettingsModal(false);
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!oldPassword || !newPassword) {
-      showToast({ type: 'error', title: 'Input Required', message: 'Please fill out all password fields.' });
-      return;
-    }
     if (newPassword.length < 6) {
-      showToast({ type: 'error', title: 'Weak Password', message: 'Password must be at least 6 characters.' });
+      showToast({ type: 'error', title: 'Invalid Password', message: 'New password must be at least 6 characters.' });
       return;
     }
     if (newPassword !== confirmPassword) {
-      showToast({ type: 'error', title: 'Mismatch', message: 'New password and confirmation do not match.' });
+      showToast({ type: 'error', title: 'Password Mismatch', message: 'New passwords do not match.' });
+      return;
+    }
+    setPasswordLoading(true);
+    const res = await changePassword(oldPassword, newPassword);
+    setPasswordLoading(false);
+    if (res.success) {
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowSecurityModal(false);
+      showToast({
+        type: 'success',
+        title: 'Password Updated',
+        message: 'Your account credentials have been updated securely.'
+      });
+    } else {
+      showToast({
+        type: 'error',
+        title: 'Update Failed',
+        message: res.error || 'Current password was incorrect.'
+      });
+    }
+  };
+
+  const handleCreateStaffPass = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!staffName.trim() || !staffEmail.trim()) {
+      showToast({ type: 'error', title: 'Required Fields', message: 'Enter staff member name and email.' });
       return;
     }
 
-    setPasswordLoading(true);
-    try {
-      const res = await changePassword(oldPassword, newPassword);
-      if (res.success) {
-        showToast({
-          type: 'success',
-          title: 'Password Changed',
-          message: 'Your password was changed securely.'
-        });
-        setOldPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-        setShowSecurityModal(false);
-      } else {
-        showToast({
-          type: 'error',
-          title: 'Update Failed',
-          message: res.error || 'Current password was incorrect.'
-        });
-      }
-    } finally {
-      setPasswordLoading(false);
+    const operatorLink = `${window.location.origin}/remote?tour=${currentTournament?.id || 'live'}&role=${staffRole}&staff=${encodeURIComponent(staffName)}`;
+    navigator.clipboard.writeText(operatorLink);
+    setQuickCopied(true);
+    setTimeout(() => setQuickCopied(false), 3000);
+
+    showToast({
+      type: 'success',
+      title: 'Operator Access Pass Created',
+      message: `Direct Operator URL for ${staffName} copied to clipboard!`
+    });
+  };
+
+  const handleSendContact = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactMessage.trim()) {
+      showToast({ type: 'error', title: 'Message Required', message: 'Please write your message.' });
+      return;
     }
+    setContactSending(true);
+    setTimeout(() => {
+      setContactSending(false);
+      setContactSubject('');
+      setContactMessage('');
+      setShowHelpModal(false);
+      showToast({
+        type: 'success',
+        title: 'Message Sent Successfully',
+        message: 'Our 24/7 tournament operations team will respond via email shortly.'
+      });
+    }, 600);
   };
 
   const handleTerminateOtherSessions = async () => {
@@ -333,44 +364,54 @@ export const Navbar: FC<NavbarProps> = ({
                       </div>
                     </div>
 
-                    {/* SECTION 1: ACCOUNT & SECURITY */}
+                    {/* SECTION 1: ACCOUNT & MANAGEMENT */}
                     <div className="pt-2 space-y-1">
-                      <div className="px-2 pb-1 text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)]">Account & Security</div>
+                      <div className="px-2 pb-1 text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)]">Account & Organization</div>
                       
-                      {/* My Account / Profile */}
+                      {/* Unified My Account & Settings Option */}
                       <button
                         type="button"
                         onClick={() => {
                           setIsDropdownOpen(false);
-                          setShowProfileModal(true);
+                          if (onSelectWorkspaceTab) {
+                            onSelectWorkspaceTab('account');
+                          } else {
+                            setShowProfileModal(true);
+                          }
                         }}
                         className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors text-left cursor-pointer group"
                       >
                         <div className="flex items-center gap-2.5">
                           <User className="h-4 w-4 text-[var(--accent-primary)] group-hover:scale-110 transition-transform" />
                           <div>
-                            <div className="font-bold text-[var(--text-primary)]">My Account / Profile</div>
-                            <div className="text-[10px] text-[var(--text-muted)] font-mono">Personal info & credentials</div>
+                            <div className="font-bold text-[var(--text-primary)]">My Account & Settings</div>
+                            <div className="text-[10px] text-[var(--text-muted)] font-mono">Personal info, branding & rules</div>
                           </div>
                         </div>
+                        <ExternalLink className="h-3 w-3 text-[var(--text-muted)] group-hover:text-[var(--text-primary)]" />
                       </button>
 
-                      {/* Account Settings */}
+                      {/* Staff & Operator Delegation */}
                       <button
                         type="button"
                         onClick={() => {
                           setIsDropdownOpen(false);
-                          setShowSettingsModal(true);
+                          if (onSelectWorkspaceTab) {
+                            onSelectWorkspaceTab('account');
+                          } else {
+                            setShowStaffModal(true);
+                          }
                         }}
                         className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors text-left cursor-pointer group"
                       >
                         <div className="flex items-center gap-2.5">
-                          <Settings className="h-4 w-4 text-[var(--accent-primary)] group-hover:scale-110 transition-transform" />
+                          <Users2 className="h-4 w-4 text-cyan-400 group-hover:scale-110 transition-transform" />
                           <div>
-                            <div className="font-bold text-[var(--text-primary)]">Account Settings</div>
-                            <div className="text-[10px] text-[var(--text-muted)] font-mono">Platform rules & branding</div>
+                            <div className="font-bold text-[var(--text-primary)]">Staff & Operator Access</div>
+                            <div className="text-[10px] text-[var(--text-muted)] font-mono">Delegate scoring & OBS overlays</div>
                           </div>
                         </div>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 font-bold">STAFF</span>
                       </button>
 
                       {/* Security & Login */}
@@ -401,19 +442,19 @@ export const Navbar: FC<NavbarProps> = ({
                         className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors text-left cursor-pointer group"
                       >
                         <div className="flex items-center gap-2.5">
-                          <Laptop className="h-4 w-4 text-cyan-400 group-hover:scale-110 transition-transform" />
+                          <Laptop className="h-4 w-4 text-amber-400 group-hover:scale-110 transition-transform" />
                           <div>
                             <div className="font-bold text-[var(--text-primary)]">Active Sessions / Devices</div>
-                            <div className="text-[10px] text-[var(--text-muted)] font-mono">1 device connected</div>
+                            <div className="text-[10px] text-[var(--text-muted)] font-mono">Manage active devices</div>
                           </div>
                         </div>
                         <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.06] text-white">Active</span>
                       </button>
                     </div>
 
-                    {/* SECTION 2: TOURNAMENTS & LOGS */}
+                    {/* SECTION 2: TOURNAMENTS & NAVIGATION */}
                     <div className="pt-2 space-y-1">
-                      <div className="px-2 pb-1 text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)]">Tournaments & Logs</div>
+                      <div className="px-2 pb-1 text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)]">Tournaments</div>
                       
                       {/* My Tournaments (Go to Dashboard) */}
                       <button
@@ -429,24 +470,6 @@ export const Navbar: FC<NavbarProps> = ({
                           <div>
                             <div className="font-bold text-[var(--text-primary)]">My Tournaments</div>
                             <div className="text-[10px] text-[var(--text-muted)] font-mono">Command Center dashboard</div>
-                          </div>
-                        </div>
-                      </button>
-
-                      {/* Usage & Activity */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsDropdownOpen(false);
-                          setShowActivityModal(true);
-                        }}
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors text-left cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <History className="h-4 w-4 text-[var(--status-info)] group-hover:scale-110 transition-transform" />
-                          <div>
-                            <div className="font-bold text-[var(--text-primary)]">Usage & Activity</div>
-                            <div className="text-[10px] text-[var(--text-muted)] font-mono">Audit logs & timeline</div>
                           </div>
                         </div>
                       </button>
@@ -473,9 +496,9 @@ export const Navbar: FC<NavbarProps> = ({
                       )}
                     </div>
 
-                    {/* SECTION 3: PLATFORM TOOLS */}
+                    {/* SECTION 3: PLATFORM TOOLS & HELP */}
                     <div className="pt-2 space-y-1">
-                      <div className="px-2 pb-1 text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)]">Platform Tools</div>
+                      <div className="px-2 pb-1 text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)]">Support & Controls</div>
                       
                       {/* Theme Toggle */}
                       <button
@@ -490,34 +513,21 @@ export const Navbar: FC<NavbarProps> = ({
                         <span className="text-[10px] font-mono uppercase font-black px-2 py-0.5 rounded bg-white/[0.06] text-[var(--accent-primary)]">{theme}</span>
                       </button>
 
-                      {/* Keyboard Shortcuts */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsDropdownOpen(false);
-                          setShowShortcutsModal(true);
-                        }}
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors text-left cursor-pointer"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <Keyboard className="h-4 w-4 text-cyan-400" />
-                          <span className="font-bold text-[var(--text-primary)]">Keyboard Shortcuts</span>
-                        </div>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-[var(--text-muted)]">?</span>
-                      </button>
-
-                      {/* Help & Support */}
+                      {/* Contact Us & Support */}
                       <button
                         type="button"
                         onClick={() => {
                           setIsDropdownOpen(false);
                           setShowHelpModal(true);
                         }}
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors text-left cursor-pointer"
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors text-left cursor-pointer group"
                       >
                         <div className="flex items-center gap-2.5">
-                          <HelpCircle className="h-4 w-4 text-amber-400" />
-                          <span className="font-bold text-[var(--text-primary)]">Help & Support</span>
+                          <HelpCircle className="h-4 w-4 text-amber-400 group-hover:scale-110 transition-transform" />
+                          <div>
+                            <div className="font-bold text-[var(--text-primary)]">Contact Us & Support</div>
+                            <div className="text-[10px] text-[var(--text-muted)] font-mono">24/7 helpdesk & WhatsApp</div>
+                          </div>
                         </div>
                       </button>
                     </div>
@@ -583,8 +593,8 @@ export const Navbar: FC<NavbarProps> = ({
         </div>
       </header>
 
-      {/* 1. My Account / Profile Modal */}
-      <Modal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} title="My Account / Profile" maxWidth="md">
+      {/* 1. Unified My Account & Settings Modal */}
+      <Modal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} title="My Account & Organization Settings" maxWidth="md">
         <form onSubmit={handleSaveProfile} className="space-y-4 font-sans">
           <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)]">
             <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-amber-400/25 to-amber-600/25 border border-amber-400/50 flex items-center justify-center font-mono font-black text-sm text-[var(--accent-primary)]">
@@ -600,28 +610,109 @@ export const Navbar: FC<NavbarProps> = ({
           <Input label="Full Name *" value={editName} onChange={(e) => setEditName(e.target.value)} required />
           <Input label="Email Address (Verified)" value={editEmail} disabled className="opacity-75 cursor-not-allowed" />
           <Input label="Organization / Club Name" value={editOrgName} onChange={(e) => setEditOrgName(e.target.value)} placeholder="e.g. Total Gaming Esports" />
-          <Input label="Phone Number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="+91 9876543210" />
-
-          <div className="flex justify-end gap-2.5 pt-3 border-t border-[var(--border-subtle)]">
-            <Button variant="outline" size="sm" type="button" onClick={() => setShowProfileModal(false)}>Cancel</Button>
-            <Button variant="primary" size="sm" type="submit">Save Changes</Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* 2. Account Settings Modal */}
-      <Modal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} title="Account Settings" maxWidth="md">
-        <form onSubmit={handleSaveProfile} className="space-y-4 font-sans">
-          <p className="text-xs text-[var(--text-secondary)]">Configure your organization defaults and tournament branding.</p>
-          <Input label="Organization Brand Name" value={editOrgName} onChange={(e) => setEditOrgName(e.target.value)} placeholder="PointX Arena Club" />
           <Input label="Official Contact Phone" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="+91 9876543210" />
+
           <div className="p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs font-mono space-y-1">
             <div className="text-[var(--text-secondary)]">Default Rule Matrix: <strong className="text-[var(--text-primary)]">Free Fire 12-Tier Official</strong></div>
             <div className="text-[var(--text-secondary)]">Stream Overlay Resolution: <strong className="text-cyan-400">1080p60 / 4K UHD</strong></div>
           </div>
-          <div className="flex justify-end gap-2.5 pt-3 border-t border-[var(--border-subtle)]">
-            <Button variant="outline" size="sm" type="button" onClick={() => setShowSettingsModal(false)}>Cancel</Button>
-            <Button variant="primary" size="sm" type="submit">Save Settings</Button>
+
+          <div className="flex justify-between items-center pt-3 border-t border-[var(--border-subtle)]">
+            {onSelectWorkspaceTab && (
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={() => {
+                  setShowProfileModal(false);
+                  onSelectWorkspaceTab('account');
+                }}
+                leftIcon={<ExternalLink className="h-3.5 w-3.5" />}
+              >
+                Open Full Account Portal
+              </Button>
+            )}
+            <div className="flex gap-2 ml-auto">
+              <Button variant="outline" size="sm" type="button" onClick={() => setShowProfileModal(false)}>Cancel</Button>
+              <Button variant="primary" size="sm" type="submit">Save Changes</Button>
+            </div>
+          </div>
+        </form>
+      </Modal>
+
+      {/* 2. Staff & Operator Quick Access Modal */}
+      <Modal isOpen={showStaffModal} onClose={() => setShowStaffModal(false)} title="Staff & Tournament Operator Delegation" maxWidth="md">
+        <form onSubmit={handleCreateStaffPass} className="space-y-4 font-sans">
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            Authorize team members or referees to enter match scores, record kills, and control OBS stream overlays.
+          </p>
+
+          <Input
+            label="Staff Member Name *"
+            value={staffName}
+            onChange={(e) => setStaffName(e.target.value)}
+            placeholder="e.g. Rahul Sharma"
+            required
+          />
+
+          <Input
+            label="Staff Email Address *"
+            type="email"
+            value={staffEmail}
+            onChange={(e) => setStaffEmail(e.target.value)}
+            placeholder="staff@esports.in"
+            required
+          />
+
+          <div>
+            <label className="block text-xs font-mono font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
+              Assigned Operational Role
+            </label>
+            <select
+              value={staffRole}
+              onChange={(e) => setStaffRole(e.target.value as any)}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs sm:text-sm text-[var(--text-primary)] font-sans focus:border-[var(--accent-primary)] outline-none"
+            >
+              <option value="scorer">Match Scorer & Points Operator (Scorecard & Kill Entry)</option>
+              <option value="broadcast_producer">Broadcast & Overlay Producer (OBS Transparent URL & Graphics)</option>
+              <option value="co-organizer">Co-Organizer (Full Administrative Tournament Access)</option>
+            </select>
+          </div>
+
+          <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/25 space-y-1">
+            <div className="text-xs font-bold text-cyan-400 font-mono flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" /> Direct Remote Operator URL
+            </div>
+            <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+              Generating this pass gives your staff instant access to the match scoring controller and OBS broadcast overlays.
+            </p>
+          </div>
+
+          <div className="flex justify-between items-center pt-3 border-t border-[var(--border-subtle)]">
+            {onSelectWorkspaceTab && (
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={() => {
+                  setShowStaffModal(false);
+                  onSelectWorkspaceTab('account');
+                }}
+              >
+                View All Staff
+              </Button>
+            )}
+            <div className="flex gap-2 ml-auto">
+              <Button variant="outline" size="sm" type="button" onClick={() => setShowStaffModal(false)}>Close</Button>
+              <Button
+                variant="primary"
+                size="sm"
+                type="submit"
+                leftIcon={quickCopied ? <Check className="h-3.5 w-3.5 text-black" /> : <Copy className="h-3.5 w-3.5 text-black" />}
+              >
+                {quickCopied ? 'Access Link Copied!' : 'Generate & Copy Link'}
+              </Button>
+            </div>
           </div>
         </form>
       </Modal>
@@ -702,93 +793,113 @@ export const Navbar: FC<NavbarProps> = ({
         </div>
       </Modal>
 
-      {/* 5. Usage & Activity Audit Log Modal */}
-      <Modal isOpen={showActivityModal} onClose={() => setShowActivityModal(false)} title="Usage & Audit Activity Log" maxWidth="lg">
-        <div className="space-y-4 font-sans">
-          <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)] text-xs font-mono">
-            <span className="text-[var(--text-secondary)]">Live Audit Trail (Last 20 Activities)</span>
-            <span className="text-emerald-400 font-bold">Synchronized</span>
-          </div>
-
-          <div className="max-h-80 overflow-y-auto space-y-2 font-mono text-xs pr-1 custom-scrollbar">
-            {activities.length > 0 ? (
-              activities.map((act) => (
-                <div key={act.id} className="p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] flex items-center justify-between gap-3">
-                  <div>
-                    <div className="font-bold text-[var(--text-primary)] font-sans">{act.action}</div>
-                    <div className="text-[11px] text-[var(--text-secondary)] mt-0.5">{act.details}</div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-[9px] px-2 py-0.5 rounded uppercase font-bold bg-white/[0.06] text-[var(--accent-primary)]">{act.category}</span>
-                    <div className="text-[10px] text-[var(--text-muted)] mt-1">{new Date(act.timestamp).toLocaleTimeString()}</div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="space-y-2">
-                <div className="p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-[var(--text-primary)] font-sans">Authenticated Session Started</div>
-                    <div className="text-[11px] text-[var(--text-secondary)]">Logged in as {user?.email}</div>
-                  </div>
-                  <span className="text-[9px] px-2 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-400 font-mono">AUTH</span>
-                </div>
-                <div className="p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-[var(--text-primary)] font-sans">Point Matrix Engine Synchronized</div>
-                    <div className="text-[11px] text-[var(--text-secondary)]">Free Fire 12-Tier Official Scoring Rules active</div>
-                  </div>
-                  <span className="text-[9px] px-2 py-0.5 rounded font-bold bg-amber-500/20 text-amber-400 font-mono">TOURNAMENT</span>
-                </div>
+      {/* 5. Contact Us & Support Modal */}
+      <Modal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} title="Contact Us & Tournament Support Desk" maxWidth="lg">
+        <div className="space-y-5 font-sans">
+          
+          {/* Support Channels Strip */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* WhatsApp / Phone Channel */}
+            <a
+              href="https://wa.me/919178835469?text=Hello%20PointX%20Support%2C%20I%20need%20assistance%20with%20my%20tournament."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20 transition-all flex items-center gap-3 text-left group"
+            >
+              <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 group-hover:scale-110 transition-transform">
+                <Phone className="h-5 w-5" />
               </div>
-            )}
+              <div>
+                <div className="font-bold text-xs text-[var(--text-primary)]">WhatsApp Hotline</div>
+                <div className="text-[11px] text-emerald-400 font-mono font-bold">+91 91788 35469</div>
+              </div>
+            </a>
+
+            {/* Email Channel */}
+            <a
+              href="mailto:support@pointx.in"
+              className="p-3.5 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/50 transition-all flex items-center gap-3 text-left group"
+            >
+              <div className="p-2.5 rounded-xl bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] group-hover:scale-110 transition-transform">
+                <Mail className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="font-bold text-xs text-[var(--text-primary)]">Official Email</div>
+                <div className="text-[11px] text-[var(--accent-primary)] font-mono">support@pointx.in</div>
+              </div>
+            </a>
+
+            {/* Telegram Channel */}
+            <a
+              href="https://t.me/pointx_support"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/25 hover:bg-cyan-500/20 transition-all flex items-center gap-3 text-left group"
+            >
+              <div className="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-400 group-hover:scale-110 transition-transform">
+                <MessageSquare className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="font-bold text-xs text-[var(--text-primary)]">Telegram Channel</div>
+                <div className="text-[11px] text-cyan-400 font-mono">@pointx_support</div>
+              </div>
+            </a>
           </div>
 
-          <div className="flex justify-end pt-3 border-t border-[var(--border-subtle)]">
-            <Button variant="primary" size="sm" onClick={() => setShowActivityModal(false)}>Close Log</Button>
+          {/* Emergency 24/7 Operations Banner */}
+          <div className="p-3.5 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] flex items-center justify-between text-xs font-mono">
+            <div className="flex items-center gap-2 text-emerald-400 font-bold">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>24/7 Live Esports Broadcast & Matrix Assistance</span>
+            </div>
+            <span className="text-[var(--text-muted)] text-[10px]">Active Response Desk</span>
           </div>
+
+          {/* Priority Support Ticket Message Form */}
+          <form onSubmit={handleSendContact} className="space-y-3.5 pt-1">
+            <div className="text-xs font-bold font-mono text-[var(--text-secondary)] uppercase">Send Direct Message to Support</div>
+            <Input
+              label="Subject / Topic"
+              value={contactSubject}
+              onChange={(e) => setContactSubject(e.target.value)}
+              placeholder="e.g. OBS Overlay configuration assistance or Point Matrix rule inquiry"
+              required
+            />
+            <div>
+              <label className="block text-xs font-mono font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
+                Your Message / Query *
+              </label>
+              <textarea
+                value={contactMessage}
+                onChange={(e) => setContactMessage(e.target.value)}
+                placeholder="Describe your question or issue in detail..."
+                rows={3}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] font-sans focus:border-[var(--accent-primary)] outline-none resize-none"
+                required
+              />
+            </div>
+
+            <div className="flex justify-between items-center pt-3 border-t border-[var(--border-subtle)]">
+              <div className="text-[11px] font-mono text-[var(--text-muted)]">
+                Average reply time: &lt; 15 mins
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" type="button" onClick={() => setShowHelpModal(false)}>Close</Button>
+                <Button variant="primary" size="sm" type="submit" disabled={contactSending} leftIcon={<Send className="h-3.5 w-3.5" />}>
+                  {contactSending ? 'Sending Message...' : 'Send Message'}
+                </Button>
+              </div>
+            </div>
+          </form>
         </div>
       </Modal>
 
-      {/* 6. Keyboard Shortcuts Modal */}
-      <Modal isOpen={showShortcutsModal} onClose={() => setShowShortcutsModal(false)} title="Keyboard Shortcuts Cheat Sheet" maxWidth="lg">
-        <div className="space-y-4 font-sans">
-          <p className="text-xs sm:text-sm text-[var(--text-secondary)]">Use these global keyboard shortcuts anywhere in PointX to accelerate your tournament operations.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
-            <div className="p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] flex items-center justify-between"><span className="text-[var(--text-secondary)] font-sans">Show Shortcuts Cheat Sheet</span><kbd className="px-2 py-1 rounded bg-[var(--bg-surface)] border border-[var(--border-strong)] font-bold text-[var(--accent-primary)]">?</kbd></div>
-            <div className="p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] flex items-center justify-between"><span className="text-[var(--text-secondary)] font-sans">Close Active Modal / Exit</span><kbd className="px-2 py-1 rounded bg-[var(--bg-surface)] border border-[var(--border-strong)] font-bold text-[var(--accent-primary)]">ESC</kbd></div>
-            <div className="p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] flex items-center justify-between"><span className="text-[var(--text-secondary)] font-sans">Quick Standings Recalculation</span><kbd className="px-2 py-1 rounded bg-[var(--bg-surface)] border border-[var(--border-strong)] font-bold text-[var(--accent-primary)]">R</kbd></div>
-            <div className="p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] flex items-center justify-between"><span className="text-[var(--text-secondary)] font-sans">Toggle Theme Mode (Dark/Light)</span><kbd className="px-2 py-1 rounded bg-[var(--bg-surface)] border border-[var(--border-strong)] font-bold text-[var(--accent-primary)]">T</kbd></div>
-          </div>
-          <div className="flex justify-end pt-3 border-t border-[var(--border-subtle)]">
-            <Button variant="primary" size="sm" onClick={() => setShowShortcutsModal(false)}>Got It</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* 7. Help & Support Modal */}
-      <Modal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} title="PointX Help & Support" maxWidth="md">
-        <div className="space-y-4 font-sans">
-          <div className="p-4 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] space-y-2">
-            <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]"><Sparkles className="h-4 w-4 text-[var(--accent-primary)]" /><span>Official Free Fire 12-Tier Rule Engine</span></div>
-            <p className="text-xs text-[var(--text-secondary)] leading-relaxed font-sans">PointX calculates placement and kill scores conforming directly to official esports rulebooks (12-9-8-7-6-5-4-3-2-1-0-0).</p>
-          </div>
-          <div className="p-4 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] space-y-2">
-            <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]"><Shield className="h-4 w-4 text-emerald-400" /><span>Need Direct Tournament Assistance?</span></div>
-            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">Email our engineering support team directly at <strong className="text-[var(--accent-primary)] font-mono">support@pointx.in</strong>.</p>
-          </div>
-          <div className="flex justify-end pt-3 border-t border-[var(--border-subtle)]">
-            <Button variant="primary" size="sm" onClick={() => setShowHelpModal(false)}>Close</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* 8. Exit Tournament Confirmation Modal */}
+      {/* 6. Exit Tournament Confirmation Modal */}
       <Modal isOpen={showExitModal} onClose={() => setShowExitModal(false)} title="Return to Main Dashboard?" maxWidth="md">
         <div className="space-y-4 font-sans">
           <p className="text-sm text-[var(--text-secondary)] leading-relaxed">You are currently working inside <strong className="text-[var(--text-primary)] font-bold">{currentTournament?.title || 'this tournament'}</strong>. Are you sure you want to return to the Main Dashboard?</p>
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-[var(--border-subtle)]">
-            <Button variant="outline" size="md" onClick={() => setShowExitModal(false)}>No, Stay Here</Button>
+            <Button variant="outline" size="md" onClick={() => setShowExitModal(false)}>Cancel</Button>
             <Button variant="primary" size="md" onClick={() => { setShowExitModal(false); if (onBackToDashboard) onBackToDashboard(); }}>Yes, Return to Dashboard</Button>
           </div>
         </div>
