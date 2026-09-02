@@ -95,6 +95,11 @@ export function App() {
     }
   }, []);
 
+  // Restore and verify authenticated session on mount
+  useEffect(() => {
+    useAuthStore.getState().checkAuth();
+  }, []);
+
   // Preload and cache all font binary Base64 streams in the background
   useEffect(() => {
     preloadAndCacheFonts();

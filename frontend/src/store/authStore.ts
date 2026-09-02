@@ -143,13 +143,16 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
 
         applyThemeToDOM(normalizedTheme);
         useTournamentStore.getState().sanitizeTournamentsForRole(enrichedUser.role);
+        useTournamentStore.getState().fetchTournaments().catch(() => {});
       } else {
         setStoredToken(null);
         set({ user: null, isAuthenticated: false, sessionToken: null });
+        useTournamentStore.getState().clearAllTournaments();
       }
     } catch {
       setStoredToken(null);
       set({ user: null, isAuthenticated: false, sessionToken: null });
+      useTournamentStore.getState().clearAllTournaments();
     }
   },
 
@@ -219,6 +222,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
 
           applyThemeToDOM(normalizedTheme);
           useTournamentStore.getState().sanitizeTournamentsForRole(enrichedUser.role);
+          useTournamentStore.getState().fetchTournaments().catch(() => {});
           get().recordActivity('User Login', 'security', `Signed in as ${user.email} (${user.role})`);
         }
         return { success: true };
@@ -311,6 +315,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
           });
 
           applyThemeToDOM(normalizedTheme);
+          useTournamentStore.getState().fetchTournaments().catch(() => {});
           get().recordActivity('OTP Verified', 'security', `Verified email for ${user.email}`);
         }
         return { success: true };

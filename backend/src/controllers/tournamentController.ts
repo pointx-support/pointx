@@ -19,7 +19,7 @@ import {
 export async function getMyTournaments(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
-    const tournaments = await getTournamentsByUser(req.user._id.toString());
+    const tournaments = await getTournamentsByUser(req.user._id.toString(), req.user.role);
     return res.status(200).json({ success: true, data: tournaments.map((t) => t.toJSON()) });
   } catch (error) {
     next(error);
@@ -29,7 +29,7 @@ export async function getMyTournaments(req: AuthenticatedRequest, res: Response,
 export async function getTournament(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const id = req.params.id as string;
-    const tournament = await getTournamentById(id, req.user?._id.toString());
+    const tournament = await getTournamentById(id, req.user?._id.toString(), req.user?.role);
     if (!tournament) {
       return res.status(404).json({ success: false, error: 'Tournament not found.' });
     }
@@ -68,7 +68,7 @@ export async function updateExistingTournament(req: AuthenticatedRequest, res: R
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
     const validated = updateTournamentSchema.parse(req.body);
-    const updated = await updateTournament(id, req.user._id.toString(), validated);
+    const updated = await updateTournament(id, req.user._id.toString(), validated, req.user.role);
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Tournament not found or unauthorized.' });
     }
@@ -82,7 +82,7 @@ export async function deleteExistingTournament(req: AuthenticatedRequest, res: R
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
-    const deleted = await deleteTournament(id, req.user._id.toString());
+    const deleted = await deleteTournament(id, req.user._id.toString(), req.user.role);
     if (!deleted) {
       return res.status(404).json({ success: false, error: 'Tournament not found or unauthorized.' });
     }
@@ -96,7 +96,7 @@ export async function cloneExistingTournament(req: AuthenticatedRequest, res: Re
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const validated = cloneTournamentSchema.parse(req.body);
-    const cloned = await cloneTournament(validated.sourceId, req.user._id.toString(), validated);
+    const cloned = await cloneTournament(validated.sourceId, req.user._id.toString(), validated, req.user.role);
     if (!cloned) {
       return res.status(404).json({ success: false, error: 'Source tournament not found.' });
     }

@@ -1,22 +1,37 @@
+import mongoose from 'mongoose';
 import { Tournament, ITournament } from '../models/Tournament';
 import { AuditActivity } from '../models/AuditActivity';
 
-export async function getTournamentsByUser(userId: string): Promise<ITournament[]> {
-  return Tournament.find({ userId }).sort({ createdAt: -1 });
+export async function getTournamentsByUser(userId: string, role?: string): Promise<ITournament[]> {
+  if (role === 'admin') {
+    return Tournament.find({}).sort({ createdAt: -1 });
+  }
+
+  const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
+  const userCondition = userObjectId
+    ? { $or: [{ userId: userObjectId }, { userId: userId }] }
+    : { userId };
+
+  return Tournament.find(userCondition).sort({ createdAt: -1 });
 }
 
-export async function getTournamentById(idOrCustomId: string, userId?: string): Promise<ITournament | null> {
-  const query: any = {
-    $or: [{ customId: idOrCustomId }],
-  };
+export async function getTournamentById(idOrCustomId: string, userId?: string, role?: string): Promise<ITournament | null> {
+  const idQueries: any[] = [{ customId: idOrCustomId }];
   if (idOrCustomId.match(/^[0-9a-fA-F]{24}$/)) {
-    query.$or.push({ _id: idOrCustomId });
+    idQueries.push({ _id: idOrCustomId });
   }
-  if (userId) {
-    // Organizers can access their own tournaments; broadcast endpoints can access by ID
-    query.userId = userId;
+
+  const baseQuery: any = { $or: idQueries };
+
+  if (userId && role !== 'admin') {
+    const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
+    const userCondition = userObjectId
+      ? { $or: [{ userId: userObjectId }, { userId: userId }] }
+      : { userId };
+    baseQuery.$and = [userCondition];
   }
-  return Tournament.findOne(query);
+
+  return Tournament.findOne(baseQuery);
 }
 
 export async function getPublicTournamentForBroadcast(idOrCustomId: string): Promise<ITournament | null> {
@@ -31,15 +46,17 @@ export async function getPublicTournamentForBroadcast(idOrCustomId: string): Pro
 
 export async function createTournament(userId: string, data: any): Promise<ITournament> {
   const customId = data.id || `tour-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+  const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
+  
   const tournament = await Tournament.create({
     ...data,
     customId,
-    userId,
+    userId: userObjectId,
   });
 
   await AuditActivity.create({
     customId: `act-${Date.now().toString(36)}`,
-    userId,
+    userId: String(userId),
     action: 'Tournament Created',
     category: 'tournament',
     details: `Created "${tournament.title}" with ${tournament.structure?.slotsPerMatch || 12} slots.`,
@@ -48,13 +65,17 @@ export async function createTournament(userId: string, data: any): Promise<ITour
   return tournament;
 }
 
-export async function updateTournament(tournamentId: string, userId: string, data: any): Promise<ITournament | null> {
-  const query: any = {
-    $or: [{ customId: tournamentId }],
-    userId,
-  };
+export async function updateTournament(tournamentId: string, userId: string, data: any, role?: string): Promise<ITournament | null> {
+  const idQueries: any[] = [{ customId: tournamentId }];
   if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
-    query.$or.push({ _id: tournamentId });
+    idQueries.push({ _id: tournamentId });
+  }
+
+  const query: any = { $or: idQueries };
+
+  if (role !== 'admin') {
+    const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
+    query.$and = [userObjectId ? { $or: [{ userId: userObjectId }, { userId: userId }] } : { userId }];
   }
 
   const updated = await Tournament.findOneAndUpdate(
@@ -66,21 +87,25 @@ export async function updateTournament(tournamentId: string, userId: string, dat
   return updated;
 }
 
-export async function deleteTournament(tournamentId: string, userId: string): Promise<boolean> {
-  const query: any = {
-    $or: [{ customId: tournamentId }],
-    userId,
-  };
+export async function deleteTournament(tournamentId: string, userId: string, role?: string): Promise<boolean> {
+  const idQueries: any[] = [{ customId: tournamentId }];
   if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
-    query.$or.push({ _id: tournamentId });
+    idQueries.push({ _id: tournamentId });
+  }
+
+  const query: any = { $or: idQueries };
+
+  if (role !== 'admin') {
+    const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
+    query.$and = [userObjectId ? { $or: [{ userId: userObjectId }, { userId: userId }] } : { userId }];
   }
 
   const res = await Tournament.deleteOne(query);
   return res.deletedCount > 0;
 }
 
-export async function cloneTournament(sourceId: string, userId: string, options: any): Promise<ITournament | null> {
-  const source = await getTournamentById(sourceId, userId);
+export async function cloneTournament(sourceId: string, userId: string, options: any, role?: string): Promise<ITournament | null> {
+  const source = await getTournamentById(sourceId, userId, role);
   if (!source) return null;
 
   const newId = `tour-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;

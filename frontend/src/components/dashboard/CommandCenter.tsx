@@ -51,6 +51,9 @@ export interface CommandCenterProps {
 export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament }) => {
   const {
     tournaments,
+    isLoadingTournaments,
+    hasLoadedFromDatabase,
+    fetchTournaments,
     createTournament,
     updateTournament,
     cloneTournament,
@@ -86,6 +89,12 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
 
     return () => clearInterval(interval);
   }, []);
+
+  React.useEffect(() => {
+    if (!hasLoadedFromDatabase) {
+      fetchTournaments();
+    }
+  }, [hasLoadedFromDatabase, fetchTournaments]);
 
   React.useEffect(() => {
     if (user && user.role !== 'admin') {
@@ -149,7 +158,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const content = event.target?.result as string;
         const parsed = JSON.parse(content);
@@ -163,7 +172,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
           throw new Error('No valid tournament structures found in JSON.');
         }
 
-        const count = importTournaments(validTournaments);
+        const count = await importTournaments(validTournaments);
         showToast({
           type: 'success',
           title: 'Tournaments Imported',
@@ -570,7 +579,32 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
         </div>
 
         {/* Tournament Cards List */}
-        {filteredTournaments.length > 0 ? (
+        {isLoadingTournaments ? (
+          <div className="grid grid-cols-1 gap-3.5">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="p-5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-sm animate-pulse space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-zinc-700/20" />
+                    <div className="space-y-1.5">
+                      <div className="h-4 w-48 rounded-md bg-zinc-700/20" />
+                      <div className="h-3 w-32 rounded-md bg-zinc-700/10" />
+                    </div>
+                  </div>
+                  <div className="h-6 w-20 rounded-full bg-zinc-700/20" />
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[var(--border-subtle)]">
+                  <div className="h-8 rounded-lg bg-zinc-700/10" />
+                  <div className="h-8 rounded-lg bg-zinc-700/10" />
+                  <div className="h-8 rounded-lg bg-zinc-700/10" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredTournaments.length > 0 ? (
           <div className="grid grid-cols-1 gap-3.5">
             {filteredTournaments.map((tour) => (
               <TournamentCard
@@ -590,11 +624,11 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
         ) : (
           <div className="p-12 text-center rounded-3xl bg-[var(--bg-surface-subtle)] border border-[var(--border-subtle)] space-y-3">
             <Trophy className="h-10 w-10 mx-auto text-[var(--text-secondary)] opacity-50" />
-            <h3 className="text-base font-bold text-[var(--text-primary)] font-display">No Tournaments Found</h3>
+            <h3 className="text-base font-bold text-[var(--text-primary)] font-display">No Tournaments Yet</h3>
             <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
               {searchQuery
                 ? 'No events match your search query. Try clearing the filter.'
-                : 'Get started by creating your first tournament or importing a JSON backup.'}
+                : 'Your tournament workspace is empty. Create your first tournament to get started.'}
             </p>
             <div className="flex items-center justify-center gap-2.5 pt-1">
               <Button

@@ -15,13 +15,13 @@ export const createTournamentSchema = z.object({
     roundRobin: z.boolean().optional().default(false),
     groupsCount: z.number().optional().default(1),
     slotsPerMatch: z.number().min(2).max(100).default(12),
-  }).optional(),
+  }).passthrough().optional(),
   scoringPreset: z.any().optional(),
   bannerUrl: z.string().optional(),
   logoUrl: z.string().optional(),
   teams: z.array(z.any()).optional(),
   matches: z.array(z.any()).optional(),
-});
+}).passthrough();
 
 export const updateTournamentSchema = z.object({
   title: z.string().min(2).max(200).optional(),
@@ -37,7 +37,7 @@ export const updateTournamentSchema = z.object({
   logoUrl: z.string().optional(),
   teams: z.array(z.any()).optional(),
   matches: z.array(z.any()).optional(),
-});
+}).passthrough();
 
 export const cloneTournamentSchema = z.object({
   sourceId: z.string().min(1, 'Source tournament ID is required'),

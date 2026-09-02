@@ -25,6 +25,8 @@ export interface AppState {
   tournaments: Tournament[];
   activeTournamentId: string;
   currentTournament: Tournament;
+  isLoadingTournaments: boolean;
+  hasLoadedFromDatabase: boolean;
   activeTab: 'overview' | 'matches' | 'teams' | 'players' | 'global-teams' | 'standings' | 'statistics' | 'graphics' | 'broadcast' | 'scoring' | 'settings' | 'account' | 'organization' | 'template-studio';
   previousTab: 'overview' | 'matches' | 'teams' | 'players' | 'global-teams' | 'standings' | 'statistics' | 'graphics' | 'broadcast' | 'scoring' | 'settings' | 'account' | 'organization' | 'template-studio' | null;
   activeGraphicsCategory: 'standings' | 'warheads' | 'fraggers' | 'team-poster' | 'slots-list' | 'certificate';
@@ -39,12 +41,13 @@ export interface AppState {
   isCreateMatchModalOpen: boolean;
   setCreateMatchModalOpen: (open: boolean) => void;
   setCurrentTournamentId: (id: string) => void;
-  createTournament: (tournament: Tournament) => void;
-  updateTournament: (tournamentId: string, data: Partial<Tournament>) => void;
-  cloneTournament: (sourceId: string, options: CloneTournamentOptions) => Tournament;
-  importTournaments: (incoming: Tournament[]) => number;
-  archiveTournament: (tournamentId: string) => void;
-  deleteTournament: (tournamentId: string) => void;
+  fetchTournaments: () => Promise<void>;
+  createTournament: (tournament: Tournament) => Promise<Tournament>;
+  updateTournament: (tournamentId: string, data: Partial<Tournament>) => Promise<void>;
+  cloneTournament: (sourceId: string, options: CloneTournamentOptions) => Promise<Tournament>;
+  importTournaments: (incoming: Tournament[]) => Promise<number>;
+  archiveTournament: (tournamentId: string) => Promise<void>;
+  deleteTournament: (tournamentId: string) => Promise<void>;
   loadDemoTournaments: () => void;
   clearAllTournaments: () => void;
   sanitizeTournamentsForRole: (role?: string) => void;
@@ -233,75 +236,91 @@ const DEMO_TOURNAMENT_3: Tournament = {
 
 export const DEMO_TOURNAMENTS = [DEMO_TOURNAMENT_1, DEMO_TOURNAMENT_2, DEMO_TOURNAMENT_3];
 
-const STORAGE_KEY = 'pointx_tournaments_state';
+export function createBlankTournament(): Tournament {
+  return {
+    id: `tour-empty-${Date.now()}`,
+    title: 'New Tournament',
+    organizer: 'PointX Arena',
+    game: 'Free Fire',
+    description: '',
+    tournamentType: 'Battle Royale',
+    status: 'Upcoming',
+    structure: {
+      teamCount: 12,
+      matchCount: 6,
+      roundRobin: false,
+      slotsPerMatch: 12
+    },
+    scoringPreset: DEFAULT_FREE_FIRE_SCORING,
+    teams: [],
+    matches: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+const STORAGE_KEY_PREFIX = 'pointx_tournaments_user_';
+
+function getActiveUserId(): string {
+  if (typeof window === 'undefined' || !window.localStorage) return 'guest';
+  try {
+    const rawUser = window.localStorage.getItem('pointx_auth_session_v1') || window.localStorage.getItem('strikz_auth_session_v1');
+    if (rawUser) {
+      const parsed = JSON.parse(rawUser);
+      return parsed?._id || parsed?.id || parsed?.email || 'guest';
+    }
+  } catch {}
+  return 'guest';
+}
 
 function loadStoredTournaments(): { tournaments: Tournament[]; activeTournamentId: string; currentTournament: Tournament } {
-  // Check if admin is currently authenticated in storage
-  let isAdmin = false;
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      const rawUser = window.localStorage.getItem('pointx_auth_session_v1') || window.localStorage.getItem('strikz_auth_session_v1');
-      if (rawUser) {
-        const parsed = JSON.parse(rawUser);
-        if (parsed?.role === 'admin' || parsed?.isOriginalAdmin) {
-          isAdmin = true;
-        }
-      }
-    } catch {}
-  }
-
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          if (!isAdmin) {
-            // For non-admin organizers, guarantee zero demo tournament leakage
-            const nonDemo = parsed.filter(
-              (t) =>
-                t.id !== 'tour-ff-champ-2026' &&
-                t.id !== 'tour-ff-night-scrims' &&
-                t.id !== 'tour-ff-summer-finals' &&
-                !t.id.startsWith('tour-demo-')
-            );
-            return {
-              tournaments: nonDemo,
-              activeTournamentId: nonDemo[0]?.id || '',
-              currentTournament: nonDemo[0] || DEMO_TOURNAMENTS[0]
-            };
-          }
-          if (parsed.length > 0) {
-            return {
-              tournaments: parsed,
-              activeTournamentId: parsed[0].id,
-              currentTournament: parsed[0]
-            };
-          }
-        }
-      }
-    } catch {}
-  }
-
-  if (isAdmin) {
+  const blank = createBlankTournament();
+  if (typeof window === 'undefined' || !window.localStorage) {
     return {
-      tournaments: DEMO_TOURNAMENTS,
-      activeTournamentId: DEMO_TOURNAMENTS[0].id,
-      currentTournament: DEMO_TOURNAMENTS[0]
+      tournaments: [],
+      activeTournamentId: '',
+      currentTournament: blank
     };
   }
+
+  const userId = getActiveUserId();
+  try {
+    const raw = window.localStorage.getItem(`${STORAGE_KEY_PREFIX}${userId}`) || window.localStorage.getItem('pointx_tournaments_state');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Strip demo tournaments for regular users
+        const nonDemo = parsed.filter(
+          (t) =>
+            t.id !== 'tour-ff-champ-2026' &&
+            t.id !== 'tour-ff-night-scrims' &&
+            t.id !== 'tour-ff-summer-finals' &&
+            !t.id.startsWith('tour-demo-')
+        );
+        if (nonDemo.length > 0) {
+          return {
+            tournaments: nonDemo,
+            activeTournamentId: nonDemo[0].id,
+            currentTournament: nonDemo[0]
+          };
+        }
+      }
+    }
+  } catch {}
 
   return {
     tournaments: [],
     activeTournamentId: '',
-    currentTournament: DEMO_TOURNAMENTS[0]
+    currentTournament: blank
   };
 }
 
 function persistTournaments(tournaments: Tournament[]) {
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(tournaments));
+      const userId = getActiveUserId();
+      window.localStorage.setItem(`${STORAGE_KEY_PREFIX}${userId}`, JSON.stringify(tournaments));
+      window.localStorage.setItem('pointx_tournaments_state', JSON.stringify(tournaments));
     } catch {}
   }
 }
@@ -312,6 +331,8 @@ export const useTournamentStore = create<AppState>((set, get) => ({
   tournaments: initialSaved.tournaments,
   activeTournamentId: initialSaved.activeTournamentId,
   currentTournament: initialSaved.currentTournament,
+  isLoadingTournaments: false,
+  hasLoadedFromDatabase: false,
   activeTab: 'overview',
   previousTab: null,
   activeGraphicsCategory: 'standings',
@@ -347,15 +368,53 @@ export const useTournamentStore = create<AppState>((set, get) => ({
   },
 
   setCurrentTournamentId: (id) => {
-    const tour = get().tournaments.find((t) => t.id === id) || get().tournaments[0];
-    set({
-      activeTournamentId: tour.id,
-      currentTournament: tour
-    });
-    broadcastTournamentUpdate(tour);
+    const tour = get().tournaments.find((t) => t.id === id) || get().tournaments[0] || get().currentTournament;
+    if (tour) {
+      set({
+        activeTournamentId: tour.id,
+        currentTournament: tour
+      });
+      broadcastTournamentUpdate(tour);
+    }
   },
 
-  createTournament: (newTour) => {
+  fetchTournaments: async () => {
+    set({ isLoadingTournaments: true });
+    try {
+      const res = await tournamentsApi.getAll();
+      if (res.success && Array.isArray(res.data)) {
+        const loadedTournaments = res.data;
+        let active = get().currentTournament;
+        if (loadedTournaments.length > 0) {
+          const matching = loadedTournaments.find((t) => t.id === get().activeTournamentId);
+          active = matching || loadedTournaments[0];
+        } else {
+          active = createBlankTournament();
+        }
+
+        persistTournaments(loadedTournaments);
+
+        set({
+          tournaments: loadedTournaments,
+          activeTournamentId: loadedTournaments.length > 0 ? active.id : '',
+          currentTournament: active,
+          isLoadingTournaments: false,
+          hasLoadedFromDatabase: true
+        });
+
+        if (loadedTournaments.length > 0) {
+          broadcastTournamentUpdate(active);
+        }
+      } else {
+        set({ isLoadingTournaments: false, hasLoadedFromDatabase: true });
+      }
+    } catch {
+      set({ isLoadingTournaments: false, hasLoadedFromDatabase: true });
+    }
+  },
+
+  createTournament: async (newTour) => {
+    // 1. Optimistic local update
     set((state) => {
       const updatedTournaments = [newTour, ...state.tournaments];
       broadcastTournamentUpdate(newTour);
@@ -366,10 +425,31 @@ export const useTournamentStore = create<AppState>((set, get) => ({
         currentTournament: newTour
       };
     });
-    tournamentsApi.create(newTour).catch(() => {});
+
+    // 2. Persist to MongoDB database
+    try {
+      const res = await tournamentsApi.create(newTour);
+      if (res.success && res.data) {
+        const savedTour = res.data;
+        set((state) => {
+          const reconciled = state.tournaments.map((t) =>
+            t.id === newTour.id ? { ...t, ...savedTour } : t
+          );
+          persistTournaments(reconciled);
+          return {
+            tournaments: reconciled,
+            activeTournamentId: savedTour.id || newTour.id,
+            currentTournament: { ...newTour, ...savedTour }
+          };
+        });
+        return { ...newTour, ...savedTour };
+      }
+    } catch {}
+
+    return newTour;
   },
 
-  updateTournament: (tournamentId, data) => {
+  updateTournament: async (tournamentId, data) => {
     set((state) => {
       const updatedTournaments = state.tournaments.map((t) =>
         t.id === tournamentId
@@ -392,10 +472,13 @@ export const useTournamentStore = create<AppState>((set, get) => ({
         currentTournament: updatedCurrent
       };
     });
-    tournamentsApi.update(tournamentId, data).catch(() => {});
+
+    try {
+      await tournamentsApi.update(tournamentId, data);
+    } catch {}
   },
 
-  cloneTournament: (sourceId, options) => {
+  cloneTournament: async (sourceId, options) => {
     const source = get().tournaments.find((t) => t.id === sourceId) || get().currentTournament;
     const newId = `tour-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
 
@@ -438,11 +521,30 @@ export const useTournamentStore = create<AppState>((set, get) => ({
     });
 
     broadcastTournamentUpdate(clonedTournament);
-    tournamentsApi.clone({ sourceId, ...options }).catch(() => {});
+
+    try {
+      const res = await tournamentsApi.clone({ sourceId, ...options });
+      if (res.success && res.data) {
+        const saved = res.data;
+        set((state) => {
+          const reconciled = state.tournaments.map((t) =>
+            t.id === clonedTournament.id ? { ...t, ...saved } : t
+          );
+          persistTournaments(reconciled);
+          return {
+            tournaments: reconciled,
+            activeTournamentId: saved.id || clonedTournament.id,
+            currentTournament: { ...clonedTournament, ...saved }
+          };
+        });
+        return { ...clonedTournament, ...saved };
+      }
+    } catch {}
+
     return clonedTournament;
   },
 
-  importTournaments: (incoming) => {
+  importTournaments: async (incoming) => {
     if (!incoming || !Array.isArray(incoming) || incoming.length === 0) return 0;
 
     let addedCount = 0;
@@ -480,11 +582,15 @@ export const useTournamentStore = create<AppState>((set, get) => ({
       };
     });
 
-    tournamentsApi.importBatch(incoming).catch(() => {});
+    try {
+      await tournamentsApi.importBatch(incoming);
+      get().fetchTournaments().catch(() => {});
+    } catch {}
+
     return addedCount;
   },
 
-  archiveTournament: (tournamentId) => {
+  archiveTournament: async (tournamentId) => {
     set((state) => {
       const updatedTournaments = state.tournaments.map((t) =>
         t.id === tournamentId
@@ -503,21 +609,25 @@ export const useTournamentStore = create<AppState>((set, get) => ({
         currentTournament: updatedCurrent
       };
     });
-    tournamentsApi.update(tournamentId, { status: 'Archived' }).catch(() => {});
+    try {
+      await tournamentsApi.update(tournamentId, { status: 'Archived' });
+    } catch {}
   },
 
-  deleteTournament: (tournamentId) => {
+  deleteTournament: async (tournamentId) => {
     set((state) => {
       const filtered = state.tournaments.filter((t) => t.id !== tournamentId);
-      const nextActive = filtered[0] || DEMO_TOURNAMENT_1;
+      const nextActive = filtered[0] || createBlankTournament();
       persistTournaments(filtered);
       return {
         tournaments: filtered,
-        activeTournamentId: nextActive.id,
+        activeTournamentId: filtered.length > 0 ? nextActive.id : '',
         currentTournament: nextActive
       };
     });
-    tournamentsApi.delete(tournamentId).catch(() => {});
+    try {
+      await tournamentsApi.delete(tournamentId);
+    } catch {}
   },
 
   loadDemoTournaments: () => {
@@ -525,16 +635,19 @@ export const useTournamentStore = create<AppState>((set, get) => ({
     set({
       tournaments: DEMO_TOURNAMENTS,
       activeTournamentId: DEMO_TOURNAMENTS[0].id,
-      currentTournament: DEMO_TOURNAMENTS[0]
+      currentTournament: DEMO_TOURNAMENTS[0],
+      hasLoadedFromDatabase: true
     });
   },
 
   clearAllTournaments: () => {
+    const blank = createBlankTournament();
     persistTournaments([]);
     set({
       tournaments: [],
       activeTournamentId: '',
-      currentTournament: DEMO_TOURNAMENTS[0]
+      currentTournament: blank,
+      hasLoadedFromDatabase: false
     });
   },
 
@@ -550,7 +663,7 @@ export const useTournamentStore = create<AppState>((set, get) => ({
             !t.id.startsWith('tour-demo-')
         );
         const activeId = nonDemo.length > 0 ? nonDemo[0].id : '';
-        const current = nonDemo.length > 0 ? nonDemo[0] : DEMO_TOURNAMENTS[0];
+        const current = nonDemo.length > 0 ? nonDemo[0] : createBlankTournament();
         persistTournaments(nonDemo);
         return {
           tournaments: nonDemo,
