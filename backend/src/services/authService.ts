@@ -381,11 +381,15 @@ export async function loginUser(data: {
   password?: string;
   ipAddress?: string;
   userAgent?: string;
-}): Promise<{ success: boolean; user?: any; token?: string; error?: string; requiresVerification?: boolean }> {
+}): Promise<{ success: boolean; user?: any; token?: string; error?: string; requiresVerification?: boolean; notRegistered?: boolean }> {
   const email = data.email.toLowerCase().trim();
   const user = await User.findOne({ email });
   if (!user) {
-    return { success: false, error: 'Invalid email or password.' };
+    return {
+      success: false,
+      notRegistered: true,
+      error: 'This email is not registered. Please register first to access PointX.',
+    };
   }
 
   if (user.status === 'suspended') {

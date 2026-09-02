@@ -16,7 +16,7 @@ export interface AuthStoreState {
   isLoading: boolean;
 
   checkAuth: () => Promise<void>;
-  login: (email: string, password?: string) => Promise<{ success: boolean; requiresVerification?: boolean; error?: string }>;
+  login: (email: string, password?: string) => Promise<{ success: boolean; requiresVerification?: boolean; notRegistered?: boolean; error?: string }>;
   signup: (name: string, email: string, password?: string, orgName?: string) => Promise<{ success: boolean; requiresOtp?: boolean; message?: string; error?: string }>;
   verifyOtp: (email: string, otp: string, purpose?: 'signup' | 'forgot_password') => Promise<{ success: boolean; error?: string }>;
   resendOtp: (email: string, purpose?: 'signup' | 'forgot_password') => Promise<{ success: boolean; message?: string; error?: string }>;
@@ -224,6 +224,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       return {
         success: false,
         requiresVerification: res.requiresVerification,
+        notRegistered: res.notRegistered,
         error: res.error || 'Authentication failed. Please verify credentials.'
       };
     } catch {

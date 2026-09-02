@@ -86,6 +86,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isUnregisteredEmail, setIsUnregisteredEmail] = useState(false);
 
   const isDark = theme === 'dark';
 
@@ -101,6 +102,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
+    setIsUnregisteredEmail(false);
 
     const emailToUse = loginEmail.includes('@') ? loginEmail.trim() : `${loginEmail.trim()}@pointx.gg`;
     const res = await login(emailToUse, loginPassword);
@@ -113,8 +115,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
         setIsOtpStep(true);
         handleToggleMode(true);
         setSuccessMessage('Please verify your email with the 6-digit OTP code.');
+      } else if (res.notRegistered || res.error?.toLowerCase().includes('not registered') || res.error?.toLowerCase().includes('register first')) {
+        setIsUnregisteredEmail(true);
+        setSignupEmail(emailToUse);
+        setErrorMessage('This email is not registered yet. Please register first to access PointX.');
       } else {
-        setErrorMessage(res.error || 'Login failed.');
+        setErrorMessage(res.error || 'Login failed. Please verify your credentials.');
       }
     }
   };
@@ -315,7 +321,27 @@ export const LoginView: React.FC<LoginViewProps> = ({
           )}
 
           {errorMessage && !isToggled && (
-            <div className="auth-error-banner slide-element">{errorMessage}</div>
+            <div className="auth-error-banner slide-element space-y-2">
+              <div className="flex items-center gap-2">
+                <span>{errorMessage}</span>
+              </div>
+              {isUnregisteredEmail && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSignupEmail(loginEmail.trim());
+                    handleToggleMode(true);
+                    setIsOtpStep(false);
+                    setErrorMessage(null);
+                    setIsUnregisteredEmail(false);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[var(--accent-primary)] text-black text-xs font-black hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer font-display mt-1 shadow-md"
+                >
+                  <span>Click Here to Register First</span>
+                  <Zap className="h-3.5 w-3.5 fill-black" />
+                </button>
+              )}
+            </div>
           )}
 
           <form onSubmit={handleLoginSubmit}>
@@ -324,7 +350,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 type="text"
                 required
                 value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
+                onChange={(e) => {
+                  setLoginEmail(e.target.value);
+                  if (isUnregisteredEmail) setIsUnregisteredEmail(false);
+                }}
                 className={loginEmail ? 'has-value' : ''}
               />
               <label>Username / Email</label>
@@ -377,9 +406,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   type="button"
                   className="register-trigger"
                   onClick={() => {
+                    if (loginEmail && !signupEmail) {
+                      setSignupEmail(loginEmail.trim());
+                    }
                     handleToggleMode(true);
                     setIsOtpStep(false);
                     setErrorMessage(null);
+                    setIsUnregisteredEmail(false);
                   }}
                 >
                   Register Now

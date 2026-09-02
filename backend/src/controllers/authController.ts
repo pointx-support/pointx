@@ -106,7 +106,8 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     });
 
     if (!result.success) {
-      return res.status(result.requiresVerification ? 403 : 401).json(result);
+      const statusCode = result.requiresVerification ? 403 : result.notRegistered ? 404 : 401;
+      return res.status(statusCode).json(result);
     }
 
     if (result.token) {
