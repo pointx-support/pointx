@@ -48,7 +48,9 @@ export const Sidebar: FC<SidebarProps> = ({
     isSidebarCollapsed,
     toggleSidebar,
     currentTournament,
-    triggerDashboardHighlight
+    triggerDashboardHighlight,
+    activeGraphicsCategory,
+    setActiveGraphicsCategory
   } = useTournamentStore();
   const { showToast } = useToast();
 
@@ -72,14 +74,14 @@ export const Sidebar: FC<SidebarProps> = ({
     { id: 'statistics', label: 'Statistics & MVPs', icon: BarChart3 }
   ];
 
-  // Sub-items inside Graphics Studio (From user image reference)
-  const graphicsSubItems = [
-    { id: 'points', label: 'Point Tables', isPro: false },
+  // Sub-items inside Graphics Studio (Strictly 1-at-a-time active selection)
+  const graphicsSubItems: { id: 'standings' | 'warheads' | 'fraggers' | 'team-poster' | 'slots-list' | 'certificate'; label: string; isPro: boolean }[] = [
+    { id: 'standings', label: 'Point Tables', isPro: false },
     { id: 'warheads', label: 'Warheads / Kill Leader', isPro: true },
-    { id: 'mvp', label: 'Top Fraggers / MVP', isPro: true },
+    { id: 'fraggers', label: 'Top Fraggers / MVP', isPro: true },
     { id: 'team-poster', label: 'Team Poster', isPro: true },
     { id: 'slots-list', label: 'Slots List', isPro: true },
-    { id: 'victory-cert', label: 'Victory Certificate', isPro: true }
+    { id: 'certificate', label: 'Victory Certificate', isPro: true }
   ];
 
   // Organization & Staff Delegation
@@ -118,6 +120,11 @@ export const Sidebar: FC<SidebarProps> = ({
     } else {
       setActiveTab(tabId as any);
     }
+  };
+
+  const handleGraphicsSubClick = (subId: 'standings' | 'warheads' | 'fraggers' | 'team-poster' | 'slots-list' | 'certificate') => {
+    setActiveGraphicsCategory(subId);
+    handleNavClick('graphics');
   };
 
   const handleDashboardClick = () => {
@@ -489,26 +496,32 @@ export const Sidebar: FC<SidebarProps> = ({
                     Graphics Posters
                   </div>
                   <div className="relative pl-3 border-l-2 border-white/15 space-y-1 ml-2">
-                    {graphicsSubItems.map((sub) => (
-                      <button
-                        key={sub.id}
-                        type="button"
-                        onClick={() => handleNavClick('graphics')}
-                        className={cn(
-                          'w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all text-left cursor-pointer',
-                          isGraphicsActive
-                            ? (isDark ? 'bg-white/15 text-white font-bold' : 'bg-black/10 text-black font-bold')
-                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
-                        )}
-                      >
-                        <span>{sub.label}</span>
-                        {sub.isPro && (
-                          <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">
-                            PRO
-                          </span>
-                        )}
-                      </button>
-                    ))}
+                    {graphicsSubItems.map((sub) => {
+                      const isSubActive = isGraphicsActive && activeGraphicsCategory === sub.id && !isCommandCenter;
+
+                      return (
+                        <button
+                          key={sub.id}
+                          type="button"
+                          onClick={() => handleGraphicsSubClick(sub.id)}
+                          className={cn(
+                            'w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all text-left cursor-pointer',
+                            isSubActive
+                              ? (isDark ? 'bg-white/15 text-white font-bold' : 'bg-black/10 text-black font-bold')
+                              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
+                          )}
+                        >
+                          <span>{sub.label}</span>
+                          {isSubActive ? (
+                            <div className="h-1.5 w-1.5 rounded-full bg-[var(--accent-primary)] shadow-[0_0_8px_rgba(255,208,0,0.8)] shrink-0" />
+                          ) : sub.isPro && (
+                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">
+                              PRO
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -516,32 +529,38 @@ export const Sidebar: FC<SidebarProps> = ({
               {/* Expanded Branch Tree Connectors for Graphics Studio */}
               {isExpanded && isGraphicsTreeOpen && (
                 <div className="relative ml-4 pl-4.5 border-l-2 border-white/15 dark:border-white/15 light:border-black/15 mt-1.5 space-y-1">
-                  {graphicsSubItems.map((sub) => (
-                    <div key={sub.id} className="relative flex items-center">
-                      {/* Curved Connector Branch Stub */}
-                      <div className="absolute -left-[19px] top-1/2 -translate-y-1/2 w-3.5 h-[2px] bg-white/20 dark:bg-white/20 light:bg-black/20 rounded-full" />
+                  {graphicsSubItems.map((sub) => {
+                    const isSubActive = isGraphicsActive && activeGraphicsCategory === sub.id && !isCommandCenter;
 
-                      <button
-                        type="button"
-                        onClick={() => handleNavClick('graphics')}
-                        className={cn(
-                          'w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer group',
-                          isGraphicsActive && !isCommandCenter
-                            ? (isDark
-                                ? 'bg-white/15 text-white font-bold shadow-sm'
-                                : 'bg-black/10 text-black font-bold shadow-sm')
-                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
-                        )}
-                      >
-                        <span className="truncate">{sub.label}</span>
-                        {sub.isPro && (
-                          <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 shrink-0">
-                            PRO
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                  ))}
+                    return (
+                      <div key={sub.id} className="relative flex items-center">
+                        {/* Curved Connector Branch Stub */}
+                        <div className="absolute -left-[19px] top-1/2 -translate-y-1/2 w-3.5 h-[2px] bg-white/20 dark:bg-white/20 light:bg-black/20 rounded-full" />
+
+                        <button
+                          type="button"
+                          onClick={() => handleGraphicsSubClick(sub.id)}
+                          className={cn(
+                            'w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer group',
+                            isSubActive
+                              ? (isDark
+                                  ? 'bg-white/15 text-white font-bold shadow-sm'
+                                  : 'bg-black/10 text-black font-bold shadow-sm')
+                              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
+                          )}
+                        >
+                          <span className="truncate">{sub.label}</span>
+                          {isSubActive ? (
+                            <div className="h-1.5 w-1.5 rounded-full bg-[var(--accent-primary)] shadow-[0_0_8px_rgba(255,208,0,0.8)] shrink-0" />
+                          ) : sub.isPro && (
+                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 shrink-0">
+                              PRO
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

@@ -51,13 +51,21 @@ const HUE_PRESETS = [
 ];
 
 export const GraphicsStudioView: React.FC = () => {
-  const { currentTournament, getStandings, goBackTab, setActiveTab } = useTournamentStore();
+  const {
+    currentTournament,
+    getStandings,
+    goBackTab,
+    setActiveTab,
+    activeGraphicsCategory,
+    setActiveGraphicsCategory
+  } = useTournamentStore();
   const { templates, activeTemplateId, setActiveTemplateId, getActiveTemplate } = useTemplateStore();
   const { user } = useAuthStore();
   const { showToast } = useToast();
   const isAdmin = user?.role === 'admin';
 
-  const [activeCategory, setActiveCategory] = useState<GraphicCategoryTab>('standings');
+  const activeCategory = activeGraphicsCategory || 'standings';
+  const setActiveCategory = setActiveGraphicsCategory;
   const [selectedScope, setSelectedScope] = useState<'overall' | number>('overall');
   const [formatFilter, setFormatFilter] = useState<'all' | 'portrait' | 'landscape'>('all');
   const [customOrgName, setCustomOrgName] = useState(currentTournament.organizer || 'PointX Arena');

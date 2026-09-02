@@ -27,7 +27,9 @@ export interface AppState {
   currentTournament: Tournament;
   activeTab: 'overview' | 'matches' | 'teams' | 'players' | 'global-teams' | 'standings' | 'statistics' | 'graphics' | 'broadcast' | 'scoring' | 'settings' | 'account' | 'organization' | 'template-studio';
   previousTab: 'overview' | 'matches' | 'teams' | 'players' | 'global-teams' | 'standings' | 'statistics' | 'graphics' | 'broadcast' | 'scoring' | 'settings' | 'account' | 'organization' | 'template-studio' | null;
+  activeGraphicsCategory: 'standings' | 'warheads' | 'fraggers' | 'team-poster' | 'slots-list' | 'certificate';
   setActiveTab: (tab: AppState['activeTab']) => void;
+  setActiveGraphicsCategory: (category: AppState['activeGraphicsCategory']) => void;
   goBackTab: () => void;
   isSidebarCollapsed: boolean;
   toggleSidebar: () => void;
@@ -312,6 +314,7 @@ export const useTournamentStore = create<AppState>((set, get) => ({
   currentTournament: initialSaved.currentTournament,
   activeTab: 'overview',
   previousTab: null,
+  activeGraphicsCategory: 'standings',
   isSidebarCollapsed: false,
   highlightDashboardAction: false,
   isCreateMatchModalOpen: false,
@@ -324,6 +327,7 @@ export const useTournamentStore = create<AppState>((set, get) => ({
         activeTab: tab
       };
     }),
+  setActiveGraphicsCategory: (category) => set({ activeGraphicsCategory: category }),
   goBackTab: () =>
     set((state) => {
       const target = state.previousTab || 'overview';
