@@ -54,6 +54,7 @@ export const Sidebar: FC<SidebarProps> = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isMainTreeOpen, setIsMainTreeOpen] = useState(true);
+  const [isGraphicsTreeOpen, setIsGraphicsTreeOpen] = useState(true);
   const [hoveredFlyout, setHoveredFlyout] = useState<string | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
@@ -71,11 +72,14 @@ export const Sidebar: FC<SidebarProps> = ({
     { id: 'statistics', label: 'Statistics & MVPs', icon: BarChart3 }
   ];
 
-  // Primary Single Nav Items
-  const primaryNavItems = [
-    { id: 'broadcast', label: 'Live Overlays (OBS)', icon: Tv, isLive: true },
-    { id: 'graphics', label: 'Graphics Studio', icon: Sparkles },
-    { id: 'template-studio', label: 'Template Studio', icon: Palette }
+  // Sub-items inside Graphics Studio (From user image reference)
+  const graphicsSubItems = [
+    { id: 'points', label: 'Point Tables', isPro: false },
+    { id: 'warheads', label: 'Warheads / Kill Leader', isPro: true },
+    { id: 'mvp', label: 'Top Fraggers / MVP', isPro: true },
+    { id: 'team-poster', label: 'Team Poster', isPro: true },
+    { id: 'slots-list', label: 'Slots List', isPro: true },
+    { id: 'victory-cert', label: 'Victory Certificate', isPro: true }
   ];
 
   // Organization & Staff Delegation
@@ -140,6 +144,7 @@ export const Sidebar: FC<SidebarProps> = ({
   }, [searchQuery, tournamentSubItems]);
 
   const isAnySubActive = tournamentSubItems.some((sub) => activeTab === sub.id);
+  const isGraphicsActive = activeTab === 'graphics';
 
   return (
     <>
@@ -256,7 +261,32 @@ export const Sidebar: FC<SidebarProps> = ({
               </div>
             )}
 
-            {/* Dashboard / Tournament Overview Parent Node */}
+            {/* 1. Main Dashboard Top Option */}
+            <button
+              type="button"
+              onClick={handleDashboardClick}
+              className={cn(
+                'w-full flex items-center rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer group',
+                isExpanded ? 'justify-between px-3 py-2.5' : 'justify-center h-10 w-10 mx-auto p-0',
+                isCommandCenter
+                  ? (isDark ? 'bg-white text-black shadow-md font-display' : 'bg-[#111215] text-white shadow-md font-display')
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 dark:hover:bg-white/5'
+              )}
+              title={!isExpanded ? 'Main Dashboard' : undefined}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <LayoutGrid className={cn(
+                  'h-4 w-4 shrink-0 transition-transform group-hover:scale-110',
+                  isCommandCenter ? (isDark ? 'text-black' : 'text-white') : 'text-[var(--accent-primary)]'
+                )} />
+                {isExpanded && <span className="truncate">Main Dashboard</span>}
+              </div>
+              {isExpanded && isCommandCenter && (
+                <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', isDark ? 'bg-black' : 'bg-white')} />
+              )}
+            </button>
+
+            {/* 2. Tournament Overview Parent Node */}
             <div
               className="relative"
               onMouseEnter={() => !isExpanded && setHoveredFlyout('main-tree')}
@@ -275,18 +305,18 @@ export const Sidebar: FC<SidebarProps> = ({
                 className={cn(
                   'w-full flex items-center rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer group',
                   isExpanded ? 'justify-between px-3 py-2.5' : 'justify-center h-10 w-10 mx-auto p-0',
-                  (activeTab === 'overview' || isAnySubActive)
+                  (activeTab === 'overview' || isAnySubActive) && !isCommandCenter
                     ? (isDark ? 'bg-white/12 text-white shadow-sm' : 'bg-black/8 text-black shadow-sm')
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 dark:hover:bg-white/5'
                 )}
-                title={!isExpanded ? 'Dashboard' : undefined}
+                title={!isExpanded ? 'Tournament Overview' : undefined}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <LayoutGrid className={cn(
+                  <Trophy className={cn(
                     'h-4 w-4 shrink-0 transition-transform group-hover:scale-110',
-                    (activeTab === 'overview' || isAnySubActive) ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'
+                    (activeTab === 'overview' || isAnySubActive) && !isCommandCenter ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'
                   )} />
-                  {isExpanded && <span className="truncate">Dashboard</span>}
+                  {isExpanded && <span className="truncate">Tournament Arena</span>}
                 </div>
 
                 {isExpanded && (
@@ -338,7 +368,7 @@ export const Sidebar: FC<SidebarProps> = ({
               {isExpanded && isMainTreeOpen && (
                 <div className="relative ml-4 pl-4.5 border-l-2 border-white/15 dark:border-white/15 light:border-black/15 mt-1.5 space-y-1">
                   {filteredSubItems.map((sub) => {
-                    const isActive = activeTab === sub.id;
+                    const isActive = activeTab === sub.id && !isCommandCenter;
                     const SubIcon = sub.icon;
 
                     return (
@@ -377,45 +407,176 @@ export const Sidebar: FC<SidebarProps> = ({
               )}
             </div>
 
-            {/* Other Primary Items (Broadcast & Graphics) */}
-            {primaryNavItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
+            {/* 3. Live Broadcast Overlays (OBS) */}
+            <button
+              type="button"
+              onClick={() => handleNavClick('broadcast')}
+              className={cn(
+                'w-full flex items-center rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer group',
+                isExpanded ? 'justify-between px-3 py-2.5' : 'justify-center h-10 w-10 mx-auto p-0',
+                activeTab === 'broadcast' && !isCommandCenter
+                  ? (isDark ? 'bg-white/12 text-white shadow-sm' : 'bg-black/8 text-black shadow-sm')
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 dark:hover:bg-white/5'
+              )}
+              title={!isExpanded ? 'Live Broadcast (OBS)' : undefined}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <Tv className={cn(
+                  'h-4 w-4 shrink-0 transition-transform group-hover:scale-110',
+                  activeTab === 'broadcast' && !isCommandCenter ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'
+                )} />
+                {isExpanded && <span className="truncate">Live Overlays (OBS)</span>}
+              </div>
 
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleNavClick(item.id)}
-                  className={cn(
-                    'w-full flex items-center rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer group',
-                    isExpanded ? 'justify-between px-3 py-2.5' : 'justify-center h-10 w-10 mx-auto p-0',
-                    isActive
-                      ? (isDark ? 'bg-white/12 text-white shadow-sm' : 'bg-black/8 text-black shadow-sm')
-                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 dark:hover:bg-white/5'
-                  )}
-                  title={!isExpanded ? item.label : undefined}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Icon className={cn(
-                      'h-4 w-4 shrink-0 transition-transform group-hover:scale-110',
-                      isActive ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'
-                    )} />
-                    {isExpanded && <span className="truncate">{item.label}</span>}
+              <span className={cn(
+                'flex h-2 w-2 rounded-full shrink-0',
+                activeTab === 'broadcast' && !isCommandCenter ? 'bg-[var(--accent-primary)]' : 'bg-emerald-400 animate-pulse'
+              )} />
+            </button>
+
+            {/* 4. Graphics Studio with Sub-types Branch Tree (Point Tables, Warheads, MVP, etc.) */}
+            <div
+              className="relative"
+              onMouseEnter={() => !isExpanded && setHoveredFlyout('graphics-tree')}
+              onMouseLeave={() => !isExpanded && setHoveredFlyout(null)}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  if (isExpanded) {
+                    setIsGraphicsTreeOpen(!isGraphicsTreeOpen);
+                    handleNavClick('graphics');
+                  } else {
+                    handleNavClick('graphics');
+                  }
+                }}
+                className={cn(
+                  'w-full flex items-center rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer group',
+                  isExpanded ? 'justify-between px-3 py-2.5' : 'justify-center h-10 w-10 mx-auto p-0',
+                  isGraphicsActive && !isCommandCenter
+                    ? (isDark ? 'bg-white/12 text-white shadow-sm' : 'bg-black/8 text-black shadow-sm')
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 dark:hover:bg-white/5'
+                )}
+                title={!isExpanded ? 'Graphics Studio' : undefined}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <Sparkles className={cn(
+                    'h-4 w-4 shrink-0 transition-transform group-hover:scale-110',
+                    isGraphicsActive && !isCommandCenter ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'
+                  )} />
+                  {isExpanded && <span className="truncate">Graphics Studio</span>}
+                </div>
+
+                {isExpanded && (
+                  <ChevronDown
+                    className={cn(
+                      'h-3.5 w-3.5 text-[var(--text-muted)] transition-transform duration-200',
+                      isGraphicsTreeOpen ? 'rotate-0' : '-rotate-90'
+                    )}
+                  />
+                )}
+              </button>
+
+              {/* Collapsed Flyout Menu Popup for Graphics Sub-items */}
+              {!isExpanded && hoveredFlyout === 'graphics-tree' && (
+                <div className={cn(
+                  'absolute left-full ml-3 top-0 w-52 p-2.5 rounded-3xl border shadow-2xl backdrop-blur-2xl z-50 animate-in fade-in zoom-in-95 duration-150',
+                  isDark
+                    ? 'bg-[#18191E]/98 border-white/20 text-white shadow-[0_16px_40px_rgba(0,0,0,0.8)]'
+                    : 'bg-white/98 border-black/15 text-black shadow-[0_16px_40px_rgba(0,0,0,0.15)]'
+                )}>
+                  <div className="px-3 py-1 text-[10px] font-mono font-bold uppercase text-[var(--text-muted)] border-b border-[var(--border-subtle)] pb-1.5 mb-1.5">
+                    Graphics Posters
                   </div>
+                  <div className="relative pl-3 border-l-2 border-white/15 space-y-1 ml-2">
+                    {graphicsSubItems.map((sub) => (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={() => handleNavClick('graphics')}
+                        className={cn(
+                          'w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all text-left cursor-pointer',
+                          isGraphicsActive
+                            ? (isDark ? 'bg-white/15 text-white font-bold' : 'bg-black/10 text-black font-bold')
+                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
+                        )}
+                      >
+                        <span>{sub.label}</span>
+                        {sub.isPro && (
+                          <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">
+                            PRO
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-                  {item.isLive && (
-                    <span className={cn(
-                      'flex h-2 w-2 rounded-full shrink-0',
-                      isActive ? 'bg-[var(--accent-primary)]' : 'bg-emerald-400 animate-pulse'
-                    )} />
-                  )}
-                </button>
-              );
-            })}
+              {/* Expanded Branch Tree Connectors for Graphics Studio */}
+              {isExpanded && isGraphicsTreeOpen && (
+                <div className="relative ml-4 pl-4.5 border-l-2 border-white/15 dark:border-white/15 light:border-black/15 mt-1.5 space-y-1">
+                  {graphicsSubItems.map((sub) => (
+                    <div key={sub.id} className="relative flex items-center">
+                      {/* Curved Connector Branch Stub */}
+                      <div className="absolute -left-[19px] top-1/2 -translate-y-1/2 w-3.5 h-[2px] bg-white/20 dark:bg-white/20 light:bg-black/20 rounded-full" />
+
+                      <button
+                        type="button"
+                        onClick={() => handleNavClick('graphics')}
+                        className={cn(
+                          'w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer group',
+                          isGraphicsActive && !isCommandCenter
+                            ? (isDark
+                                ? 'bg-white/15 text-white font-bold shadow-sm'
+                                : 'bg-black/10 text-black font-bold shadow-sm')
+                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
+                        )}
+                      >
+                        <span className="truncate">{sub.label}</span>
+                        {sub.isPro && (
+                          <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 shrink-0">
+                            PRO
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 5. Template Studio (ADMIN ONLY) */}
+            {user?.role === 'admin' && (
+              <button
+                type="button"
+                onClick={() => handleNavClick('template-studio')}
+                className={cn(
+                  'w-full flex items-center rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer group',
+                  isExpanded ? 'justify-between px-3 py-2.5' : 'justify-center h-10 w-10 mx-auto p-0',
+                  activeTab === 'template-studio' && !isCommandCenter
+                    ? (isDark ? 'bg-white/12 text-white shadow-sm' : 'bg-black/8 text-black shadow-sm')
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 dark:hover:bg-white/5'
+                )}
+                title={!isExpanded ? 'Template Studio (Admin)' : undefined}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <Palette className={cn(
+                    'h-4 w-4 shrink-0 transition-transform group-hover:scale-110',
+                    activeTab === 'template-studio' && !isCommandCenter ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'
+                  )} />
+                  {isExpanded && <span className="truncate">Template Studio</span>}
+                </div>
+                {isExpanded && (
+                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400">
+                    ADMIN
+                  </span>
+                )}
+              </button>
+            )}
           </div>
 
-          {/* SECTION 2: ORGANIZATION & STAFF (Matching 'MESSAGES' in Screenshot) */}
+          {/* SECTION 2: ORGANIZATION & STAFF */}
           <div className="space-y-1 pt-2 border-t border-[var(--border-subtle)]">
             {isExpanded && (
               <div className="px-2 pb-1 flex items-center justify-between text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)]">

@@ -32,24 +32,7 @@ interface StaffMember {
   addedAt: string;
 }
 
-const INITIAL_STAFF: StaffMember[] = [
-  {
-    id: 'staff-1',
-    name: 'Rahul Sharma',
-    email: 'rahul.esports@gmail.com',
-    role: 'broadcast_producer',
-    status: 'active',
-    addedAt: '2026-09-01'
-  },
-  {
-    id: 'staff-2',
-    name: 'Amit Verma',
-    email: 'amit.verma99@gmail.com',
-    role: 'scorer',
-    status: 'active',
-    addedAt: '2026-09-02'
-  }
-];
+const INITIAL_STAFF: StaffMember[] = [];
 
 export const MyAccountView: React.FC = () => {
   const { user, sessions, updateProfile, changePassword, terminateOtherSessions, logout } = useAuthStore();
@@ -450,7 +433,18 @@ export const MyAccountView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-subtle)] font-mono">
-                    {staffList.map((staff) => (
+                    {staffList.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-10 text-center text-xs text-[var(--text-muted)] font-sans">
+                          <Users2 className="h-8 w-8 mx-auto mb-2 opacity-30 text-[var(--accent-primary)]" />
+                          <div className="font-bold text-[var(--text-secondary)]">No Staff Delegated Yet</div>
+                          <div className="text-[11px] text-[var(--text-muted)] mt-1">
+                            Click &ldquo;Add Staff Member&rdquo; above to assign match scorekeepers or OBS stream producers.
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      staffList.map((staff) => (
                       <tr key={staff.id} className="hover:bg-[var(--bg-surface-hover)] transition-colors">
                         <td className="px-4 py-3.5 font-sans font-bold text-[var(--text-primary)]">
                           <div>{staff.name}</div>
@@ -506,7 +500,7 @@ export const MyAccountView: React.FC = () => {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    )))}
                   </tbody>
                 </table>
               </div>
