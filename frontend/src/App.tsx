@@ -190,8 +190,8 @@ export function App() {
     }
   }, [setActiveTab]);
 
-  // Theme Syncing Effect (Supports 'dark' and 'light' mode)
-  const currentTheme = theme || user?.preferences?.theme || 'dark';
+  // Theme Syncing Effect (Defaults to 'dark' mode)
+  const currentTheme = theme || 'dark';
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', currentTheme);

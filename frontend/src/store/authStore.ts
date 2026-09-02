@@ -59,22 +59,24 @@ function applyThemeToDOM(theme: 'light' | 'dark') {
   }
 }
 
-function loadStoredTheme(): 'light' | 'dark' {
-  if (typeof window === 'undefined' || !window.localStorage) return 'dark';
+function getEffectiveTheme(): 'light' | 'dark' {
+  if (typeof window === 'undefined') return 'dark';
   try {
-    const directTheme = window.localStorage.getItem(THEME_STORAGE_KEY) || window.localStorage.getItem('strikz_theme_mode_v1');
+    const sessionTheme = window.sessionStorage?.getItem('pointx_theme_session');
+    if (sessionTheme === 'light' || sessionTheme === 'dark') return sessionTheme;
+
+    const directTheme = window.localStorage?.getItem('pointx_theme_mode_v2');
     if (directTheme === 'light' || directTheme === 'dark') return directTheme;
-    const rawUser = window.localStorage.getItem(AUTH_STORAGE_KEY) || window.localStorage.getItem('strikz_auth_session_v1');
-    if (rawUser) {
-      const parsed = JSON.parse(rawUser);
-      if (parsed?.preferences?.theme === 'light' || parsed?.preferences?.theme === 'dark') {
-        return parsed.preferences.theme;
-      }
-    }
+
+    // Explicit default: strictly DARK mode
     return 'dark';
   } catch {
     return 'dark';
   }
+}
+
+function loadStoredTheme(): 'light' | 'dark' {
+  return getEffectiveTheme();
 }
 
 function loadStoredUser(): User | null {
@@ -112,13 +114,14 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   checkAuth: async () => {
     const token = getStoredToken();
     const storedUser = loadStoredUser();
-
     if (!token) {
       if (storedUser) {
         set({ user: null, isAuthenticated: false, sessionToken: null });
         if (typeof window !== 'undefined' && window.localStorage) {
           window.localStorage.removeItem(AUTH_STORAGE_KEY);
         }
+      } else {
+        set({ isAuthenticated: false, user: null, sessionToken: null });
       }
       return;
     }
@@ -127,8 +130,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       const res = await authApi.getMe();
       const user = res.user || (res.data && res.data.user);
       if (res.success && user) {
-        const rawTheme = user.preferences?.theme;
-        const normalizedTheme: 'light' | 'dark' = rawTheme === 'light' ? 'light' : 'dark';
+        const normalizedTheme: 'light' | 'dark' = getEffectiveTheme();
         const enrichedUser: User = {
           ...user,
           isOriginalAdmin: user.role === 'admin' || user.isOriginalAdmin
@@ -185,8 +187,10 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
 
   setTheme: (newTheme: 'light' | 'dark') => {
     applyThemeToDOM(newTheme);
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem(THEME_STORAGE_KEY, newTheme);
+    if (typeof window !== 'undefined') {
+      window.sessionStorage?.setItem('pointx_theme_session', newTheme);
+      window.localStorage?.setItem('pointx_theme_mode_v2', newTheme);
+      window.localStorage?.setItem(THEME_STORAGE_KEY, newTheme);
     }
     const currentUser = get().user;
     if (currentUser) {
@@ -229,8 +233,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         if (token) setStoredToken(token);
 
         if (user) {
-          const rawTheme = user.preferences?.theme;
-          const normalizedTheme: 'light' | 'dark' = rawTheme === 'light' ? 'light' : 'dark';
+          const normalizedTheme: 'light' | 'dark' = getEffectiveTheme();
           const enrichedUser: User = {
             ...user,
             isOriginalAdmin: user.role === 'admin' || user.isOriginalAdmin
@@ -327,8 +330,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         if (token) setStoredToken(token);
 
         if (user) {
-          const rawTheme = user.preferences?.theme;
-          const normalizedTheme: 'light' | 'dark' = rawTheme === 'light' ? 'light' : 'dark';
+          const normalizedTheme: 'light' | 'dark' = getEffectiveTheme();
 
           if (typeof window !== 'undefined' && window.localStorage) {
             window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
