@@ -34,6 +34,9 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useToast } from '../ui/Toast';
+import { motion, AnimatePresence } from 'motion/react';
+import { AnimatedThemeToggle } from '../animation';
+import { dropdownVariants } from '../animation/motionTokens';
 
 export interface NavbarProps {
   viewMode?: 'command-center' | 'workspace' | 'admin-dashboard';
@@ -342,19 +345,17 @@ export const Navbar: FC<NavbarProps> = ({
               </button>
             )}
 
-            <button
-              onClick={toggleTheme}
-              className="p-2 sm:p-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] shadow-sm cursor-pointer transition-colors"
-              title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
-            >
-              {isDark ? <Sun className="h-4 w-4 text-[var(--accent-primary)]" /> : <Moon className="h-4 w-4 text-[var(--accent-primary)]" />}
-            </button>
+            <AnimatedThemeToggle
+              isDark={isDark}
+              onToggle={toggleTheme}
+            />
 
             {user && (
               <div className="relative" ref={dropdownRef}>
                 <button
+                  type="button"
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className={`flex items-center gap-2.5 rounded-xl border transition-all p-1.5 sm:px-3 sm:py-2 cursor-pointer ${
+                  className={`flex items-center gap-2.5 rounded-xl border transition-all p-1.5 sm:px-3 sm:py-2 cursor-pointer btn-press ${
                     isDropdownOpen ? 'border-[var(--accent-primary)] bg-[var(--bg-surface-raised)] shadow-[0_0_15px_rgba(255,208,0,0.15)]' : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-surface-hover)] shadow-sm'
                   }`}
                 >
@@ -368,8 +369,15 @@ export const Navbar: FC<NavbarProps> = ({
                   <ChevronDown className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform duration-200 ${isDropdownOpen ? 'rotate-180 text-[var(--accent-primary)]' : ''}`} />
                 </button>
 
-                {isDropdownOpen && (
-                  <div className="absolute right-0 mt-2.5 w-76 sm:w-84 max-h-[85vh] overflow-y-auto rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-surface)]/98 backdrop-blur-2xl p-2.5 shadow-[var(--shadow-floating)] z-50 animate-dropdown-enter space-y-2 divide-y divide-[var(--border-subtle)]">
+                <AnimatePresence>
+                  {isDropdownOpen && (
+                    <motion.div
+                      variants={dropdownVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="absolute right-0 mt-2.5 w-76 sm:w-84 max-h-[85vh] overflow-y-auto rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-surface)]/98 backdrop-blur-2xl p-2.5 shadow-[var(--shadow-floating)] z-50 space-y-2 divide-y divide-[var(--border-subtle)]"
+                    >
                     
                     {/* Header Profile Identity Card */}
                     <div className="p-3 rounded-xl bg-gradient-to-br from-white/[0.04] to-transparent border border-white/[0.06] space-y-2.5">
@@ -614,9 +622,10 @@ export const Navbar: FC<NavbarProps> = ({
                         <span>Sign Out</span>
                       </button>
                     </div>
-                  </div>
+                  </motion.div>
                 )}
-              </div>
+              </AnimatePresence>
+            </div>
             )}
           </div>
         </div>

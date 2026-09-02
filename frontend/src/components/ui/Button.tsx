@@ -26,7 +26,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center font-bold tracking-tight transition-all select-none rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] active:translate-y-[1px] disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed cursor-pointer font-sans';
+      'btn-press inline-flex items-center justify-center font-bold tracking-tight transition-all select-none rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed cursor-pointer font-sans';
 
     // 8-12% larger typography sizes
     const sizeStyles = {

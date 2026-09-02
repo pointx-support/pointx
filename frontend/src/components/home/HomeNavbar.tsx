@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Sun,
-  Moon,
-  Menu,
-  X,
   LogIn,
   LayoutDashboard,
   ArrowRight
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useAuthStore } from '../../store/authStore';
 import { cn } from '../../lib/utils';
+import { AnimatedHamburger, AnimatedThemeToggle } from '../animation';
+import { mobileDrawerVariants, mobileDrawerItemVariants } from '../animation/motionTokens';
 
 export interface HomeNavbarProps {
   onNavigateLogin: () => void;
@@ -183,25 +181,11 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
         {/* Right: Theme Toggle & High-Contrast Signature Action Pill */}
         <div className="flex items-center gap-1.5 sm:gap-2">
           
-          {/* Subtle Theme Toggle Button */}
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className={cn(
-              'h-8 w-8 sm:h-9 sm:w-9 rounded-full flex items-center justify-center transition-colors cursor-pointer',
-              isDark
-                ? 'text-zinc-400 hover:text-white hover:bg-white/10'
-                : 'text-zinc-600 hover:text-black hover:bg-black/5'
-            )}
-            title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
-            aria-label="Toggle Theme Mode"
-          >
-            {isDark ? (
-              <Sun className="h-4 w-4 text-amber-400" />
-            ) : (
-              <Moon className="h-4 w-4 text-zinc-800" />
-            )}
-          </button>
+          {/* Smooth Animated Theme Toggle Button */}
+          <AnimatedThemeToggle
+            isDark={isDark}
+            onToggle={toggleTheme}
+          />
 
           {/* High-Contrast Capsule CTA Button */}
           {isAuthenticated ? (
@@ -236,84 +220,93 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
             </button>
           )}
 
-          {/* Mobile Menu Hamburger */}
-          <button
-            type="button"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className={cn(
-              'h-8 w-8 sm:h-9 sm:w-9 md:hidden flex items-center justify-center rounded-full transition-colors cursor-pointer',
-              isDark
-                ? 'text-zinc-400 hover:text-white hover:bg-white/10'
-                : 'text-zinc-600 hover:text-black hover:bg-black/5'
-            )}
-            aria-label="Toggle Mobile Menu"
-          >
-            {isMobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-          </button>
+          {/* Morphing Mobile Menu Hamburger Button (☰ ↔ ✕) */}
+          <div className="md:hidden">
+            <AnimatedHamburger
+              isOpen={isMobileMenuOpen}
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className={cn(
+                'h-8 w-8 sm:h-9 sm:w-9',
+                isDark
+                  ? 'text-zinc-300 hover:text-white hover:bg-white/10'
+                  : 'text-zinc-700 hover:text-black hover:bg-black/5'
+              )}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Mobile Slide-Down Drawer */}
-      {isMobileMenuOpen && (
-        <div
-          className={cn(
-            'pointer-events-auto w-full max-w-[920px] mt-2 rounded-3xl p-4 space-y-2 backdrop-blur-2xl shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 md:hidden',
-            isDark
-              ? 'bg-[#111215]/98 border border-white/15 text-white'
-              : 'bg-white/98 border border-black/10 text-black'
-          )}
-        >
-          <nav className="space-y-1">
-            {navLinks.map((link) => {
-              const isCurrentActive = activeSection === link.id;
+      {/* Smooth Mobile Slide-Down Drawer with Staggered Entrance & Exit */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div
+            variants={mobileDrawerVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className={cn(
+              'pointer-events-auto w-full max-w-[920px] mt-2 rounded-3xl p-4 space-y-2 backdrop-blur-2xl shadow-2xl md:hidden overflow-hidden',
+              isDark
+                ? 'bg-[#111215]/98 border border-white/15 text-white'
+                : 'bg-white/98 border border-black/10 text-black'
+            )}
+          >
+            <nav className="space-y-1">
+              {navLinks.map((link) => {
+                const isCurrentActive = activeSection === link.id;
 
-              return (
-                <a
-                  key={link.id}
-                  href={link.href}
-                  onClick={(e) => handleScrollTo(e, link.href, link.id)}
-                  className={cn(
-                    'flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-bold transition-all',
-                    isDark
-                      ? (isCurrentActive ? 'bg-white/15 text-white' : 'text-zinc-400 hover:bg-white/5 hover:text-white')
-                      : (isCurrentActive ? 'bg-black/10 text-black' : 'text-zinc-600 hover:bg-black/5 hover:text-black')
-                  )}
-                >
-                  <span>{link.label}</span>
-                  {isCurrentActive && <div className="h-1.5 w-1.5 rounded-full bg-[var(--accent-primary)]" />}
-                </a>
-              );
-            })}
-          </nav>
+                return (
+                  <motion.a
+                    key={link.id}
+                    variants={mobileDrawerItemVariants}
+                    href={link.href}
+                    onClick={(e) => handleScrollTo(e, link.href, link.id)}
+                    className={cn(
+                      'flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer',
+                      isDark
+                        ? (isCurrentActive ? 'bg-white/15 text-white' : 'text-zinc-400 hover:bg-white/5 hover:text-white')
+                        : (isCurrentActive ? 'bg-black/10 text-black' : 'text-zinc-600 hover:bg-black/5 hover:text-black')
+                    )}
+                  >
+                    <span>{link.label}</span>
+                    {isCurrentActive && <div className="h-1.5 w-1.5 rounded-full bg-[var(--accent-primary)] shadow-[0_0_8px_rgba(255,208,0,0.8)]" />}
+                  </motion.a>
+                );
+              })}
+            </nav>
 
-          <div className="pt-3 border-t border-[var(--border-subtle)]">
-            <button
-              type="button"
-              onClick={() => {
-                setIsMobileMenuOpen(false);
-                if (isAuthenticated) {
-                  onNavigateDashboard();
-                } else {
-                  onNavigateLogin();
-                }
-              }}
-              className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl text-xs font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-md font-display uppercase tracking-wider"
+            <motion.div
+              variants={mobileDrawerItemVariants}
+              className="pt-3 border-t border-[var(--border-subtle)]"
             >
-              {isAuthenticated ? (
-                <>
-                  <LayoutDashboard className="h-4 w-4" />
-                  <span>Enter Organizer Console</span>
-                </>
-              ) : (
-                <>
-                  <LogIn className="h-4 w-4" />
-                  <span>Sign In to PointX Arena</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  if (isAuthenticated) {
+                    onNavigateDashboard();
+                  } else {
+                    onNavigateLogin();
+                  }
+                }}
+                className="btn-press w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl text-xs font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-md font-display uppercase tracking-wider cursor-pointer"
+              >
+                {isAuthenticated ? (
+                  <>
+                    <LayoutDashboard className="h-4 w-4" />
+                    <span>Enter Organizer Console</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="h-4 w-4" />
+                    <span>Sign In to PointX Arena</span>
+                  </>
+                )}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   );
 };

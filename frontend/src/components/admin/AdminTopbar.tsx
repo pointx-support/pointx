@@ -2,12 +2,11 @@ import React from 'react';
 import { useAdminStore } from '../../store/adminStore';
 import { useAuthStore } from '../../store/authStore';
 import {
-  Sun,
-  Moon,
   Shield,
   Menu,
   ArrowLeft
 } from 'lucide-react';
+import { AnimatedThemeToggle } from '../animation';
 
 export interface AdminTopbarProps {
   onExitAdmin?: () => void;
@@ -80,14 +79,10 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         )}
 
         {/* Theme Mode Toggle */}
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="p-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-          title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
-        >
-          {isDark ? <Sun className="h-4 w-4 text-[var(--accent-primary)]" /> : <Moon className="h-4 w-4 text-[var(--accent-primary)]" />}
-        </button>
+        <AnimatedThemeToggle
+          isDark={isDark}
+          onToggle={toggleTheme}
+        />
 
         {/* Admin Profile Pill */}
         <div className="flex items-center gap-2 sm:pl-2 sm:border-l sm:border-[var(--border-subtle)]">
