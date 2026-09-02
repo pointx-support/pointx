@@ -1,7 +1,7 @@
 {
   "name": "pointx",
   "private": true,
-  "version": "2.5.0",
+  "version": "2.6.0",
   "type": "module",
   "workspaces": [
     "frontend",

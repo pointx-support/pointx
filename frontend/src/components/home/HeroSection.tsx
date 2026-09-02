@@ -29,13 +29,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         {/* Cinematic Background Video with Ultra-Clear Visibility */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
           <video
+            key="hero-bgvideo-v260"
             autoPlay
             loop
             muted
             playsInline
+            preload="auto"
             className="w-full h-full object-cover opacity-90 dark:opacity-95 filter saturate-110 contrast-105 brightness-105 transition-opacity duration-700"
           >
-            <source src="/bgvideo.mp4" type="video/mp4" />
+            <source src="/bgvideo_v260.mp4?v=2.6.0" type="video/mp4" />
+            <source src="/bgvideo.mp4?v=2.6.0" type="video/mp4" />
           </video>
 
           {/* Minimal Transparent Scrim for Text Contrast */}
