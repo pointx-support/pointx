@@ -33,7 +33,8 @@ import {
   Palette,
   RotateCcw,
   Edit3,
-  X
+  X,
+  Tv
 } from 'lucide-react';
 import JSZip from 'jszip';
 import type { GraphicsRenderData } from '../../types/graphics';
@@ -199,6 +200,17 @@ export const GraphicsStudioView: React.FC = () => {
     }
   };
 
+  const handleCopyObsLink = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
+    const obsUrl = `${origin}/?mode=broadcast&tournamentId=${currentTournament.id}&layout=standings`;
+    navigator.clipboard.writeText(obsUrl);
+    showToast({
+      type: 'success',
+      title: 'OBS Live Link Copied!',
+      message: 'Add this link as a Browser Source in OBS Studio to show the live points table directly on stream without exporting files.'
+    });
+  };
+
   const sortedMatches = [...currentTournament.matches].sort((a, b) => a.matchNumber - b.matchNumber);
 
   const GRAPHIC_CATEGORIES = [
@@ -248,6 +260,17 @@ export const GraphicsStudioView: React.FC = () => {
                 Admin Template Studio
               </Button>
             )}
+
+            <Button
+              variant="outline"
+              size="md"
+              onClick={handleCopyObsLink}
+              leftIcon={<Tv className="h-4 w-4 text-[var(--accent-primary)]" />}
+              className="border-[var(--accent-primary)]/40 hover:border-[var(--accent-primary)] font-bold text-[var(--accent-primary)]"
+              title="Copy live browser source URL for OBS Studio"
+            >
+              Copy OBS Link
+            </Button>
 
             <Button
               variant="outline"
@@ -445,6 +468,16 @@ export const GraphicsStudioView: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-secondary)]">
+                    <button
+                      type="button"
+                      onClick={handleCopyObsLink}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--accent-primary)]/10 hover:bg-[var(--accent-primary)]/20 border border-[var(--accent-primary)]/30 text-[var(--accent-primary)] font-bold flex items-center gap-1 cursor-pointer transition-all shadow-xs"
+                      title="Copy live browser source URL for OBS Studio"
+                    >
+                      <Tv className="h-3.5 w-3.5 text-[var(--accent-primary)]" />
+                      <span>Copy OBS Link</span>
+                    </button>
+                    <span>•</span>
                     <button
                       type="button"
                       onClick={() => setIsFullScreenOpen(true)}
