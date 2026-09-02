@@ -8,6 +8,7 @@ import {
   subscribeToTournamentLiveUpdates,
   type LivePlayerState
 } from '../../services/broadcastSync';
+import { tournamentsApi } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
@@ -86,7 +87,7 @@ const PLACEMENT_POINTS_MAP: Record<number, number> = {
 
 export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ tournamentId: propTournamentId }) => {
   const store = useTournamentStore();
-  const { updateMatchResults, createMatch } = store;
+  const { updateMatchResults } = store;
   const { showToast } = useToast();
 
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -662,7 +663,10 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
   // Feature: Verify and Save Customized Final Match Report to Tournament
   const handleFinalizeAndSaveReport = () => {
-    const nextMatchNum = tournament.matches.length + 1;
+    const nextMatchNum = (tournament.matches?.length || 0) + 1;
+    const now = new Date().toISOString();
+    const newMatchId = `match-${tournament.id}-${nextMatchNum}-${Date.now().toString(36)}`;
+
     const completedMatchResults: TeamMatchResult[] = tournament.teams.map((team) => {
       const item = editedReportResults[team.id] || { placement: 12, kills: 0, bonus: 0, penalty: 0 };
       const placement = Number(item.placement) || 12;
@@ -686,23 +690,57 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       };
     });
 
-    // Create completed new match record
-    createMatch(tournament.id, activeMatch.mapName || 'Bermuda', `Match ${nextMatchNum}`);
-    const newestTour = useTournamentStore.getState().currentTournament;
-    const latestCreatedMatch = newestTour.matches[newestTour.matches.length - 1];
+    const newMatch: Match = {
+      id: newMatchId,
+      tournamentId: tournament.id,
+      matchNumber: nextMatchNum,
+      customLabel: `Match ${nextMatchNum}`,
+      mapName: activeMatch?.mapName || 'Bermuda',
+      status: 'Completed',
+      createdAt: now,
+      updatedAt: now,
+      results: completedMatchResults
+    };
 
-    if (latestCreatedMatch) {
-      updateMatchResults(
-        tournament.id,
-        latestCreatedMatch.id,
-        completedMatchResults as any,
-        'Completed',
-        `Match ${nextMatchNum}`
-      );
+    const updatedMatches = [...(tournament.matches || []), newMatch];
+    const updatedTour: Tournament = {
+      ...tournament,
+      matches: updatedMatches,
+      status: 'Live',
+      updatedAt: now
+    };
+
+    // 1. Update component live tournament state
+    setTournament(updatedTour);
+
+    // 2. Update same-tab tournament store
+    const storeState = useTournamentStore.getState();
+    if (storeState.tournaments.some((t) => t.id === tournament.id)) {
+      storeState.updateTournament(tournament.id, { matches: updatedMatches });
+    }
+    storeState.setTournament(updatedTour);
+
+    // 3. Persist to MongoDB database via tournaments API
+    if (tournament.id && tournament.id !== 'default') {
+      tournamentsApi.update(tournament.id, {
+        matches: updatedMatches,
+        status: updatedTour.status
+      }).catch(() => {});
     }
 
+    // 4. Reset live squad alive states for the next match
+    const resetSquads: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]> = {};
+    tournament.teams.forEach((t) => {
+      resetSquads[t.id] = ['alive', 'alive', 'alive', 'alive'];
+    });
+    setSquadStates(resetSquads);
+    setEliminationOrder([]);
+    setHighlightedTeamId(null);
+
+    // 5. Atomic real-time broadcast to OBS and Remote clients
+    syncToBroadcast(resetSquads, null, isOverlayVisible, updatedTour);
+
     setIsReportModalOpen(false);
-    handleResetAllAlive();
 
     showToast({
       type: 'success',
