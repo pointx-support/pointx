@@ -7,15 +7,13 @@ import {
   Trophy,
 } from 'lucide-react';
 import { FadeIn, SlideIn } from '../animation/RevealAnimations';
-import { MagneticButton } from '../animation/MagneticButton';
 
 export interface FinalCTAProps {
-  onNavigateSignup: () => void;
+  onNavigateSignup?: () => void;
   onNavigateLogin: () => void;
 }
 
 export const FinalCTA: React.FC<FinalCTAProps> = ({
-  onNavigateSignup,
   onNavigateLogin,
 }) => {
   return (
@@ -52,22 +50,21 @@ export const FinalCTA: React.FC<FinalCTAProps> = ({
         {/* Dual Action CTAs */}
         <SlideIn direction="up" delay={0.15}>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-3">
-            <MagneticButton strength={0.25}>
-              <button
-                type="button"
-                onClick={onNavigateSignup}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-9 py-4.5 rounded-2xl text-sm font-black bg-[var(--accent-primary)] text-[var(--accent-primary-text)] hover:brightness-110 shadow-xl shadow-[var(--accent-primary)]/25 transition-all cursor-pointer font-display active:scale-[0.98]"
-              >
-                <Zap className="h-4 w-4 fill-current" />
-                <span>CREATE FREE ACCOUNT</span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </MagneticButton>
+            <button
+              type="button"
+              onClick={onNavigateLogin}
+              className="relative w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-9 py-4 rounded-2xl text-sm sm:text-base font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-[0_4px_25px_rgba(255,208,0,0.35)] hover:shadow-[0_0_35px_rgba(255,208,0,0.7)] hover:-translate-y-1 hover:scale-[1.03] active:scale-[0.97] transition-all duration-300 cursor-pointer font-display border border-amber-300/70 group overflow-hidden"
+            >
+              <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none" />
+              <Zap className="h-4 w-4 fill-black/80 stroke-black text-black group-hover:rotate-12 transition-transform duration-300" />
+              <span className="tracking-wider">ENTER THE ARENA</span>
+              <ArrowRight className="h-4 w-4 stroke-[2.5] text-black group-hover:translate-x-1.5 transition-transform duration-300" />
+            </button>
 
             <button
               type="button"
               onClick={onNavigateLogin}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4.5 rounded-2xl text-sm font-bold bg-[var(--bg-surface-raised)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] text-[var(--text-primary)] transition-colors cursor-pointer font-sans shadow-md"
+              className="relative w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl text-sm sm:text-base font-bold bg-[var(--bg-surface-raised)]/80 hover:bg-[var(--accent-primary)]/10 border border-[var(--border-strong)] hover:border-[var(--accent-primary)] text-[var(--text-primary)] hover:text-[var(--accent-primary)] shadow-md hover:shadow-[0_0_25px_rgba(255,208,0,0.25)] hover:-translate-y-1 hover:scale-[1.02] active:scale-[0.97] backdrop-blur-xl transition-all duration-300 cursor-pointer font-sans"
             >
               <span>Sign In To Console</span>
             </button>

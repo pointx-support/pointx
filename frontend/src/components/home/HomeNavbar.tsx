@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Trophy,
   TableProperties,
@@ -30,24 +30,85 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
   const { isAuthenticated, theme, toggleTheme } = useAuthStore();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>('tournaments');
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 25);
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  // Sliding Capsule Glider State
+  const [gliderStyle, setGliderStyle] = useState<{ left: number; width: number; opacity: number }>({
+    left: 0,
+    width: 0,
+    opacity: 0,
+  });
+
+  const navContainerRef = useRef<HTMLElement | null>(null);
+  const navItemsRef = useRef<(HTMLAnchorElement | null)[]>([]);
 
   const isDark = theme === 'dark';
 
   const navLinks = [
-    { label: 'Tournaments', href: '#tournaments', icon: Trophy },
-    { label: 'Live Matrix', href: '#live-matrix', icon: TableProperties },
-    { label: 'Games', href: '#games', icon: Gamepad2 },
-    { label: 'Features', href: '#features', icon: Sparkles },
-    { label: 'Broadcast', href: '#broadcast', icon: Radio },
+    { id: 'tournaments', label: 'Tournaments', href: '#tournaments', icon: Trophy },
+    { id: 'live-matrix', label: 'Live Matrix', href: '#live-matrix', icon: TableProperties },
+    { id: 'games', label: 'Games', href: '#games', icon: Gamepad2 },
+    { id: 'features', label: 'Features', href: '#features', icon: Sparkles },
+    { id: 'broadcast', label: 'Broadcast', href: '#broadcast', icon: Radio },
   ];
+
+  // Helper to calculate exact bounding box of target nav item relative to container
+  const updateGlider = (index: number | null) => {
+    if (index !== null && navItemsRef.current[index] && navContainerRef.current) {
+      const targetEl = navItemsRef.current[index]!;
+      const containerRect = navContainerRef.current.getBoundingClientRect();
+      const targetRect = targetEl.getBoundingClientRect();
+
+      setGliderStyle({
+        left: targetRect.left - containerRect.left,
+        width: targetRect.width,
+        opacity: 1,
+      });
+    } else {
+      setGliderStyle((prev) => ({ ...prev, opacity: 0 }));
+    }
+  };
+
+  // Sync glider when hovered index changes or active section updates
+  useEffect(() => {
+    if (hoveredIndex !== null) {
+      updateGlider(hoveredIndex);
+    } else {
+      const activeIdx = navLinks.findIndex((l) => l.id === activeSection);
+      if (activeIdx !== -1) {
+        updateGlider(activeIdx);
+      } else {
+        setGliderStyle((prev) => ({ ...prev, opacity: 0 }));
+      }
+    }
+  }, [hoveredIndex, activeSection]);
+
+  // Viewport scroll listener for navbar background & active section tracking
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+
+      const sectionIds = ['tournaments', 'live-matrix', 'games', 'features', 'broadcast'];
+      const scrollPosition = window.scrollY + 220;
+
+      for (const id of sectionIds) {
+        const el = document.getElementById(id);
+        if (el) {
+          const top = el.offsetTop;
+          const height = el.offsetHeight;
+          if (scrollPosition >= top && scrollPosition < top + height) {
+            setActiveSection(id);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleScrollTo = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     e.preventDefault();
@@ -86,18 +147,51 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
           </div>
         </a>
 
-        {/* Center: Desktop Navigation Links */}
-        <nav className="hidden md:flex items-center gap-1 bg-[var(--bg-surface-inset)]/60 px-3 py-1 rounded-full border border-[var(--border-subtle)]">
-          {navLinks.map((link) => {
+        {/* Center: Desktop Navigation with Smooth Sliding Capsule Glider */}
+        <nav
+          ref={navContainerRef}
+          onMouseLeave={() => setHoveredIndex(null)}
+          className="relative hidden md:flex items-center gap-1 bg-[var(--bg-surface-inset)]/60 p-1 rounded-full border border-[var(--border-subtle)] shadow-inner"
+        >
+          {/* Animated Sliding Capsule Glider Element */}
+          <div
+            className="absolute top-1 bottom-1 rounded-full pointer-events-none transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] bg-gradient-to-r from-[var(--accent-primary)]/25 via-[var(--accent-primary)]/15 to-[var(--accent-primary)]/25 border border-[var(--accent-primary)]/45 shadow-[0_0_15px_rgba(255,208,0,0.25)]"
+            style={{
+              transform: `translateX(${gliderStyle.left}px)`,
+              width: `${gliderStyle.width}px`,
+              opacity: gliderStyle.opacity,
+            }}
+          />
+
+          {navLinks.map((link, idx) => {
             const Icon = link.icon;
+            const isCurrentActive = activeSection === link.id;
+            const isHovered = hoveredIndex === idx;
+
             return (
               <a
-                key={link.label}
+                key={link.id}
+                ref={(el) => {
+                  navItemsRef.current[idx] = el;
+                }}
                 href={link.href}
+                onMouseEnter={() => setHoveredIndex(idx)}
                 onClick={(e) => handleScrollTo(e, link.href)}
-                className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-all cursor-pointer"
+                className={cn(
+                  'relative z-10 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all duration-200 select-none cursor-pointer',
+                  isCurrentActive || isHovered
+                    ? 'text-[var(--text-primary)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                )}
               >
-                <Icon className="h-3 w-3 text-[var(--accent-primary)] opacity-80" />
+                <Icon
+                  className={cn(
+                    'h-3.5 w-3.5 transition-all duration-200',
+                    isCurrentActive || isHovered
+                      ? 'text-[var(--accent-primary)] scale-110 drop-shadow-[0_0_8px_rgba(255,208,0,0.6)]'
+                      : 'text-[var(--text-muted)]'
+                  )}
+                />
                 <span>{link.label}</span>
               </a>
             );
@@ -106,7 +200,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
 
         {/* Right: Auth CTAs & Theme Switcher */}
         <div className="flex items-center gap-2">
-          {/* Theme Toggle */}
+          {/* Theme Quick Toggle */}
           <button
             type="button"
             onClick={toggleTheme}
@@ -164,7 +258,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               const Icon = link.icon;
               return (
                 <a
-                  key={link.label}
+                  key={link.id}
                   href={link.href}
                   onClick={(e) => handleScrollTo(e, link.href)}
                   className="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors"
