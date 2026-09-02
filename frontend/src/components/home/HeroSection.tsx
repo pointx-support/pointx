@@ -77,7 +77,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black tracking-tight text-[var(--text-primary)] font-display uppercase leading-[1.2]">
                 AUTOMATE FREE FIRE SCORES & BROADCAST LIVE 4K OVERLAYS
               </h1>
-              <p className="text-xs sm:text-sm md:text-base text-[var(--text-secondary)] font-medium max-w-2xl mx-auto leading-relaxed">
+              <p className="font-display font-bold text-xs sm:text-sm md:text-base text-[var(--text-primary)]/95 dark:text-zinc-100 max-w-2xl mx-auto leading-relaxed tracking-wide drop-shadow-sm">
                 The real-time tournament engine engineered for Free Fire & battle royale esports. Ingest match stats, calculate 12-team matrices in &lt;50ms, and stream seamless overlays to OBS Studio.
               </p>
             </div>
