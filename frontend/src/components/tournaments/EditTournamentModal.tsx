@@ -4,7 +4,9 @@ import type { ScoringPreset, PlacementRule } from '../../types/scoring';
 import {
   DEFAULT_FREE_FIRE_SCORING,
   FREE_FIRE_AGGRESSIVE_SCORING,
-  FREE_FIRE_SURVIVAL_BOOST_SCORING
+  FREE_FIRE_SURVIVAL_BOOST_SCORING,
+  normalizeScoringConfig,
+  OFFICIAL_FF_PLACEMENT_TABLE
 } from '../../engine/scoringEngine';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -55,10 +57,20 @@ export const EditTournamentModal: React.FC<EditTournamentModalProps> = ({
   const [groupsCount, setGroupsCount] = useState<number>(tournament.structure?.groupsCount || 2);
 
   // Scoring Rules
-  const [scoringPreset, setScoringPreset] = useState<ScoringPreset>(
-    tournament.scoringPreset || DEFAULT_FREE_FIRE_SCORING
+  const [scoringPreset, setScoringPreset] = useState<ScoringPreset>(() =>
+    normalizeScoringConfig(tournament.scoringPreset)
   );
   const [activePresetTemplateId, setActivePresetTemplateId] = useState<string>('current');
+
+  React.useEffect(() => {
+    if (tournament.scoringPreset) {
+      setScoringPreset(normalizeScoringConfig(tournament.scoringPreset));
+    }
+  }, [tournament.id, tournament.scoringPreset]);
+
+  const placementRules: PlacementRule[] = Array.isArray(scoringPreset?.placementTable) && scoringPreset.placementTable.length > 0
+    ? scoringPreset.placementTable
+    : OFFICIAL_FF_PLACEMENT_TABLE;
 
   const handleSelectPreset = (templateKey: 'official' | 'aggressive' | 'survival' | 'linear' | 'topheavy') => {
     setActivePresetTemplateId(templateKey);
@@ -103,13 +115,16 @@ export const EditTournamentModal: React.FC<EditTournamentModalProps> = ({
     setActivePresetTemplateId('custom');
     const safePoints = Math.max(0, isNaN(newPoints) ? 0 : newPoints);
     setScoringPreset((prev) => {
-      const updatedTable: PlacementRule[] = prev.placementTable.map((rule) =>
+      const currentTable = Array.isArray(prev?.placementTable) && prev.placementTable.length > 0
+        ? prev.placementTable
+        : OFFICIAL_FF_PLACEMENT_TABLE;
+      const updatedTable: PlacementRule[] = currentTable.map((rule) =>
         rule.place === place ? { ...rule, points: safePoints } : rule
       );
       return {
         ...prev,
         isOfficial: false,
-        name: prev.name.includes('Custom') ? prev.name : 'Custom Free Fire Rules',
+        name: prev?.name?.includes('Custom') ? prev.name : 'Custom Free Fire Rules',
         placementTable: updatedTable
       };
     });
@@ -468,7 +483,7 @@ export const EditTournamentModal: React.FC<EditTournamentModalProps> = ({
                 </label>
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((place) => {
-                    const currentPts = scoringPreset.placementTable.find((r) => r.place === place)?.points || 0;
+                    const currentPts = placementRules.find((r) => r.place === place)?.points ?? 0;
                     return (
                       <div key={place} className="p-2 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-center">
                         <div className="text-[10px] font-mono text-[var(--text-muted)] font-bold">

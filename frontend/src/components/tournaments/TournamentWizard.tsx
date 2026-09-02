@@ -4,7 +4,8 @@ import type { ScoringPreset, PlacementRule } from '../../types/scoring';
 import {
   DEFAULT_FREE_FIRE_SCORING,
   FREE_FIRE_AGGRESSIVE_SCORING,
-  FREE_FIRE_SURVIVAL_BOOST_SCORING
+  FREE_FIRE_SURVIVAL_BOOST_SCORING,
+  OFFICIAL_FF_PLACEMENT_TABLE
 } from '../../engine/scoringEngine';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -119,13 +120,16 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
     setActivePresetTemplateId('custom');
     const safePoints = Math.max(0, isNaN(newPoints) ? 0 : newPoints);
     setScoringPreset((prev) => {
-      const updatedTable: PlacementRule[] = prev.placementTable.map((rule) =>
+      const currentTable = Array.isArray(prev?.placementTable) && prev.placementTable.length > 0
+        ? prev.placementTable
+        : OFFICIAL_FF_PLACEMENT_TABLE;
+      const updatedTable: PlacementRule[] = currentTable.map((rule) =>
         rule.place === place ? { ...rule, points: safePoints } : rule
       );
       return {
         ...prev,
         isOfficial: false,
-        name: prev.name.includes('Custom') ? prev.name : 'Custom Free Fire Rules',
+        name: prev?.name?.includes('Custom') ? prev.name : 'Custom Free Fire Rules',
         placementTable: updatedTable
       };
     });
@@ -243,9 +247,12 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
   ];
 
   // Live sandbox calculation for sample 1st place with 6 kills
-  const sample1stPlacementPts = scoringPreset.placementTable.find((r) => r.place === 1)?.points || 0;
+  const placementRules = Array.isArray(scoringPreset?.placementTable) && scoringPreset.placementTable.length > 0
+    ? scoringPreset.placementTable
+    : OFFICIAL_FF_PLACEMENT_TABLE;
+  const sample1stPlacementPts = placementRules.find((r) => r.place === 1)?.points || 0;
   const sampleKills = 6;
-  const sampleKillPts = sampleKills * scoringPreset.killPoints;
+  const sampleKillPts = sampleKills * (scoringPreset.killPoints ?? 1);
   const sampleBonus = scoringPreset.booyahBonusPoints || 0;
   const sampleTotal = sample1stPlacementPts + sampleKillPts + sampleBonus;
 
@@ -694,7 +701,7 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
                 </div>
 
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5 font-mono">
-                  {scoringPreset.placementTable.map((rule) => {
+                  {placementRules.map((rule) => {
                     const isBooyah = rule.place === 1;
 
                     return (
@@ -1014,11 +1021,11 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
                   <div className="flex items-center justify-between text-xs sm:text-sm font-mono">
                     <span className="text-[var(--text-secondary)] font-bold">Configured Placement Points:</span>
                     <span className="text-[var(--accent-primary)] font-bold font-numbers">
-                      #1: +{sample1stPlacementPts} Pts • #2: +{scoringPreset.placementTable.find((r) => r.place === 2)?.points || 0} Pts • #3: +{scoringPreset.placementTable.find((r) => r.place === 3)?.points || 0} Pts
+                      #1: +{sample1stPlacementPts} Pts • #2: +{placementRules.find((r) => r.place === 2)?.points || 0} Pts • #3: +{placementRules.find((r) => r.place === 3)?.points || 0} Pts
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-2 text-xs font-mono text-[var(--text-secondary)]">
-                    {scoringPreset.placementTable.map((r) => (
+                    {placementRules.map((r) => (
                       <span key={r.place} className="bg-[var(--bg-surface-inset)] px-2.5 py-1 rounded-lg border border-[var(--border-subtle)]">
                         #{r.place}: <strong className="text-[var(--text-primary)]">+{r.points}</strong>
                       </span>
