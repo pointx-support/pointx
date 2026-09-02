@@ -44,6 +44,7 @@ export interface AppState {
   archiveTournament: (tournamentId: string) => void;
   deleteTournament: (tournamentId: string) => void;
   loadDemoTournaments: () => void;
+  clearAllTournaments: () => void;
   
   // Active Tournament Shortcuts
   setTournament: (tournament: Tournament) => void;
@@ -508,6 +509,15 @@ export const useTournamentStore = create<AppState>((set, get) => ({
     set({
       tournaments: DEMO_TOURNAMENTS,
       activeTournamentId: DEMO_TOURNAMENTS[0].id,
+      currentTournament: DEMO_TOURNAMENTS[0]
+    });
+  },
+
+  clearAllTournaments: () => {
+    persistTournaments([]);
+    set({
+      tournaments: [],
+      activeTournamentId: '',
       currentTournament: DEMO_TOURNAMENTS[0]
     });
   },

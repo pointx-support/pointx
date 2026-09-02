@@ -25,7 +25,8 @@ import {
   Radio,
   Calendar,
   CheckCircle2,
-  ShieldCheck
+  ShieldCheck,
+  EyeOff
 } from 'lucide-react';
 import { downloadBlobFile } from '../../engine/exportEngine';
 
@@ -57,6 +58,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
     archiveTournament,
     deleteTournament,
     loadDemoTournaments,
+    clearAllTournaments,
     highlightDashboardAction
   } = useTournamentStore();
   const { user } = useAuthStore();
@@ -530,6 +532,24 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
           </div>
 
           <div className="flex items-center gap-2">
+            {user?.role === 'admin' && tournaments.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  clearAllTournaments();
+                  showToast({
+                    type: 'info',
+                    title: 'Demo Tournaments Hidden',
+                    message: 'Removed all demo tournaments from workspace.'
+                  });
+                }}
+                className="px-3 py-2 rounded-xl bg-[var(--bg-surface-subtle)] hover:bg-rose-500/10 hover:border-rose-500/30 text-rose-500 border border-[var(--border-medium)] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                title="Hide all demo tournaments"
+              >
+                <EyeOff className="h-3.5 w-3.5" />
+                <span>Hide Demo Info</span>
+              </button>
+            )}
             <span className="text-xs font-mono text-[var(--text-secondary)] hidden sm:inline">Sort:</span>
             <select
               value={sortBy}
