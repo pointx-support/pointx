@@ -11,6 +11,7 @@ import {
   X,
   ArrowRight,
   LayoutDashboard,
+  Zap,
 } from 'lucide-react';
 import { PointXLogo } from '../ui/PointXLogo';
 import { useAuthStore } from '../../store/authStore';
@@ -27,9 +28,10 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
   onNavigateSignup,
   onNavigateDashboard,
 }) => {
-  const { isAuthenticated, theme, toggleTheme } = useAuthStore();
+  const { isAuthenticated, user, theme, toggleTheme } = useAuthStore();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>('');
   const isScrolledRef = useRef(false);
 
   useEffect(() => {
@@ -55,15 +57,16 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
   const isDark = theme === 'dark';
 
   const navLinks = [
-    { label: 'Tournaments', href: '#tournaments', icon: Trophy },
-    { label: 'Live Matrix', href: '#live-matrix', icon: TableProperties },
-    { label: 'Games', href: '#games', icon: Gamepad2 },
-    { label: 'Features', href: '#features', icon: Sparkles },
-    { label: 'Broadcast', href: '#broadcast', icon: Radio },
+    { id: 'tournaments', label: 'Tournaments', href: '#tournaments', icon: Trophy },
+    { id: 'live-matrix', label: 'Live Matrix', href: '#live-matrix', icon: TableProperties },
+    { id: 'games', label: 'Games', href: '#games', icon: Gamepad2 },
+    { id: 'features', label: 'Features', href: '#features', icon: Sparkles },
+    { id: 'broadcast', label: 'Broadcast', href: '#broadcast', icon: Radio },
   ];
 
-  const handleScrollTo = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+  const handleScrollTo = (e: React.MouseEvent<HTMLAnchorElement>, href: string, id: string) => {
     e.preventDefault();
+    setActiveSection(id);
     setIsMobileMenuOpen(false);
     const target = document.querySelector(href);
     if (target) {
@@ -74,15 +77,15 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
   return (
     <header
       className={cn(
-        'sticky top-0 z-50 w-full transition-all duration-200 font-sans transform-gpu',
+        'sticky top-0 z-50 w-full transition-all duration-300 font-sans transform-gpu px-3 sm:px-6 lg:px-8 py-3',
         isScrolled
-          ? 'bg-[var(--bg-base)]/90 backdrop-blur-md border-b border-[var(--border-subtle)] shadow-md shadow-black/20 py-2.5'
+          ? 'bg-[var(--bg-base)]/80 backdrop-blur-xl border-b border-[var(--border-subtle)] shadow-2xl shadow-black/25 py-2.5'
           : 'bg-transparent border-b border-transparent py-4'
       )}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-        {/* Left: Brand Identity Logo */}
-        <div className="flex items-center gap-3">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        {/* Left: Flagship Brand Identity Logo & Status Badge */}
+        <div className="flex items-center gap-3 shrink-0">
           <a
             href="#"
             onClick={(e) => {
@@ -90,60 +93,78 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             className="flex items-center gap-3 group select-none cursor-pointer"
+            title="PointX Esports Tournament OS"
           >
-            <PointXLogo className="h-8 sm:h-9 w-auto max-w-[115px] object-contain group-hover:scale-105 transition-transform" />
+            <div className="relative flex items-center">
+              <div className="absolute inset-0 bg-[var(--accent-primary)]/20 rounded-xl blur-lg group-hover:bg-[var(--accent-primary)]/40 transition-all duration-300" />
+              <PointXLogo className="h-8 sm:h-9 w-auto max-w-[110px] sm:max-w-[125px] object-contain group-hover:scale-105 transition-transform relative z-10" />
+            </div>
+
             <div className="hidden sm:flex flex-col border-l border-[var(--border-subtle)] pl-3">
-              <span className="font-bold text-[11px] font-mono text-[var(--accent-primary)] uppercase tracking-wider">
-                PointX Esports
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-black text-[11px] font-mono tracking-wider text-[var(--accent-primary)] uppercase">
+                  POINTX ESPORTS
+                </span>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              </div>
               <span className="text-[9px] font-mono font-bold tracking-widest text-[var(--text-muted)] uppercase -mt-0.5">
-                Tournament OS
+                TOURNAMENT OS v2.5
               </span>
             </div>
           </a>
         </div>
 
-        {/* Center: Desktop Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-1 bg-[var(--bg-surface-raised)]/70 backdrop-blur-sm px-3 py-1.5 rounded-full border border-[var(--border-subtle)]">
+        {/* Center: Sleek Floating Glass Nav Pill */}
+        <nav className="hidden lg:flex items-center gap-1 bg-[var(--bg-surface-raised)]/80 backdrop-blur-xl px-2 py-1.5 rounded-full border border-[var(--border-subtle)] shadow-lg shadow-black/10">
           {navLinks.map((link) => {
             const Icon = link.icon;
+            const isActive = activeSection === link.id;
             return (
               <a
                 key={link.label}
                 href={link.href}
-                onClick={(e) => handleScrollTo(e, link.href)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors"
+                onClick={(e) => handleScrollTo(e, link.href, link.id)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all select-none',
+                  isActive
+                    ? 'bg-[var(--accent-primary)] text-black shadow-sm font-black'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)]'
+                )}
               >
-                <Icon className="h-3.5 w-3.5 text-[var(--accent-primary)] opacity-80" />
+                <Icon className={cn('h-3.5 w-3.5', isActive ? 'text-black' : 'text-[var(--accent-primary)]')} />
                 <span>{link.label}</span>
               </a>
             );
           })}
         </nav>
 
-        {/* Right: Auth CTAs & Theme Switcher */}
-        <div className="hidden sm:flex items-center gap-3">
-          {/* Theme Toggle */}
+        {/* Right: Auth CTAs, Theme Toggle & Direct Actions */}
+        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+          {/* Theme Toggle Button */}
           <button
             type="button"
             onClick={toggleTheme}
-            className="p-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-raised)]/80 hover:bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            className="p-2 sm:p-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-raised)]/90 hover:bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer shadow-xs active:scale-95"
             title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
             aria-label="Toggle theme mode"
           >
-            {isDark ? <Sun className="h-4 w-4 text-[var(--accent-primary)]" /> : <Moon className="h-4 w-4 text-[var(--accent-primary)]" />}
+            {isDark ? (
+              <Sun className="h-4 w-4 text-[var(--accent-primary)]" />
+            ) : (
+              <Moon className="h-4 w-4 text-[var(--accent-primary)]" />
+            )}
           </button>
 
           {isAuthenticated ? (
-            /* Authenticated User Quick Access */
+            /* Authenticated Organizer / Admin Quick Console Access */
             <button
               type="button"
               onClick={onNavigateDashboard}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[var(--accent-primary)] text-black hover:brightness-110 shadow-md shadow-[var(--accent-primary)]/20 transition-all cursor-pointer font-display"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black hover:brightness-110 shadow-md shadow-amber-500/25 transition-all cursor-pointer font-display active:scale-95"
             >
-              <LayoutDashboard className="h-3.5 w-3.5" />
-              <span>Organizer Console</span>
-              <ArrowRight className="h-3.5 w-3.5" />
+              <LayoutDashboard className="h-4 w-4" />
+              <span>{user?.role === 'admin' ? 'Admin Portal' : 'Command Center'}</span>
+              <ArrowRight className="h-3.5 w-3.5 stroke-[2.5]" />
             </button>
           ) : (
             /* Public Visitor Auth CTAs */
@@ -151,7 +172,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               <button
                 type="button"
                 onClick={onNavigateLogin}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] transition-colors cursor-pointer"
+                className="hidden sm:inline-flex px-4 py-2.5 rounded-xl text-xs font-bold text-[var(--text-primary)] hover:text-[var(--accent-primary)] bg-[var(--bg-surface-subtle)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/40 transition-all cursor-pointer shadow-xs active:scale-95"
               >
                 Sign In
               </button>
@@ -159,30 +180,20 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               <button
                 type="button"
                 onClick={onNavigateSignup}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black bg-[var(--accent-primary)] text-[var(--accent-primary-text)] hover:brightness-110 shadow-md shadow-[var(--accent-primary)]/25 transition-all cursor-pointer font-display"
+                className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black hover:brightness-110 shadow-lg shadow-amber-500/25 transition-all cursor-pointer font-display active:scale-95 border border-amber-300/60 group"
               >
-                <span>Join Arena</span>
-                <ArrowRight className="h-3.5 w-3.5" />
+                <Zap className="h-3.5 w-3.5 fill-black text-black group-hover:scale-110 transition-transform" />
+                <span className="tracking-wide">Join Arena</span>
+                <ArrowRight className="h-3.5 w-3.5 stroke-[2.5] text-black group-hover:translate-x-0.5 transition-transform" />
               </button>
             </div>
           )}
-        </div>
 
-        {/* Mobile Hamburger Trigger */}
-        <div className="flex sm:hidden items-center gap-2">
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="p-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-raised)] text-[var(--text-secondary)]"
-            aria-label="Toggle Theme"
-          >
-            {isDark ? <Sun className="h-4 w-4 text-[var(--accent-primary)]" /> : <Moon className="h-4 w-4 text-[var(--accent-primary)]" />}
-          </button>
-
+          {/* Mobile Hamburger Trigger */}
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-raised)] text-[var(--text-primary)]"
+            className="p-2 sm:hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-raised)] text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-all cursor-pointer"
             aria-label="Open navigation menu"
           >
             {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -192,7 +203,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
 
       {/* Mobile Slide-Down Drawer */}
       {isMobileMenuOpen && (
-        <div className="sm:hidden border-b border-[var(--border-subtle)] bg-[var(--bg-surface-raised)] px-4 pt-3 pb-6 space-y-3 shadow-xl">
+        <div className="lg:hidden mt-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface-raised)]/95 backdrop-blur-2xl p-4 space-y-3 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
           <nav className="space-y-1">
             {navLinks.map((link) => {
               const Icon = link.icon;
@@ -200,8 +211,8 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
                 <a
                   key={link.label}
                   href={link.href}
-                  onClick={(e) => handleScrollTo(e, link.href)}
-                  className="flex items-center gap-2.5 p-2.5 rounded-xl text-sm font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)]"
+                  onClick={(e) => handleScrollTo(e, link.href, link.id)}
+                  className="flex items-center gap-3 p-3 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-all"
                 >
                   <Icon className="h-4 w-4 text-[var(--accent-primary)]" />
                   <span>{link.label}</span>
@@ -218,10 +229,10 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
                   setIsMobileMenuOpen(false);
                   onNavigateDashboard();
                 }}
-                className="w-full py-2.5 rounded-xl text-xs font-bold bg-[var(--accent-primary)] text-black flex items-center justify-center gap-2 font-display"
+                className="w-full py-3 rounded-xl text-xs font-black bg-gradient-to-r from-[#ffd000] to-[#ff9900] text-black flex items-center justify-center gap-2 font-display shadow-md"
               >
                 <LayoutDashboard className="h-4 w-4" />
-                <span>Go to Organizer Console</span>
+                <span>Go to Command Center</span>
               </button>
             ) : (
               <>
@@ -241,10 +252,11 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
                     setIsMobileMenuOpen(false);
                     onNavigateSignup();
                   }}
-                  className="w-full py-2.5 rounded-xl text-xs font-black bg-[var(--accent-primary)] text-black flex items-center justify-center gap-2 font-display shadow-md shadow-[var(--accent-primary)]/20"
+                  className="w-full py-3 rounded-xl text-xs font-black bg-gradient-to-r from-[#ffd000] to-[#ff9900] text-black flex items-center justify-center gap-2 font-display shadow-lg shadow-amber-500/25"
                 >
+                  <Zap className="h-4 w-4 fill-black text-black" />
                   <span>Join Arena Now</span>
-                  <ArrowRight className="h-3.5 w-3.5" />
+                  <ArrowRight className="h-3.5 w-3.5 stroke-[2.5]" />
                 </button>
               </>
             )}
@@ -254,3 +266,5 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
     </header>
   );
 };
+
+export default HomeNavbar;
