@@ -2,6 +2,7 @@ import { createApp } from './app';
 import { connectDB, disconnectDB } from './config/db';
 import { env } from './config/env';
 import { ensureSuperAdminAccount } from './services/adminService';
+import { setupRealtimeSyncServer } from './services/realtimeSync';
 
 async function startServer() {
   try {
@@ -17,6 +18,9 @@ async function startServer() {
       console.log(`📬 Brevo Email: ${env.BREVO_API_KEY ? 'Active' : 'Dev Mock'}`);
       console.log(`======================================================\n`);
     });
+
+    // 1b. Attach Real-Time WebSocket Synchronization Server
+    setupRealtimeSyncServer(server);
 
     // 2. Connect Database & Ensure Super Admin in background
     connectDB()

@@ -13,13 +13,34 @@ try {
     broadcastChannel = new BroadcastChannel(SYNC_CHANNEL_NAME);
   }
 } catch {
-  console.warn('BroadcastChannel not available, falling back to storage sync');
+  console.warn('BroadcastChannel not available, falling back to storage/websocket sync');
 }
 
 export interface BroadcastTokenInfo {
   token: string;
   tournamentId: string;
   createdAt: number;
+}
+
+export type LivePlayerState = 'alive' | 'knock' | 'eliminated';
+
+export interface LiveSquadSyncState {
+  tournamentId: string;
+  revision?: number;
+  squads: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]>;
+  highlightedTeamId?: string | null;
+  isVisible?: boolean;
+  timestamp: number;
+}
+
+export interface FullSyncPayload {
+  tournamentId: string;
+  revision?: number;
+  tournament?: Tournament;
+  squads?: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]>;
+  highlightedTeamId?: string | null;
+  isVisible?: boolean;
+  timestamp?: number;
 }
 
 export function generateBroadcastToken(tournamentId: string): string {
@@ -43,59 +64,465 @@ export function getBroadcastToken(tournamentId: string): string {
   return generateBroadcastToken(tournamentId);
 }
 
-// Background network poster to Vite sync API
-async function postNetworkSync(payload: any): Promise<void> {
-  if (typeof window === 'undefined') return;
-  try {
+// =========================================================================
+// SINGLETON AUTHORITATIVE REAL-TIME WEBSOCKET & SSE CONNECTION MANAGER
+// =========================================================================
+
+type TournamentListener = (tour: Tournament, revision?: number) => void;
+type SquadListener = (data: LiveSquadSyncState) => void;
+type HeartbeatListener = () => void;
+
+class RealtimeSyncClient {
+  private static instance: RealtimeSyncClient | null = null;
+
+  private ws: WebSocket | null = null;
+  private sse: EventSource | null = null;
+  private currentTournamentId: string = 'default';
+  private currentRevision: number = 0;
+  private isConnecting: boolean = false;
+  private reconnectTimer: any = null;
+  private healthCheckTimer: any = null;
+  private reconnectAttempts: number = 0;
+
+  private tournamentListeners = new Set<TournamentListener>();
+  private squadListeners = new Set<SquadListener>();
+  private heartbeatListeners = new Set<HeartbeatListener>();
+
+  public static getInstance(): RealtimeSyncClient {
+    if (!RealtimeSyncClient.instance) {
+      RealtimeSyncClient.instance = new RealtimeSyncClient();
+    }
+    return RealtimeSyncClient.instance;
+  }
+
+  private constructor() {
+    if (typeof window === 'undefined') return;
+
+    // Listen to tab-to-tab BroadcastChannel
+    if (broadcastChannel) {
+      broadcastChannel.addEventListener('message', (event: MessageEvent) => {
+        const msg = event.data;
+        if (!msg) return;
+        if (msg.type === 'TOURNAMENT_UPDATED' && msg.data) {
+          this.notifyTournament(msg.data, msg.revision);
+        } else if (msg.type === 'LIVE_SQUADS_UPDATED' && msg.data) {
+          this.notifySquads(msg.data);
+        }
+      });
+    }
+
+    // Listen to localStorage events
+    window.addEventListener('storage', (event: StorageEvent) => {
+      if (!event.key) return;
+      if (event.key.startsWith('pointx_live_') || event.key.startsWith('strikz_live_')) {
+        const raw = event.newValue;
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed?.id) this.notifyTournament(parsed);
+          } catch {}
+        }
+      } else if (event.key.startsWith('pointx_squads_') || event.key.startsWith('strikz_squads_')) {
+        const raw = event.newValue;
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed) this.notifySquads(parsed);
+          } catch {}
+        }
+      }
+    });
+
+    // Start background health check & revision reconciliation every 10s
+    this.startHealthCheck();
+  }
+
+  public setTournament(tournamentId: string): void {
+    const cleanId = tournamentId || 'default';
+    if (this.currentTournamentId !== cleanId) {
+      this.currentTournamentId = cleanId;
+      this.currentRevision = 0; // Reset revision for new tournament context
+      this.connect();
+    } else if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      this.connect();
+    }
+  }
+
+  public subscribeTournament(cb: TournamentListener, onHeartbeat?: HeartbeatListener): () => void {
+    this.tournamentListeners.add(cb);
+    if (onHeartbeat) this.heartbeatListeners.add(onHeartbeat);
+
+    // If we have cached state, deliver it immediately
+    const cachedTour = this.getCachedTournament(this.currentTournamentId);
+    if (cachedTour) {
+      cb(cachedTour, this.currentRevision);
+    }
+
+    return () => {
+      this.tournamentListeners.delete(cb);
+      if (onHeartbeat) this.heartbeatListeners.delete(onHeartbeat);
+    };
+  }
+
+  public subscribeSquads(cb: SquadListener): () => void {
+    this.squadListeners.add(cb);
+
+    const cachedSquads = this.getCachedSquads(this.currentTournamentId);
+    if (cachedSquads) {
+      cb(cachedSquads);
+    }
+
+    return () => {
+      this.squadListeners.delete(cb);
+    };
+  }
+
+  public connect(): void {
+    if (typeof window === 'undefined') return;
+    if (this.isConnecting && this.ws && this.ws.readyState === WebSocket.CONNECTING) return;
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      if (this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'JOIN_ROOM', tournamentId: this.currentTournamentId }));
+      }
+      return;
+    }
+
+    this.isConnecting = true;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/api/sync/ws?tournamentId=${encodeURIComponent(this.currentTournamentId)}&role=obs`;
+
+    try {
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = () => {
+        this.isConnecting = false;
+        this.reconnectAttempts = 0;
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({ type: 'JOIN_ROOM', tournamentId: this.currentTournamentId }));
+        }
+        this.notifyHeartbeat();
+      };
+
+      this.ws.onmessage = (event: MessageEvent) => {
+        try {
+          const msg = JSON.parse(event.data);
+          this.handleServerMessage(msg);
+        } catch {}
+      };
+
+      this.ws.onerror = () => {
+        this.fallbackToSse();
+      };
+
+      this.ws.onclose = () => {
+        this.ws = null;
+        this.isConnecting = false;
+        this.scheduleReconnect();
+      };
+    } catch {
+      this.fallbackToSse();
+      this.scheduleReconnect();
+    }
+  }
+
+  private fallbackToSse(): void {
+    if (typeof window === 'undefined' || !('EventSource' in window)) return;
+    if (this.sse) return;
+
+    try {
+      this.sse = new EventSource(`/api/sync/stream?tournamentId=${encodeURIComponent(this.currentTournamentId)}`);
+      this.sse.onmessage = (event: MessageEvent) => {
+        try {
+          const msg = JSON.parse(event.data);
+          this.handleServerMessage(msg);
+        } catch {}
+      };
+      this.sse.onerror = () => {
+        if (this.sse) {
+          this.sse.close();
+          this.sse = null;
+        }
+      };
+    } catch {}
+  }
+
+  private handleServerMessage(msg: any): void {
+    if (!msg) return;
+
+    if (msg.type === 'PING') {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'PONG' }));
+      }
+      this.notifyHeartbeat();
+      return;
+    }
+
+    const incomingRevision = Number(msg.revision || msg.data?.revision || 0);
+
+    // Monotonic Ordering: Reject stale out-of-order packets
+    if (incomingRevision > 0 && incomingRevision < this.currentRevision) {
+      return;
+    }
+
+    if (incomingRevision > 0) {
+      this.currentRevision = incomingRevision;
+    }
+
+    const payload = msg.data || msg.payload || msg;
+
+    if (payload.tournament) {
+      this.cacheTournament(this.currentTournamentId, payload.tournament);
+      this.notifyTournament(payload.tournament, this.currentRevision);
+    }
+
+    if (payload.squads || payload.isVisible !== undefined || payload.highlightedTeamId !== undefined) {
+      const squadState: LiveSquadSyncState = {
+        tournamentId: payload.tournamentId || this.currentTournamentId,
+        revision: this.currentRevision,
+        squads: payload.squads || {},
+        highlightedTeamId: payload.highlightedTeamId,
+        isVisible: payload.isVisible !== undefined ? payload.isVisible : true,
+        timestamp: payload.timestamp || Date.now(),
+      };
+      this.cacheSquads(this.currentTournamentId, squadState);
+      this.notifySquads(squadState);
+    }
+
+    this.notifyHeartbeat();
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectAttempts += 1;
+    const delay = Math.min(500 * Math.pow(1.5, this.reconnectAttempts - 1), 3000);
+
+    this.reconnectTimer = setTimeout(() => {
+      this.connect();
+      this.fetchAuthoritativeSnapshot();
+    }, delay);
+  }
+
+  private startHealthCheck(): void {
+    if (this.healthCheckTimer) clearInterval(this.healthCheckTimer);
+    this.healthCheckTimer = setInterval(() => {
+      // Lightweight HTTP state check every 10 seconds to reconcile state
+      this.fetchAuthoritativeSnapshot();
+    }, 10000);
+  }
+
+  public async fetchAuthoritativeSnapshot(): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      const res = await fetch(`/api/sync/state?tournamentId=${encodeURIComponent(this.currentTournamentId)}`);
+      const json = await res.json();
+      if (json.success && json.data) {
+        this.handleServerMessage({
+          type: 'STATE_UPDATED',
+          revision: json.revision || json.data.revision,
+          data: json.data,
+          timestamp: json.timestamp || Date.now(),
+        });
+      }
+    } catch {}
+  }
+
+  public sendUpdate(payload: FullSyncPayload): void {
+    const ts = payload.timestamp || Date.now();
+    const tourId = payload.tournamentId || this.currentTournamentId;
+
+    // 1. BroadcastChannel (Instant same-browser tabs)
+    if (broadcastChannel) {
+      try {
+        if (payload.tournament) {
+          broadcastChannel.postMessage({
+            type: 'TOURNAMENT_UPDATED',
+            tournamentId: tourId,
+            data: payload.tournament,
+            timestamp: ts,
+          });
+        }
+        if (payload.squads || payload.isVisible !== undefined) {
+          broadcastChannel.postMessage({
+            type: 'LIVE_SQUADS_UPDATED',
+            tournamentId: tourId,
+            data: {
+              tournamentId: tourId,
+              squads: payload.squads || {},
+              highlightedTeamId: payload.highlightedTeamId,
+              isVisible: payload.isVisible !== undefined ? payload.isVisible : true,
+              timestamp: ts,
+            },
+          });
+        }
+      } catch {}
+    }
+
+    // 2. LocalStorage Persistence
+    if (payload.tournament) {
+      this.cacheTournament(tourId, payload.tournament);
+    }
+    if (payload.squads || payload.isVisible !== undefined) {
+      this.cacheSquads(tourId, {
+        tournamentId: tourId,
+        squads: payload.squads || {},
+        highlightedTeamId: payload.highlightedTeamId,
+        isVisible: payload.isVisible !== undefined ? payload.isVisible : true,
+        timestamp: ts,
+      });
+    }
+
+    // 3. Real-time WebSocket Push
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        this.ws.send(
+          JSON.stringify({
+            type: 'UPDATE_STATE',
+            tournamentId: tourId,
+            payload: {
+              ...payload,
+              tournamentId: tourId,
+              timestamp: ts,
+            },
+          })
+        );
+        return;
+      } catch {}
+    }
+
+    // 4. Fallback REST POST if WebSocket is momentarily offline
     fetch('/api/sync/state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).catch(() => {
-      // Offline fallback is handled via localStorage & BroadcastChannel
-    });
-  } catch {
-    // Ignore network errors in offline scenarios
+      body: JSON.stringify({
+        ...payload,
+        tournamentId: tourId,
+        timestamp: ts,
+      }),
+    }).catch(() => {});
+  }
+
+  private notifyTournament(tour: Tournament, revision?: number): void {
+    for (const listener of this.tournamentListeners) {
+      try {
+        listener(tour, revision);
+      } catch {}
+    }
+  }
+
+  private notifySquads(data: LiveSquadSyncState): void {
+    for (const listener of this.squadListeners) {
+      try {
+        listener(data);
+      } catch {}
+    }
+  }
+
+  private notifyHeartbeat(): void {
+    for (const listener of this.heartbeatListeners) {
+      try {
+        listener();
+      } catch {}
+    }
+  }
+
+  private cacheTournament(tournamentId: string, tour: Tournament): void {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(`pointx_live_${tournamentId}`, JSON.stringify(tour));
+        window.localStorage.setItem('pointx_live_default', JSON.stringify(tour));
+        window.localStorage.setItem('pointx_live_ping', String(Date.now()));
+      } catch {}
+    } else {
+      memoryStoreMap.set(`pointx_live_${tournamentId}`, JSON.stringify(tour));
+    }
+  }
+
+  private getCachedTournament(tournamentId: string): Tournament | null {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw =
+        window.localStorage.getItem(`pointx_live_${tournamentId}`) ||
+        window.localStorage.getItem('pointx_live_default') ||
+        window.localStorage.getItem(`strikz_live_${tournamentId}`);
+      if (raw) {
+        try {
+          return JSON.parse(raw);
+        } catch {}
+      }
+    }
+    const mem = memoryStoreMap.get(`pointx_live_${tournamentId}`);
+    if (mem) {
+      try {
+        return JSON.parse(mem);
+      } catch {}
+    }
+    return null;
+  }
+
+  private cacheSquads(tournamentId: string, data: LiveSquadSyncState): void {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(`pointx_squads_${tournamentId}`, JSON.stringify(data));
+        window.localStorage.setItem('pointx_squads_default', JSON.stringify(data));
+        window.localStorage.setItem('pointx_squads_ping', String(Date.now()));
+      } catch {}
+    } else {
+      memoryStoreMap.set(`pointx_squads_${tournamentId}`, JSON.stringify(data));
+    }
+  }
+
+  private getCachedSquads(tournamentId: string): LiveSquadSyncState | null {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw =
+        window.localStorage.getItem(`pointx_squads_${tournamentId}`) ||
+        window.localStorage.getItem('pointx_squads_default') ||
+        window.localStorage.getItem(`strikz_squads_${tournamentId}`);
+      if (raw) {
+        try {
+          return JSON.parse(raw);
+        } catch {}
+      }
+    }
+    const mem = memoryStoreMap.get(`pointx_squads_${tournamentId}`);
+    if (mem) {
+      try {
+        return JSON.parse(mem);
+      } catch {}
+    }
+    return null;
   }
 }
 
-/**
- * Broadcast live tournament update to all connected OBS browser sources
- */
+// =========================================================================
+// PUBLIC CONVENIENCE EXPORTS (Seamless drop-in replacement)
+// =========================================================================
+
 export function broadcastTournamentUpdate(tournament: Tournament): void {
-  // 1. BroadcastChannel (Instant same-browser tabs sync)
-  if (broadcastChannel) {
-    try {
-      broadcastChannel.postMessage({
-        type: 'TOURNAMENT_UPDATED',
-        tournamentId: tournament.id,
-        data: tournament,
-        timestamp: Date.now()
-      });
-    } catch {
-      console.warn('Error posting to BroadcastChannel');
-    }
-  }
-
-  // 2. LocalStorage sync & event trigger for OBS Browser Source
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      window.localStorage.setItem(`pointx_live_${tournament.id}`, JSON.stringify(tournament));
-      window.localStorage.setItem('pointx_live_default', JSON.stringify(tournament));
-      window.localStorage.setItem('pointx_live_ping', String(Date.now()));
-    } catch {
-      console.warn('Error writing to localStorage sync');
-    }
-  } else {
-    memoryStoreMap.set(`pointx_live_${tournament.id}`, JSON.stringify(tournament));
-  }
-
-  // 3. Local Wi-Fi Network Sync (for Phone <-> PC)
-  postNetworkSync({
+  const client = RealtimeSyncClient.getInstance();
+  client.setTournament(tournament.id);
+  client.sendUpdate({
     tournamentId: tournament.id,
     tournament,
-    timestamp: Date.now()
+    timestamp: Date.now(),
   });
+}
+
+export function broadcastLiveSquadUpdate(data: LiveSquadSyncState): void {
+  const client = RealtimeSyncClient.getInstance();
+  client.setTournament(data.tournamentId);
+  client.sendUpdate({
+    tournamentId: data.tournamentId,
+    squads: data.squads,
+    highlightedTeamId: data.highlightedTeamId,
+    isVisible: data.isVisible !== undefined ? data.isVisible : true,
+    timestamp: Date.now(),
+  });
+}
+
+export function broadcastFullSync(payload: FullSyncPayload): void {
+  const client = RealtimeSyncClient.getInstance();
+  client.setTournament(payload.tournamentId);
+  client.sendUpdate(payload);
 }
 
 export function subscribeToTournamentLiveUpdates(
@@ -103,326 +530,16 @@ export function subscribeToTournamentLiveUpdates(
   onUpdate: (tournament: Tournament) => void,
   onHeartbeat?: () => void
 ): () => void {
-  let lastTimestamp = 0;
-  let lastTournamentHash = '';
-
-  const processTournamentUpdate = (tour: Tournament, ts?: number) => {
-    if (!tour || !tour.id) return;
-    const currentHash = JSON.stringify({
-      id: tour.id,
-      matches: tour.matches,
-      teams: tour.teams,
-      title: tour.title,
-      status: tour.status
-    });
-
-    if (currentHash !== lastTournamentHash || (ts && ts > lastTimestamp)) {
-      lastTournamentHash = currentHash;
-      lastTimestamp = ts || Date.now();
-      onUpdate(tour);
-      if (onHeartbeat) onHeartbeat();
-    }
-  };
-
-  // Initial load from network API on mount
-  if (typeof window !== 'undefined') {
-    fetch(`/api/sync/state?tournamentId=${tournamentId}`)
-      .then((res) => res.json())
-      .then((res) => {
-        if (res?.data?.tournament) {
-          processTournamentUpdate(res.data.tournament, res.data.timestamp);
-        }
-      })
-      .catch(() => {
-        const stored =
-          window.localStorage.getItem(`pointx_live_${tournamentId}`) ||
-          window.localStorage.getItem('pointx_live_default') ||
-          window.localStorage.getItem(`strikz_live_${tournamentId}`) ||
-          window.localStorage.getItem('strikz_live_default');
-        if (stored) {
-          try {
-            processTournamentUpdate(JSON.parse(stored));
-          } catch {}
-        }
-      });
-  }
-
-  // BroadcastChannel listener (Instant tab-to-tab)
-  const handleBroadcastMessage = (event: MessageEvent) => {
-    if (
-      event.data &&
-      (event.data.type === 'TOURNAMENT_UPDATED') &&
-      (!tournamentId || !event.data.tournamentId || event.data.tournamentId === tournamentId || event.data.tournamentId === 'all') &&
-      event.data.data
-    ) {
-      processTournamentUpdate(event.data.data, event.data.timestamp);
-    }
-  };
-
-  if (broadcastChannel) {
-    broadcastChannel.addEventListener('message', handleBroadcastMessage);
-  }
-
-  // Storage event listener
-  const handleStorageEvent = (event: StorageEvent) => {
-    if (
-      event.key === `pointx_live_${tournamentId}` ||
-      event.key === 'pointx_live_default' ||
-      event.key === 'pointx_live_ping' ||
-      event.key === `strikz_live_${tournamentId}` ||
-      event.key === 'strikz_live_default' ||
-      event.key === 'strikz_live_ping'
-    ) {
-      const stored = typeof window !== 'undefined' && window.localStorage
-        ? window.localStorage.getItem(`pointx_live_${tournamentId}`) ||
-          window.localStorage.getItem('pointx_live_default') ||
-          window.localStorage.getItem(`strikz_live_${tournamentId}`) ||
-          window.localStorage.getItem('strikz_live_default')
-        : memoryStoreMap.get(`pointx_live_${tournamentId}`);
-
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          processTournamentUpdate(parsed);
-        } catch {
-          console.warn('Error parsing storage update');
-        }
-      }
-    }
-  };
-
-  if (typeof window !== 'undefined') {
-    window.addEventListener('storage', handleStorageEvent);
-  }
-
-  // Multi-Network Online Polling every 250ms
-  const pollInterval = setInterval(() => {
-    if (typeof window === 'undefined') return;
-    fetch(`/api/sync/state?tournamentId=${tournamentId}`)
-      .then((res) => res.json())
-      .then((res) => {
-        if (res?.data?.tournament) {
-          processTournamentUpdate(res.data.tournament, res.data.timestamp);
-        }
-      })
-      .catch(() => {});
-  }, 250);
-
-  return () => {
-    clearInterval(pollInterval);
-    if (broadcastChannel) {
-      broadcastChannel.removeEventListener('message', handleBroadcastMessage);
-    }
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('storage', handleStorageEvent);
-    }
-  };
-}
-
-export type LivePlayerState = 'alive' | 'knock' | 'eliminated';
-
-export interface LiveSquadSyncState {
-  tournamentId: string;
-  squads: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]>;
-  highlightedTeamId?: string | null;
-  isVisible?: boolean;
-  timestamp: number;
-}
-
-export function broadcastLiveSquadUpdate(data: LiveSquadSyncState): void {
-  const payload = {
-    type: 'LIVE_SQUADS_UPDATED',
-    tournamentId: data.tournamentId,
-    timestamp: Date.now(),
-    data
-  };
-
-  // 1. BroadcastChannel IPC
-  if (broadcastChannel) {
-    try {
-      broadcastChannel.postMessage(payload);
-    } catch {
-      console.warn('Error posting to BroadcastChannel');
-    }
-  }
-
-  // 2. LocalStorage sync & persistence
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      window.localStorage.setItem(`pointx_squads_${data.tournamentId}`, JSON.stringify(data));
-      window.localStorage.setItem('pointx_squads_default', JSON.stringify(data));
-      window.localStorage.setItem('pointx_squads_ping', String(Date.now()));
-    } catch {
-      console.warn('Error writing to localStorage sync');
-    }
-  } else {
-    memoryStoreMap.set(`pointx_squads_${data.tournamentId}`, JSON.stringify(data));
-  }
-
-  // 3. Local Wi-Fi Network Sync (Phone -> PC)
-  postNetworkSync({
-    tournamentId: data.tournamentId,
-    squads: data.squads,
-    highlightedTeamId: data.highlightedTeamId,
-    isVisible: data.isVisible !== undefined ? data.isVisible : true,
-    timestamp: Date.now()
-  });
-}
-
-export interface FullSyncPayload {
-  tournamentId: string;
-  tournament?: Tournament;
-  squads?: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]>;
-  highlightedTeamId?: string | null;
-  isVisible?: boolean;
-  timestamp?: number;
-}
-
-export function broadcastFullSync(payload: FullSyncPayload): void {
-  const ts = payload.timestamp || Date.now();
-  if (payload.tournament) {
-    broadcastTournamentUpdate(payload.tournament);
-  }
-  if (payload.squads || payload.isVisible !== undefined) {
-    broadcastLiveSquadUpdate({
-      tournamentId: payload.tournamentId,
-      squads: payload.squads || ({} as any),
-      highlightedTeamId: payload.highlightedTeamId,
-      isVisible: payload.isVisible !== undefined ? payload.isVisible : true,
-      timestamp: ts
-    });
-  }
-
-  // Network sync to backend
-  postNetworkSync({
-    ...payload,
-    timestamp: ts
-  });
+  const client = RealtimeSyncClient.getInstance();
+  client.setTournament(tournamentId);
+  return client.subscribeTournament(onUpdate, onHeartbeat);
 }
 
 export function subscribeToLiveSquadUpdates(
   tournamentId: string,
   onUpdate: (data: LiveSquadSyncState) => void
 ): () => void {
-  let lastTimestamp = 0;
-  let lastSquadHash = '';
-
-  const processSquadUpdate = (data: LiveSquadSyncState) => {
-    if (!data) return;
-    const currentHash = JSON.stringify({
-      squads: data.squads,
-      highlightedTeamId: data.highlightedTeamId,
-      isVisible: data.isVisible !== undefined ? data.isVisible : true
-    });
-
-    if (currentHash !== lastSquadHash || (data.timestamp && data.timestamp > lastTimestamp)) {
-      lastSquadHash = currentHash;
-      lastTimestamp = data.timestamp || Date.now();
-      onUpdate(data);
-    }
-  };
-
-  // Initial load from network API on mount
-  if (typeof window !== 'undefined') {
-    fetch(`/api/sync/state?tournamentId=${tournamentId}`)
-      .then((res) => res.json())
-      .then((res) => {
-        if (res?.data?.squads || res?.data?.isVisible !== undefined) {
-          processSquadUpdate({
-            tournamentId,
-            squads: res.data.squads,
-            highlightedTeamId: res.data.highlightedTeamId,
-            isVisible: res.data.isVisible !== undefined ? res.data.isVisible : true,
-            timestamp: res.data.timestamp || Date.now()
-          });
-        }
-      })
-      .catch(() => {
-        const stored =
-          window.localStorage.getItem(`pointx_squads_${tournamentId}`) ||
-          window.localStorage.getItem('pointx_squads_default') ||
-          window.localStorage.getItem(`strikz_squads_${tournamentId}`) ||
-          window.localStorage.getItem('strikz_squads_default');
-        if (stored) {
-          try {
-            processSquadUpdate(JSON.parse(stored));
-          } catch {}
-        }
-      });
-  }
-
-  const handleBroadcastMessage = (event: MessageEvent) => {
-    if (
-      event.data &&
-      event.data.type === 'LIVE_SQUADS_UPDATED' &&
-      (!tournamentId || !event.data.tournamentId || event.data.tournamentId === tournamentId || event.data.tournamentId === 'all') &&
-      event.data.data
-    ) {
-      processSquadUpdate(event.data.data);
-    }
-  };
-
-  if (broadcastChannel) {
-    broadcastChannel.addEventListener('message', handleBroadcastMessage);
-  }
-
-  const handleStorageEvent = (event: StorageEvent) => {
-    if (
-      event.key === `pointx_squads_${tournamentId}` ||
-      event.key === 'pointx_squads_default' ||
-      event.key === 'pointx_squads_ping' ||
-      event.key === `strikz_squads_${tournamentId}` ||
-      event.key === 'strikz_squads_default' ||
-      event.key === 'strikz_squads_ping'
-    ) {
-      const stored = typeof window !== 'undefined' && window.localStorage
-        ? window.localStorage.getItem(`pointx_squads_${tournamentId}`) ||
-          window.localStorage.getItem('pointx_squads_default') ||
-          window.localStorage.getItem(`strikz_squads_${tournamentId}`) ||
-          window.localStorage.getItem('strikz_squads_default')
-        : memoryStoreMap.get(`pointx_squads_${tournamentId}`);
-
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          processSquadUpdate(parsed);
-        } catch {
-          console.warn('Error parsing storage squad update');
-        }
-      }
-    }
-  };
-
-  if (typeof window !== 'undefined') {
-    window.addEventListener('storage', handleStorageEvent);
-  }
-
-  // Multi-Network Online Polling every 250ms
-  const pollInterval = setInterval(() => {
-    if (typeof window === 'undefined') return;
-    fetch(`/api/sync/state?tournamentId=${tournamentId}`)
-      .then((res) => res.json())
-      .then((res) => {
-        if (res?.data?.squads || res?.data?.isVisible !== undefined) {
-          processSquadUpdate({
-            tournamentId,
-            squads: res.data.squads,
-            highlightedTeamId: res.data.highlightedTeamId,
-            isVisible: res.data.isVisible !== undefined ? res.data.isVisible : true,
-            timestamp: res.data.timestamp || Date.now()
-          });
-        }
-      })
-      .catch(() => {});
-  }, 250);
-
-  return () => {
-    clearInterval(pollInterval);
-    if (broadcastChannel) {
-      broadcastChannel.removeEventListener('message', handleBroadcastMessage);
-    }
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('storage', handleStorageEvent);
-    }
-  };
+  const client = RealtimeSyncClient.getInstance();
+  client.setTournament(tournamentId);
+  return client.subscribeSquads(onUpdate);
 }

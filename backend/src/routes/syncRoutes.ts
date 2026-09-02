@@ -1,68 +1,18 @@
 import { Router, Request, Response } from 'express';
-import { Tournament } from '../models/Tournament';
+import {
+  getOrCreateAuthoritativeState,
+  updateAuthoritativeState,
+  addSseListener,
+  RemoteDeviceSession
+} from '../services/realtimeSync';
 
 const router = Router();
 
-export interface RemoteDeviceSession {
-  deviceId: string;
-  deviceName: string;
-  ipAddress: string;
-  lastActive: number;
-  isBlocked: boolean;
-}
-
-export interface TournamentSyncState {
-  tournamentId: string;
-  tournament?: any;
-  pinCode: string;
-  connectedDevices: RemoteDeviceSession[];
-  blockedDeviceIds: string[];
-  timestamp: number;
-  squads?: any;
-  highlightedTeamId?: string | null;
-  isVisible?: boolean;
-  [key: string]: any;
-}
-
-const syncStore: Record<string, TournamentSyncState> = {};
-
-function getOrCreateSyncState(tournamentId: string): TournamentSyncState {
-  if (!syncStore[tournamentId]) {
-    syncStore[tournamentId] = {
-      tournamentId,
-      pinCode: '1234',
-      connectedDevices: [],
-      blockedDeviceIds: [],
-      timestamp: Date.now(),
-      isVisible: true,
-    };
-  }
-  return syncStore[tournamentId];
-}
-
-// 1. Get Live State for OBS and Remote
+// 1. Get Authoritative Live State for OBS, Remote & Dashboard
 router.get('/state', async (req: Request, res: Response) => {
   const tournamentId = (req.query.tournamentId as string) || 'default';
-  const state = getOrCreateSyncState(tournamentId);
+  const state = await getOrCreateAuthoritativeState(tournamentId);
 
-  // If in-memory tournament is not loaded, try fetching from database
-  if (!state.tournament && tournamentId !== 'default') {
-    try {
-      const idQueries: any[] = [{ customId: tournamentId }];
-      if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
-        idQueries.push({ _id: tournamentId });
-      }
-      const doc = await Tournament.findOne({ $or: idQueries }).lean();
-      if (doc) {
-        state.tournament = {
-          ...doc,
-          id: doc.customId || String(doc._id),
-        };
-      }
-    } catch {}
-  }
-
-  // Filter out inactive devices older than 5 minutes
   const now = Date.now();
   state.connectedDevices = state.connectedDevices.filter(
     (d) => now - d.lastActive < 5 * 60 * 1000
@@ -71,48 +21,69 @@ router.get('/state', async (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     data: state,
-    timestamp: state.timestamp || Date.now(),
+    revision: state.revision,
+    timestamp: state.timestamp,
   });
 });
 
-// 2. Post State Update from Remote / OBS / Dashboard
-router.post('/state', (req: Request, res: Response) => {
+// 2. Server-Sent Events (SSE) Real-Time Stream (Cross-Platform HTTP Push)
+router.get('/stream', async (req: Request, res: Response) => {
+  const tournamentId = (req.query.tournamentId as string) || 'default';
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  // Send initial snapshot
+  const state = await getOrCreateAuthoritativeState(tournamentId);
+  res.write(
+    `data: ${JSON.stringify({
+      type: 'INITIAL_STATE',
+      tournamentId,
+      revision: state.revision,
+      data: state,
+      timestamp: state.timestamp,
+    })}\n\n`
+  );
+
+  const removeListener = addSseListener(tournamentId, res);
+
+  // Ping SSE client every 20 seconds to keep connection alive
+  const ssePing = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch {
+      clearInterval(ssePing);
+      removeListener();
+    }
+  }, 20000);
+
+  req.on('close', () => {
+    clearInterval(ssePing);
+    removeListener();
+  });
+});
+
+// 3. Post State Update (from REST/offline clients)
+router.post('/state', async (req: Request, res: Response) => {
   const body = req.body;
   const tourId = body.tournamentId || 'default';
-  const state = getOrCreateSyncState(tourId);
-
-  syncStore[tourId] = {
-    ...state,
-    ...body,
-    pinCode: body.pinCode || state.pinCode || '1234',
-    connectedDevices: state.connectedDevices,
-    blockedDeviceIds: body.blockedDeviceIds || state.blockedDeviceIds || [],
-    timestamp: Date.now(),
-  };
-
-  // Optional background persist to database if full tournament object is provided
-  if (body.tournament && tourId !== 'default') {
-    const idQueries: any[] = [{ customId: tourId }];
-    if (tourId.match(/^[0-9a-fA-F]{24}$/)) {
-      idQueries.push({ _id: tourId });
-    }
-    Tournament.updateOne(
-      { $or: idQueries },
-      { $set: { matches: body.tournament.matches, teams: body.tournament.teams, status: body.tournament.status || 'Live' } }
-    ).catch(() => {});
-  }
+  const updatedState = await updateAuthoritativeState(tourId, body);
 
   res.status(200).json({
     success: true,
-    data: syncStore[tourId],
-    timestamp: Date.now(),
+    data: updatedState,
+    revision: updatedState.revision,
+    timestamp: updatedState.timestamp,
   });
 });
 
-// 3. Verify 4-Digit Security PIN
-router.post('/verify-pin', (req: Request, res: Response) => {
+// 4. Verify 4-Digit Security PIN
+router.post('/verify-pin', async (req: Request, res: Response) => {
   const { tournamentId, pin, deviceId, deviceName } = req.body;
-  const state = getOrCreateSyncState(tournamentId || 'default');
+  const state = await getOrCreateAuthoritativeState(tournamentId || 'default');
 
   if (state.blockedDeviceIds.includes(deviceId)) {
     return res.status(403).json({
@@ -124,7 +95,6 @@ router.post('/verify-pin', (req: Request, res: Response) => {
 
   const expectedPin = state.pinCode || '1234';
   if (pin === expectedPin || pin === '1234') {
-    // Register device
     const ip = req.ip || (req.headers['x-forwarded-for'] as string) || 'Online Remote';
     const existingIndex = state.connectedDevices.findIndex((d) => d.deviceId === deviceId);
     const session: RemoteDeviceSession = {
@@ -141,6 +111,10 @@ router.post('/verify-pin', (req: Request, res: Response) => {
       state.connectedDevices.push(session);
     }
 
+    await updateAuthoritativeState(tournamentId || 'default', {
+      connectedDevices: state.connectedDevices,
+    });
+
     return res.status(200).json({
       success: true,
       verified: true,
@@ -154,28 +128,29 @@ router.post('/verify-pin', (req: Request, res: Response) => {
   });
 });
 
-// 4. Update Security PIN
-router.post('/update-pin', (req: Request, res: Response) => {
+// 5. Update Security PIN
+router.post('/update-pin', async (req: Request, res: Response) => {
   const { tournamentId, newPin } = req.body;
   if (!newPin || newPin.length !== 4) {
     return res.status(400).json({ success: false, error: 'PIN must be exactly 4 digits.' });
   }
 
-  const state = getOrCreateSyncState(tournamentId || 'default');
-  state.pinCode = newPin;
-  state.timestamp = Date.now();
+  const updatedState = await updateAuthoritativeState(tournamentId || 'default', {
+    pinCode: newPin,
+  });
 
   res.status(200).json({
     success: true,
     message: 'Security PIN updated successfully.',
-    pinCode: newPin,
+    pinCode: updatedState.pinCode,
+    revision: updatedState.revision,
   });
 });
 
-// 5. Remote Device Heartbeat
-router.post('/device-heartbeat', (req: Request, res: Response) => {
+// 6. Remote Device Heartbeat
+router.post('/device-heartbeat', async (req: Request, res: Response) => {
   const { tournamentId, deviceId, deviceName } = req.body;
-  const state = getOrCreateSyncState(tournamentId || 'default');
+  const state = await getOrCreateAuthoritativeState(tournamentId || 'default');
 
   if (state.blockedDeviceIds.includes(deviceId)) {
     return res.status(403).json({
@@ -203,40 +178,51 @@ router.post('/device-heartbeat', (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     isBlocked: false,
+    revision: state.revision,
   });
 });
 
-// 6. Block / Revoke Device Access
-router.post('/block-device', (req: Request, res: Response) => {
+// 7. Block / Revoke Device Access
+router.post('/block-device', async (req: Request, res: Response) => {
   const { tournamentId, deviceId } = req.body;
-  const state = getOrCreateSyncState(tournamentId || 'default');
+  const state = await getOrCreateAuthoritativeState(tournamentId || 'default');
 
-  if (!state.blockedDeviceIds.includes(deviceId)) {
-    state.blockedDeviceIds.push(deviceId);
+  const blockedDeviceIds = [...state.blockedDeviceIds];
+  if (!blockedDeviceIds.includes(deviceId)) {
+    blockedDeviceIds.push(deviceId);
   }
 
-  state.connectedDevices = state.connectedDevices.filter((d) => d.deviceId !== deviceId);
-  state.timestamp = Date.now();
+  const connectedDevices = state.connectedDevices.filter((d) => d.deviceId !== deviceId);
+
+  const updatedState = await updateAuthoritativeState(tournamentId || 'default', {
+    blockedDeviceIds,
+    connectedDevices,
+  });
 
   res.status(200).json({
     success: true,
     message: 'Device access revoked.',
-    blockedDeviceIds: state.blockedDeviceIds,
+    blockedDeviceIds: updatedState.blockedDeviceIds,
+    revision: updatedState.revision,
   });
 });
 
-// 7. Unblock Device Access
-router.post('/unblock-device', (req: Request, res: Response) => {
+// 8. Unblock Device Access
+router.post('/unblock-device', async (req: Request, res: Response) => {
   const { tournamentId, deviceId } = req.body;
-  const state = getOrCreateSyncState(tournamentId || 'default');
+  const state = await getOrCreateAuthoritativeState(tournamentId || 'default');
 
-  state.blockedDeviceIds = state.blockedDeviceIds.filter((id) => id !== deviceId);
-  state.timestamp = Date.now();
+  const blockedDeviceIds = state.blockedDeviceIds.filter((id) => id !== deviceId);
+
+  const updatedState = await updateAuthoritativeState(tournamentId || 'default', {
+    blockedDeviceIds,
+  });
 
   res.status(200).json({
     success: true,
     message: 'Device unblocked.',
-    blockedDeviceIds: state.blockedDeviceIds,
+    blockedDeviceIds: updatedState.blockedDeviceIds,
+    revision: updatedState.revision,
   });
 });
 
