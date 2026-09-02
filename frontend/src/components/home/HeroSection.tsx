@@ -83,28 +83,28 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
           </SlideIn>
 
-          {/* Primary Action Buttons */}
+          {/* Primary Action Buttons (Matching Navbar Capsule Theme) */}
           <SlideIn direction="up" delay={0.2}>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full max-w-md mx-auto mt-8">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 sm:gap-4 w-full max-w-md mx-auto mt-8">
               {/* Enter The Arena Primary CTA */}
               <button
                 type="button"
                 onClick={onNavigateLogin}
-                className="relative w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl text-sm sm:text-base font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-[0_4px_30px_rgba(255,208,0,0.35)] hover:shadow-[0_0_40px_rgba(255,208,0,0.65)] hover:-translate-y-1 hover:scale-[1.03] active:scale-[0.97] transition-all duration-300 cursor-pointer font-display border border-amber-300/70 group overflow-hidden"
+                className="relative w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2 px-7 sm:px-9 py-3.5 sm:py-4 rounded-full text-xs sm:text-sm font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-[0_8px_32px_rgba(255,208,0,0.35)] hover:shadow-[0_0_36px_rgba(255,208,0,0.55)] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer font-display uppercase tracking-wider group overflow-hidden border border-amber-300/80"
               >
-                <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/35 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none" />
-                <Zap className="h-4 w-4 fill-black text-black group-hover:rotate-12 transition-transform duration-300" />
-                <span className="tracking-wider">ENTER THE ARENA</span>
-                <ArrowRight className="h-4 w-4 stroke-[2.5] text-black group-hover:translate-x-1.5 transition-transform duration-300" />
+                <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none" />
+                <Zap className="h-4 w-4 fill-black text-black group-hover:rotate-12 transition-transform duration-300 shrink-0" />
+                <span>ENTER THE ARENA</span>
+                <ArrowRight className="h-3.5 w-3.5 stroke-[2.5] text-black group-hover:translate-x-1 transition-transform duration-300 shrink-0" />
               </button>
 
-              {/* Organizer Sign In Secondary CTA */}
+              {/* Organizer Sign In Secondary Glass Capsule CTA */}
               <button
                 type="button"
                 onClick={onNavigateLogin}
-                className="relative w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl text-sm sm:text-base font-bold bg-[var(--bg-surface-raised)] hover:bg-[var(--accent-primary)]/10 border border-[var(--border-strong)] hover:border-[var(--accent-primary)] text-[var(--text-primary)] hover:text-[var(--accent-primary)] shadow-md hover:shadow-[0_0_24px_rgba(255,208,0,0.25)] hover:-translate-y-1 hover:scale-[1.02] active:scale-[0.97] backdrop-blur-xl transition-all duration-300 cursor-pointer font-sans group"
+                className="relative w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2 px-7 sm:px-9 py-3.5 sm:py-4 rounded-full text-xs sm:text-sm font-bold bg-white/10 dark:bg-white/[0.08] hover:bg-white/20 dark:hover:bg-white/15 border border-black/10 dark:border-white/20 text-[var(--text-primary)] backdrop-blur-2xl shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer font-sans group"
               >
-                <LogIn className="h-4 w-4 text-[var(--accent-primary)] group-hover:translate-x-0.5 transition-transform duration-300" />
+                <LogIn className="h-4 w-4 text-[var(--accent-primary)] group-hover:translate-x-0.5 transition-transform duration-300 shrink-0" />
                 <span>Organizer Sign In</span>
               </button>
             </div>
