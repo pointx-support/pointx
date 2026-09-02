@@ -1,10 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Trophy,
-  TableProperties,
-  Gamepad2,
-  Sparkles,
-  Radio,
   Sun,
   Moon,
   Menu,
@@ -28,7 +23,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
   onNavigateLogin,
   onNavigateDashboard,
 }) => {
-  const { isAuthenticated, theme, toggleTheme } = useAuthStore();
+  const { isAuthenticated, user, theme, toggleTheme } = useAuthStore();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<string>('');
@@ -36,14 +31,14 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
   const isDark = theme === 'dark';
 
   const navLinks = [
-    { id: 'tournaments', label: 'Tournaments', href: '#tournaments', icon: Trophy },
-    { id: 'live-matrix', label: 'Live Matrix', href: '#live-matrix', icon: TableProperties },
-    { id: 'broadcast', label: 'Broadcast', href: '#broadcast', icon: Radio },
-    { id: 'features', label: 'Features', href: '#features', icon: Sparkles },
-    { id: 'games', label: 'Games', href: '#games', icon: Gamepad2 },
+    { id: 'tournaments', label: 'Tournaments', href: '#tournaments' },
+    { id: 'live-matrix', label: 'Live Matrix', href: '#live-matrix' },
+    { id: 'broadcast', label: 'Broadcast', href: '#broadcast' },
+    { id: 'features', label: 'Features', href: '#features' },
+    { id: 'games', label: 'Games', href: '#games' },
   ];
 
-  // Viewport scroll listener for navbar background & accurate section tracking
+  // Viewport scroll listener for navbar background & section tracking
   useEffect(() => {
     const handleScroll = () => {
       const scrollY = window.scrollY;
@@ -87,35 +82,47 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
   };
 
   return (
-    <header
-      className={cn(
-        'fixed top-0 inset-x-0 z-50 w-full transition-all duration-300 font-sans',
-        isScrolled
-          ? 'bg-[var(--bg-header)]/95 backdrop-blur-2xl border-b border-[var(--border-subtle)] shadow-[var(--shadow-raised)]'
-          : 'bg-[var(--bg-header)]/80 backdrop-blur-xl border-b border-[var(--border-subtle)]/50'
-      )}
-    >
-      <div className="max-w-[1536px] w-full mx-auto px-4 sm:px-6 lg:px-12 h-18 sm:h-20 flex items-center justify-between">
+    <header className="fixed top-3 sm:top-5 inset-x-0 z-50 flex flex-col items-center justify-center px-3 sm:px-6 pointer-events-none font-sans">
+      
+      {/* Unified Floating Pill Container */}
+      <div
+        className={cn(
+          'pointer-events-auto w-full max-w-[920px] lg:max-w-[980px] h-14 sm:h-16 rounded-full px-2 sm:px-3 flex items-center justify-between transition-all duration-300 backdrop-blur-2xl',
+          isDark
+            ? 'bg-[#111215]/95 border border-white/15 text-white shadow-[0_16px_40px_rgba(0,0,0,0.6)]'
+            : 'bg-white/95 border border-black/10 text-[#111215] shadow-[0_16px_40px_rgba(0,0,0,0.1)]',
+          isScrolled && (isDark ? 'border-white/25 shadow-[0_20px_50px_rgba(0,0,0,0.8)]' : 'border-black/20 shadow-[0_20px_50px_rgba(0,0,0,0.15)]')
+        )}
+      >
         
-        {/* Left: Brand Identity */}
-        <div className="flex items-center gap-4">
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            className="flex items-center gap-3 group select-none cursor-pointer"
-            title="PointX Home"
+        {/* Left: Circular Brand Identity Emblem Badge */}
+        <a
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className="flex items-center gap-2 sm:gap-3 group select-none cursor-pointer pl-1 shrink-0"
+          title="PointX Home"
+        >
+          <div
+            className={cn(
+              'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center font-black transition-transform duration-300 group-hover:scale-105 shadow-md p-1.5',
+              isDark
+                ? 'bg-white text-black'
+                : 'bg-[#111215] text-white'
+            )}
           >
-            <PointXLogo className="h-7 sm:h-8 w-auto max-w-[110px] sm:max-w-[125px] object-contain group-hover:scale-105 transition-transform" />
-          </a>
-        </div>
+            <PointXLogo className="h-5 sm:h-6 w-auto object-contain select-none" />
+          </div>
+          <span className="hidden sm:inline font-display font-black text-sm tracking-wider uppercase">
+            Point<span className="text-[var(--accent-primary)]">X</span>
+          </span>
+        </a>
 
-        {/* Center: Desktop Navigation with Moving Capsule Animation */}
-        <nav className="hidden md:flex items-center p-1.5 rounded-2xl bg-[var(--bg-surface-inset)]/60 border border-[var(--border-subtle)] gap-1 shadow-inner backdrop-blur-xl relative">
+        {/* Center: Clean Nav Links with subtle active pill */}
+        <nav className="hidden md:flex items-center gap-1 sm:gap-1.5 lg:gap-2 px-2 relative">
           {navLinks.map((link) => {
-            const Icon = link.icon;
             const isCurrentActive = activeSection === link.id;
 
             return (
@@ -124,69 +131,80 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
                 href={link.href}
                 onClick={(e) => handleScrollTo(e, link.href)}
                 className={cn(
-                  'relative flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-mono uppercase tracking-wider transition-colors duration-200 select-none cursor-pointer',
-                  isCurrentActive
-                    ? 'text-[var(--accent-primary)] font-black'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-bold'
+                  'relative px-3 sm:px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 select-none cursor-pointer',
+                  isDark
+                    ? (isCurrentActive ? 'text-white font-bold' : 'text-zinc-400 hover:text-white')
+                    : (isCurrentActive ? 'text-black font-bold' : 'text-zinc-600 hover:text-black')
                 )}
               >
-                {/* Moving Sliding Capsule Background exclusively for active link */}
+                {/* Moving Sliding Pill Indicator */}
                 {isCurrentActive && (
                   <motion.div
-                    layoutId="navbar-active-capsule"
-                    className="absolute inset-0 rounded-xl bg-[var(--bg-surface)] border border-[var(--accent-primary)]/40 shadow-sm -z-10"
+                    layoutId="navbar-pill-active"
+                    className={cn(
+                      'absolute inset-0 rounded-full -z-10 shadow-sm',
+                      isDark
+                        ? 'bg-white/12 border border-white/20'
+                        : 'bg-black/8 border border-black/10'
+                    )}
                     transition={{ type: 'spring', stiffness: 450, damping: 32 }}
                   />
                 )}
-
-                <Icon
-                  className={cn(
-                    'h-3.5 w-3.5 transition-transform duration-200',
-                    isCurrentActive
-                      ? 'text-[var(--accent-primary)] scale-110'
-                      : 'text-[var(--text-muted)]'
-                  )}
-                />
                 <span>{link.label}</span>
               </a>
             );
           })}
         </nav>
 
-        {/* Right: Theme Controls & Action CTAs */}
-        <div className="flex items-center gap-3">
-          {/* Theme Switcher */}
+        {/* Right: Theme Toggle & High-Contrast Signature Action Pill */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          
+          {/* Subtle Theme Toggle Button */}
           <button
             type="button"
             onClick={toggleTheme}
-            className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors flex items-center justify-center cursor-pointer shadow-sm"
+            className={cn(
+              'h-8 w-8 sm:h-9 sm:w-9 rounded-full flex items-center justify-center transition-colors cursor-pointer',
+              isDark
+                ? 'text-zinc-400 hover:text-white hover:bg-white/10'
+                : 'text-zinc-600 hover:text-black hover:bg-black/5'
+            )}
             title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
             aria-label="Toggle Theme Mode"
           >
             {isDark ? (
-              <Sun className="h-4 w-4 text-[var(--accent-primary)]" />
+              <Sun className="h-4 w-4 text-amber-400" />
             ) : (
-              <Moon className="h-4 w-4 text-[var(--accent-primary)]" />
+              <Moon className="h-4 w-4 text-zinc-800" />
             )}
           </button>
 
+          {/* High-Contrast Capsule CTA Button */}
           {isAuthenticated ? (
-            /* Authenticated Console CTA */
             <button
               type="button"
               onClick={onNavigateDashboard}
-              className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full sm:rounded-xl text-[11px] sm:text-sm font-bold bg-[var(--bg-surface-raised)] hover:bg-[var(--bg-surface-hover)] border border-[var(--accent-primary)]/40 hover:border-[var(--accent-primary)] text-[var(--text-primary)] hover:text-[var(--accent-primary)] shadow-sm transition-all duration-200 cursor-pointer font-display uppercase tracking-wider group active:scale-[0.98]"
+              className={cn(
+                'inline-flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 cursor-pointer shadow-md hover:scale-105 active:scale-95 group font-display',
+                isDark
+                  ? 'bg-white text-black hover:bg-zinc-100 shadow-[0_4px_20px_rgba(255,255,255,0.2)]'
+                  : 'bg-[#111215] text-white hover:bg-black shadow-[0_4px_20px_rgba(0,0,0,0.2)]'
+              )}
             >
-              <LayoutDashboard className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--accent-primary)] group-hover:scale-110 transition-transform shrink-0" />
-              <span>Console</span>
-              <ArrowRight className="hidden sm:inline h-3.5 w-3.5 text-[var(--accent-primary)] group-hover:translate-x-0.5 transition-transform" />
+              <LayoutDashboard className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="truncate max-w-[120px] sm:max-w-[180px]">{user?.email || 'Console'}</span>
+              <ArrowRight className="hidden sm:inline h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
             </button>
           ) : (
-            /* Public Sign In CTA - Capsule shape on mobile */
             <button
               type="button"
               onClick={onNavigateLogin}
-              className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full sm:rounded-xl text-[11px] sm:text-sm font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-sm hover:shadow-[0_0_20px_rgba(255,208,0,0.4)] hover:brightness-105 active:scale-[0.98] transition-all duration-200 cursor-pointer font-display uppercase tracking-wider border border-amber-300/60 group"
+              className={cn(
+                'inline-flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 cursor-pointer shadow-md hover:scale-105 active:scale-95 group font-sans',
+                isDark
+                  ? 'bg-white text-black hover:bg-zinc-100 shadow-[0_4px_20px_rgba(255,255,255,0.25)]'
+                  : 'bg-[#111215] text-white hover:bg-black shadow-[0_4px_20px_rgba(0,0,0,0.25)]'
+              )}
             >
               <LogIn className="h-3.5 w-3.5 sm:h-4 sm:w-4 group-hover:translate-x-0.5 transition-transform shrink-0" />
               <span className="hidden sm:inline">Organizer Sign In</span>
@@ -194,24 +212,35 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
             </button>
           )}
 
-          {/* Mobile Hamburger Trigger */}
+          {/* Mobile Menu Hamburger */}
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="h-9 w-9 sm:h-10 sm:w-10 md:hidden flex items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+            className={cn(
+              'h-8 w-8 sm:h-9 sm:w-9 md:hidden flex items-center justify-center rounded-full transition-colors cursor-pointer',
+              isDark
+                ? 'text-zinc-400 hover:text-white hover:bg-white/10'
+                : 'text-zinc-600 hover:text-black hover:bg-black/5'
+            )}
             aria-label="Toggle Mobile Menu"
           >
-            {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {isMobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
         </div>
       </div>
 
       {/* Mobile Slide-Down Drawer */}
       {isMobileMenuOpen && (
-        <div className="md:hidden border-t border-[var(--border-subtle)] bg-[var(--bg-surface)]/98 backdrop-blur-2xl px-6 py-6 space-y-4 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
-          <nav className="space-y-1.5">
+        <div
+          className={cn(
+            'pointer-events-auto w-full max-w-[920px] mt-2 rounded-3xl p-4 space-y-2 backdrop-blur-2xl shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 md:hidden',
+            isDark
+              ? 'bg-[#111215]/98 border border-white/15 text-white'
+              : 'bg-white/98 border border-black/10 text-black'
+          )}
+        >
+          <nav className="space-y-1">
             {navLinks.map((link) => {
-              const Icon = link.icon;
               const isCurrentActive = activeSection === link.id;
 
               return (
@@ -220,19 +249,14 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
                   href={link.href}
                   onClick={(e) => handleScrollTo(e, link.href)}
                   className={cn(
-                    'flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-mono uppercase tracking-wider font-bold transition-colors',
-                    isCurrentActive
-                      ? 'bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30'
-                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)]'
+                    'flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-bold transition-all',
+                    isDark
+                      ? (isCurrentActive ? 'bg-white/15 text-white' : 'text-zinc-400 hover:bg-white/5 hover:text-white')
+                      : (isCurrentActive ? 'bg-black/10 text-black' : 'text-zinc-600 hover:bg-black/5 hover:text-black')
                   )}
                 >
-                  <Icon
-                    className={cn(
-                      'h-4 w-4',
-                      isCurrentActive ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'
-                    )}
-                  />
                   <span>{link.label}</span>
+                  {isCurrentActive && <div className="h-1.5 w-1.5 rounded-full bg-[var(--accent-primary)]" />}
                 </a>
               );
             })}
