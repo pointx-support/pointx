@@ -6,7 +6,6 @@ import {
   FREE_FIRE_AGGRESSIVE_SCORING,
   FREE_FIRE_SURVIVAL_BOOST_SCORING
 } from '../../engine/scoringEngine';
-import { SEED_TEAMS } from '../../store/tournamentStore';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Badge } from '../ui/Badge';
@@ -22,7 +21,8 @@ import {
   Calculator,
   Upload,
   Image as ImageIcon,
-  X
+  X,
+  ShieldCheck
 } from 'lucide-react';
 
 export interface TournamentWizardProps {
@@ -31,7 +31,7 @@ export interface TournamentWizardProps {
 }
 
 export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, onCancel }) => {
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
 
   // Form State
   const [title, setTitle] = useState('');
@@ -41,7 +41,6 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
   const [description, setDescription] = useState('');
   const [tournamentType, setTournamentType] = useState<TournamentType>('Battle Royale');
   const [status, setStatus] = useState<TournamentStatus>('Live');
-  const [bannerUrl, setBannerUrl] = useState('');
 
   const tournamentLogoInputRef = useRef<HTMLInputElement | null>(null);
   const organizerLogoInputRef = useRef<HTMLInputElement | null>(null);
@@ -76,9 +75,6 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
   const [scoringPreset, setScoringPreset] = useState<ScoringPreset>(DEFAULT_FREE_FIRE_SCORING);
   const [activePresetTemplateId, setActivePresetTemplateId] = useState<string>('official');
 
-  // Teams Setup State
-  const [teamSetupMode, setTeamSetupMode] = useState<'sample' | 'empty'>('sample');
-
   // Inline Validation Error
   const [titleError, setTitleError] = useState('');
 
@@ -94,7 +90,7 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
       }
       setTitleError('');
     }
-    if (currentStep < 5) {
+    if (currentStep < 6) {
       setCurrentStep((prev) => (prev + 1) as any);
     }
   };
@@ -201,21 +197,14 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
   const handleCreate = () => {
     const newId = `tour-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
 
-    // Build teams
-    const initialTeams =
-      teamSetupMode === 'sample'
-        ? SEED_TEAMS.slice(0, teamCount).map((t, idx) => ({
-            ...t,
-            id: `team-${newId}-${idx + 1}`,
-            slotNumber: idx + 1
-          }))
-        : Array.from({ length: teamCount }, (_, i) => ({
-            id: `team-${newId}-${i + 1}`,
-            name: `Slot #${i + 1} Team`,
-            tag: `S${i + 1}`,
-            slotNumber: i + 1,
-            players: []
-          }));
+    // Build initial blank team slots
+    const initialTeams = Array.from({ length: teamCount }, (_, i) => ({
+      id: `team-${newId}-${i + 1}`,
+      name: `Slot #${i + 1}`,
+      tag: `S${i + 1}`,
+      slotNumber: i + 1,
+      players: []
+    }));
 
     const newTournament: Tournament = {
       id: newId,
@@ -227,7 +216,6 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
       description: description.trim(),
       tournamentType,
       status,
-      bannerUrl: bannerUrl.trim() || undefined,
       structure: {
         teamCount,
         matchCount,
@@ -246,11 +234,12 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
   };
 
   const STEPS = [
-    { num: 1, label: 'Basic Info', icon: Trophy, desc: 'Title & Branding' },
+    { num: 1, label: 'Basic Info', icon: Trophy, desc: 'Title & Details' },
     { num: 2, label: 'Structure', icon: Swords, desc: 'Teams & Matches' },
     { num: 3, label: 'Scoring', icon: Sliders, desc: 'Custom FF Rules' },
-    { num: 4, label: 'Teams', icon: Users2, desc: 'Slots & Rosters' },
-    { num: 5, label: 'Review', icon: CheckCircle2, desc: 'Final Confirmation' }
+    { num: 4, label: 'Slots', icon: Users2, desc: 'Slot Allocation' },
+    { num: 5, label: 'Branding', icon: ImageIcon, desc: 'Logos & Visuals' },
+    { num: 6, label: 'Review', icon: CheckCircle2, desc: 'Final Confirmation' }
   ];
 
   // Live sandbox calculation for sample 1st place with 6 kills
@@ -276,7 +265,7 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
               Create Tournament
             </h1>
             <p className="text-xs sm:text-sm text-[var(--text-secondary)] font-mono">
-              Step {currentStep} of 5: <span className="text-[var(--accent-primary)] font-bold">{STEPS[currentStep - 1].label}</span>
+              Step {currentStep} of 6: <span className="text-[var(--accent-primary)] font-bold">{STEPS[currentStep - 1].label}</span>
             </p>
           </div>
         </div>
@@ -287,7 +276,7 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
       </div>
 
       {/* Progressive Step Navigation Bar */}
-      <div className="grid grid-cols-5 gap-2 p-2 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] shadow-[var(--shadow-inset)]">
+      <div className="grid grid-cols-6 gap-1.5 sm:gap-2 p-2 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] shadow-[var(--shadow-inset)]">
         {STEPS.map((step) => {
           const isDone = currentStep > step.num;
           const isCurrent = currentStep === step.num;
@@ -295,7 +284,7 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
           return (
             <div
               key={step.num}
-              className={`flex items-center gap-2.5 p-2 rounded-xl transition-all ${
+              className={`flex items-center gap-2 p-2 rounded-xl transition-all ${
                 isCurrent
                   ? 'bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--accent-primary)] shadow-sm font-bold'
                   : isDone
@@ -304,7 +293,7 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
               }`}
             >
               <div
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-mono font-black text-xs ${
+                className={`flex h-6 w-6 sm:h-7 sm:w-7 shrink-0 items-center justify-center rounded-lg font-mono font-black text-xs ${
                   isCurrent
                     ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] shadow-sm'
                     : isDone
@@ -314,9 +303,9 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
               >
                 {isDone ? '✓' : step.num}
               </div>
-              <div className="hidden sm:block min-w-0">
-                <div className="text-xs sm:text-sm font-bold truncate font-sans">{step.label}</div>
-                <div className="text-xs text-[var(--text-secondary)] truncate font-mono">{step.desc}</div>
+              <div className="hidden lg:block min-w-0">
+                <div className="text-xs font-bold truncate font-sans">{step.label}</div>
+                <div className="text-[10px] text-[var(--text-secondary)] truncate font-mono">{step.desc}</div>
               </div>
             </div>
           );
@@ -334,7 +323,7 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
                   Step 01: Tournament Identity & Details
                 </h2>
                 <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-0.5 font-mono">
-                  Set the tournament name, organizer branding, and competition mode.
+                  Set the tournament name, host organizer, and competition format.
                 </p>
               </div>
 
@@ -342,7 +331,7 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
                 <div className="space-y-4">
                   <Input
                     label="Tournament Title *"
-                    placeholder="Enter tournament title"
+                    placeholder="Enter tournament title (e.g. Free Fire Championship 2026)"
                     value={title}
                     onChange={(e) => {
                       setTitle(e.target.value);
@@ -354,144 +343,16 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
 
                   <Input
                     label="Organizer / Host Name"
-                    placeholder="Enter host name"
+                    placeholder="Enter host organization name"
                     value={organizer}
                     onChange={(e) => setOrganizer(e.target.value)}
                   />
 
                   <Input
                     label="Description / Notes"
-                    placeholder="Enter description or notes"
+                    placeholder="Enter description or tournament rules notes"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                  />
-
-                  {/* TOURNAMENT LOGO & ORGANIZER LOGO UPLOADS */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
-                    {/* 1. Tournament Logo */}
-                    <div className="p-3.5 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] space-y-2.5 shadow-[var(--shadow-inset)]">
-                      <label className="block text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] font-mono">
-                        Tournament Logo
-                      </label>
-
-                      <div className="flex items-center gap-3">
-                        {tournamentLogoUrl ? (
-                          <div className="relative h-12 w-12 rounded-xl overflow-hidden bg-black/40 border border-[var(--border-subtle)] shrink-0 flex items-center justify-center">
-                            <img
-                              src={tournamentLogoUrl}
-                              alt="Tournament Logo"
-                              className="h-full w-full object-contain"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setTournamentLogoUrl('')}
-                              className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/80 text-white hover:text-[var(--status-danger)] transition-colors"
-                              title="Remove logo"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="h-12 w-12 rounded-xl bg-[var(--bg-surface)] border border-dashed border-[var(--border-subtle)] shrink-0 flex items-center justify-center text-[var(--text-muted)]">
-                            <Trophy className="h-5 w-5 opacity-40" />
-                          </div>
-                        )}
-
-                        <div className="flex-1 space-y-1.5">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="xs"
-                            onClick={() => tournamentLogoInputRef.current?.click()}
-                            leftIcon={<Upload className="h-3 w-3" />}
-                            className="w-full"
-                          >
-                            Upload File
-                          </Button>
-                          <input
-                            ref={tournamentLogoInputRef}
-                            type="file"
-                            accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                            onChange={handleTournamentLogoUpload}
-                            className="hidden"
-                          />
-                        </div>
-                      </div>
-
-                      <input
-                        type="text"
-                        placeholder="Or paste Logo URL"
-                        value={tournamentLogoUrl}
-                        onChange={(e) => setTournamentLogoUrl(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] font-mono"
-                      />
-                    </div>
-
-                    {/* 2. Organizer Logo */}
-                    <div className="p-3.5 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] space-y-2.5 shadow-[var(--shadow-inset)]">
-                      <label className="block text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] font-mono">
-                        Organizer Logo
-                      </label>
-
-                      <div className="flex items-center gap-3">
-                        {organizerLogoUrl ? (
-                          <div className="relative h-12 w-12 rounded-xl overflow-hidden bg-black/40 border border-[var(--border-subtle)] shrink-0 flex items-center justify-center">
-                            <img
-                              src={organizerLogoUrl}
-                              alt="Organizer Logo"
-                              className="h-full w-full object-contain"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setOrganizerLogoUrl('')}
-                              className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/80 text-white hover:text-[var(--status-danger)] transition-colors"
-                              title="Remove logo"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="h-12 w-12 rounded-xl bg-[var(--bg-surface)] border border-dashed border-[var(--border-subtle)] shrink-0 flex items-center justify-center text-[var(--text-muted)]">
-                            <ImageIcon className="h-5 w-5 opacity-40" />
-                          </div>
-                        )}
-
-                        <div className="flex-1 space-y-1.5">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="xs"
-                            onClick={() => organizerLogoInputRef.current?.click()}
-                            leftIcon={<Upload className="h-3 w-3" />}
-                            className="w-full"
-                          >
-                            Upload File
-                          </Button>
-                          <input
-                            ref={organizerLogoInputRef}
-                            type="file"
-                            accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                            onChange={handleOrganizerLogoUpload}
-                            className="hidden"
-                          />
-                        </div>
-                      </div>
-
-                      <input
-                        type="text"
-                        placeholder="Or paste Organiser Logo URL"
-                        value={organizerLogoUrl}
-                        onChange={(e) => setOrganizerLogoUrl(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <Input
-                    label="Banner / Cover URL (Optional)"
-                    placeholder="Enter banner image URL"
-                    value={bannerUrl}
-                    onChange={(e) => setBannerUrl(e.target.value)}
                   />
                 </div>
 
@@ -889,7 +750,7 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
             </div>
           )}
 
-          {/* STEP 4: Teams */}
+          {/* STEP 4: Teams Slots */}
           {currentStep === 4 && (
             <div className="space-y-5 animate-fadeIn">
               <div>
@@ -897,56 +758,199 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
                   Step 04: Initial Team Slot Allocation
                 </h2>
                 <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-0.5 font-mono">
-                  Choose how you want to populate the initial {teamCount} team slots.
+                  PointX will generate {teamCount} structured slots for your tournament roster.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button
-                  type="button"
-                  onClick={() => setTeamSetupMode('sample')}
-                  className={`p-6 rounded-2xl border text-left transition-all cursor-pointer ${
-                    teamSetupMode === 'sample'
-                      ? 'bg-[var(--bg-surface-raised)] border-[var(--accent-primary)] shadow-md'
-                      : 'bg-[var(--bg-surface-inset)] border-[var(--border-subtle)] text-[var(--text-secondary)] shadow-[var(--shadow-inset)]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Sparkles className="h-6 w-6 text-[var(--accent-primary)]" />
-                    <span className="font-bold text-[var(--text-primary)] text-sm sm:text-base font-display">Populate with Verified FF Pro Teams</span>
+              <div className="p-6 rounded-2xl border border-[var(--accent-primary)]/40 bg-[var(--bg-surface-raised)] shadow-md space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-xl bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]">
+                    <Users2 className="h-6 w-6" />
                   </div>
-                  <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-2 leading-relaxed font-sans">
-                    Auto-populates slots with verified pro teams (Total Gaming, Team Elite, Orangutan, GodLike, Blind, etc.) with player rosters.
-                  </p>
-                </button>
+                  <div>
+                    <h3 className="font-bold text-[var(--text-primary)] text-base font-display">
+                      Generate Blank Slots (Slot 1 to Slot {teamCount})
+                    </h3>
+                    <p className="text-xs sm:text-sm text-[var(--text-secondary)] font-sans mt-0.5">
+                      Creates clean placeholder slots ready for custom team registrations, logo uploads, and player rosters.
+                    </p>
+                  </div>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => setTeamSetupMode('empty')}
-                  className={`p-6 rounded-2xl border text-left transition-all cursor-pointer ${
-                    teamSetupMode === 'empty'
-                      ? 'bg-[var(--bg-surface-raised)] border-[var(--accent-primary)] shadow-md'
-                      : 'bg-[var(--bg-surface-inset)] border-[var(--border-subtle)] text-[var(--text-secondary)] shadow-[var(--shadow-inset)]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Users2 className="h-6 w-6 text-[var(--accent-primary)]" />
-                    <span className="font-bold text-[var(--text-primary)] text-sm sm:text-base font-display">Generate Blank Slots (Slot 1 to {teamCount})</span>
-                  </div>
-                  <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-2 leading-relaxed font-sans">
-                    Creates empty placeholder slots so you can enter team names and player rosters manually later.
-                  </p>
-                </button>
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5 pt-2 border-t border-[var(--border-subtle)] font-mono">
+                  {Array.from({ length: teamCount }).map((_, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] flex items-center justify-between text-xs"
+                    >
+                      <span className="font-bold text-[var(--accent-primary)]">#{idx + 1}</span>
+                      <span className="text-[var(--text-secondary)]">Slot {idx + 1}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
 
-          {/* STEP 5: Review & Initialize */}
+          {/* STEP 5: Branding & Logos */}
           {currentStep === 5 && (
             <div className="space-y-5 animate-fadeIn">
               <div>
+                <h2 className="text-base sm:text-lg font-bold text-[var(--text-primary)] tracking-tight font-display flex items-center gap-2">
+                  <ImageIcon className="h-5 w-5 text-[var(--accent-primary)]" />
+                  Step 05: Tournament & Organizer Logos
+                </h2>
+                <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-0.5 font-mono">
+                  Upload official visual branding for your stream overlays, OBS browser sources, and 4K posters.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* 1. Tournament Logo */}
+                <div className="p-6 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] space-y-4 shadow-[var(--shadow-inset)]">
+                  <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono flex items-center gap-2">
+                    <Trophy className="h-4 w-4 text-[var(--accent-primary)]" />
+                    Tournament Logo
+                  </label>
+
+                  <div className="flex items-center gap-4">
+                    {tournamentLogoUrl ? (
+                      <div className="relative h-20 w-20 rounded-2xl overflow-hidden bg-black/40 border border-[var(--border-strong)] shrink-0 flex items-center justify-center shadow-md">
+                        <img
+                          src={tournamentLogoUrl}
+                          alt="Tournament Logo"
+                          className="h-full w-full object-contain p-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setTournamentLogoUrl('')}
+                          className="absolute top-1 right-1 p-1 rounded-full bg-black/80 text-white hover:text-[var(--status-danger)] transition-colors cursor-pointer"
+                          title="Remove logo"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-20 w-20 rounded-2xl bg-[var(--bg-surface)] border border-dashed border-[var(--border-subtle)] shrink-0 flex items-center justify-center text-[var(--text-muted)]">
+                        <Trophy className="h-8 w-8 opacity-30" />
+                      </div>
+                    )}
+
+                    <div className="flex-1 space-y-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => tournamentLogoInputRef.current?.click()}
+                        leftIcon={<Upload className="h-4 w-4" />}
+                        className="w-full"
+                      >
+                        Upload Image File
+                      </Button>
+                      <input
+                        ref={tournamentLogoInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                        onChange={handleTournamentLogoUpload}
+                        className="hidden"
+                      />
+                      <p className="text-[11px] text-[var(--text-muted)] font-mono">
+                        PNG, SVG, WEBP recommended (Transparent 512x512)
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono text-[var(--text-secondary)] mb-1">
+                      Direct Logo Image URL (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="https://example.com/logo.png"
+                      value={tournamentLogoUrl}
+                      onChange={(e) => setTournamentLogoUrl(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Organizer Logo */}
+                <div className="p-6 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] space-y-4 shadow-[var(--shadow-inset)]">
+                  <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-[var(--accent-primary)]" />
+                    Organizer Brand Logo
+                  </label>
+
+                  <div className="flex items-center gap-4">
+                    {organizerLogoUrl ? (
+                      <div className="relative h-20 w-20 rounded-2xl overflow-hidden bg-black/40 border border-[var(--border-strong)] shrink-0 flex items-center justify-center shadow-md">
+                        <img
+                          src={organizerLogoUrl}
+                          alt="Organizer Logo"
+                          className="h-full w-full object-contain p-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setOrganizerLogoUrl('')}
+                          className="absolute top-1 right-1 p-1 rounded-full bg-black/80 text-white hover:text-[var(--status-danger)] transition-colors cursor-pointer"
+                          title="Remove logo"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-20 w-20 rounded-2xl bg-[var(--bg-surface)] border border-dashed border-[var(--border-subtle)] shrink-0 flex items-center justify-center text-[var(--text-muted)]">
+                        <ImageIcon className="h-8 w-8 opacity-30" />
+                      </div>
+                    )}
+
+                    <div className="flex-1 space-y-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => organizerLogoInputRef.current?.click()}
+                        leftIcon={<Upload className="h-4 w-4" />}
+                        className="w-full"
+                      >
+                        Upload Image File
+                      </Button>
+                      <input
+                        ref={organizerLogoInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                        onChange={handleOrganizerLogoUpload}
+                        className="hidden"
+                      />
+                      <p className="text-[11px] text-[var(--text-muted)] font-mono">
+                        PNG, SVG, WEBP recommended (Transparent 512x512)
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono text-[var(--text-secondary)] mb-1">
+                      Direct Organizer Logo URL (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="https://example.com/organizer-logo.png"
+                      value={organizerLogoUrl}
+                      onChange={(e) => setOrganizerLogoUrl(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 6: Review & Initialize */}
+          {currentStep === 6 && (
+            <div className="space-y-5 animate-fadeIn">
+              <div>
                 <h2 className="text-base sm:text-lg font-bold text-[var(--text-primary)] tracking-tight font-display">
-                  Step 05: Review & Initialize Tournament
+                  Step 06: Review & Initialize Tournament
                 </h2>
                 <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-0.5 font-mono">
                   Confirm the settings below to launch the tournament workspace.
@@ -957,9 +961,9 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
                 <div className="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)]">
                   <div className="flex items-center gap-4">
                     {tournamentLogoUrl ? (
-                      <img src={tournamentLogoUrl} alt="Tournament Logo" className="h-14 w-14 object-contain rounded-2xl bg-black/30 border border-[var(--border-subtle)] p-1 shrink-0" />
+                      <img src={tournamentLogoUrl} alt="Tournament Logo" className="h-16 w-16 object-contain rounded-2xl bg-black/30 border border-[var(--border-subtle)] p-1 shrink-0" />
                     ) : organizerLogoUrl ? (
-                      <img src={organizerLogoUrl} alt="Organizer Logo" className="h-14 w-14 object-contain rounded-2xl bg-black/30 border border-[var(--border-subtle)] p-1 shrink-0" />
+                      <img src={organizerLogoUrl} alt="Organizer Logo" className="h-16 w-16 object-contain rounded-2xl bg-black/30 border border-[var(--border-subtle)] p-1 shrink-0" />
                     ) : null}
                     <div>
                       <div className="flex items-center gap-2">
@@ -1032,7 +1036,7 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
             {currentStep === 1 ? 'Cancel' : 'Previous Step'}
           </Button>
 
-          {currentStep < 5 ? (
+          {currentStep < 6 ? (
             <Button
               variant="primary"
               size="sm"
@@ -1056,3 +1060,5 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
     </div>
   );
 };
+
+export default TournamentWizard;
