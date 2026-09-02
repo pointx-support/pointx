@@ -111,10 +111,14 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
 
   checkAuth: async () => {
     const token = getStoredToken();
+    const storedUser = loadStoredUser();
+
     if (!token) {
-      set({ user: null, isAuthenticated: false, sessionToken: null });
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.removeItem(AUTH_STORAGE_KEY);
+      if (storedUser) {
+        set({ user: null, isAuthenticated: false, sessionToken: null });
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.removeItem(AUTH_STORAGE_KEY);
+        }
       }
       return;
     }
@@ -137,6 +141,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         set({
           user: enrichedUser,
           isAuthenticated: true,
+          sessionToken: token,
           sessions: res.sessions || (res.data && res.data.sessions) || [],
           theme: normalizedTheme
         });
@@ -144,15 +149,37 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         applyThemeToDOM(normalizedTheme);
         useTournamentStore.getState().sanitizeTournamentsForRole(enrichedUser.role);
         useTournamentStore.getState().fetchTournaments().catch(() => {});
-      } else {
+      } else if (
+        res.error &&
+        (res.error.toLowerCase().includes('unauthorized') ||
+         res.error.toLowerCase().includes('expired') ||
+         res.error.toLowerCase().includes('terminated') ||
+         res.error.toLowerCase().includes('account not found') ||
+         res.error.toLowerCase().includes('invalid token') ||
+         res.error.toLowerCase().includes('authentication required'))
+      ) {
+        // Explicit 401 Unauthorized / Token Revoked from backend
         setStoredToken(null);
         set({ user: null, isAuthenticated: false, sessionToken: null });
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.removeItem(AUTH_STORAGE_KEY);
+        }
         useTournamentStore.getState().clearAllTournaments();
+      } else {
+        // Transient network delay or offline: Preserve cached session!
+        if (storedUser) {
+          set({ user: storedUser, isAuthenticated: true, sessionToken: token });
+          useTournamentStore.getState().sanitizeTournamentsForRole(storedUser.role);
+          useTournamentStore.getState().fetchTournaments().catch(() => {});
+        }
       }
     } catch {
-      setStoredToken(null);
-      set({ user: null, isAuthenticated: false, sessionToken: null });
-      useTournamentStore.getState().clearAllTournaments();
+      // Network exception (e.g. server waking up or offline): Preserve cached session!
+      if (storedUser) {
+        set({ user: storedUser, isAuthenticated: true, sessionToken: token });
+        useTournamentStore.getState().sanitizeTournamentsForRole(storedUser.role);
+        useTournamentStore.getState().fetchTournaments().catch(() => {});
+      }
     }
   },
 

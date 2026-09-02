@@ -1,10 +1,12 @@
 import React from 'react';
 import { PointXLogo } from '../ui/PointXLogo';
 import { FadeIn, SlideIn } from '../animation/RevealAnimations';
+import { useAuthStore } from '../../store/authStore';
 import {
   Zap,
   ArrowRight,
   LogIn,
+  LayoutDashboard,
   BarChart3,
   Cpu,
   Monitor
@@ -13,11 +15,14 @@ import {
 export interface HeroSectionProps {
   onNavigateLogin: () => void;
   onNavigateSignup?: () => void;
+  onNavigateDashboard?: () => void;
 }
 
 export const HeroSection: React.FC<HeroSectionProps> = ({
   onNavigateLogin,
+  onNavigateDashboard,
 }) => {
+  const { isAuthenticated, user } = useAuthStore();
   return (
     <div className="relative w-full overflow-hidden bg-[var(--bg-base)] transition-colors duration-300">
       
@@ -91,26 +96,44 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           {/* Primary Action Buttons (Matching Navbar Capsule Theme) */}
           <SlideIn direction="up" delay={0.2}>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 sm:gap-4 w-full max-w-md mx-auto mt-8">
-              {/* Enter The Arena Primary CTA */}
+              {/* Enter The Arena / Console Primary CTA */}
               <button
                 type="button"
-                onClick={onNavigateLogin}
+                onClick={isAuthenticated ? (onNavigateDashboard || onNavigateLogin) : onNavigateLogin}
                 className="relative w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2 px-7 sm:px-9 py-3.5 sm:py-4 rounded-full text-xs sm:text-sm font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-[0_8px_32px_rgba(255,208,0,0.4)] hover:shadow-[0_0_40px_rgba(255,208,0,0.65)] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer font-display uppercase tracking-wider group overflow-hidden border border-amber-300/80"
               >
                 <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none" />
-                <Zap className="h-4 w-4 fill-black text-black group-hover:rotate-12 transition-transform duration-300 shrink-0" />
-                <span>ENTER THE ARENA</span>
+                {isAuthenticated ? (
+                  <>
+                    <LayoutDashboard className="h-4 w-4 fill-black text-black group-hover:rotate-12 transition-transform duration-300 shrink-0" />
+                    <span>ENTER CONSOLE</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4 fill-black text-black group-hover:rotate-12 transition-transform duration-300 shrink-0" />
+                    <span>ENTER THE ARENA</span>
+                  </>
+                )}
                 <ArrowRight className="h-3.5 w-3.5 stroke-[2.5] text-black group-hover:translate-x-1 transition-transform duration-300 shrink-0" />
               </button>
 
-              {/* Organizer Sign In Secondary Glass Capsule CTA */}
+              {/* Organizer Sign In / User Secondary Glass Capsule CTA */}
               <button
                 type="button"
-                onClick={onNavigateLogin}
+                onClick={isAuthenticated ? (onNavigateDashboard || onNavigateLogin) : onNavigateLogin}
                 className="relative w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2 px-7 sm:px-9 py-3.5 sm:py-4 rounded-full text-xs sm:text-sm font-bold bg-black/50 hover:bg-black/70 border border-white/30 hover:border-[#ffd000]/60 text-white backdrop-blur-2xl shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer font-sans group"
               >
-                <LogIn className="h-4 w-4 text-[#ffd000] group-hover:translate-x-0.5 transition-transform duration-300 shrink-0" />
-                <span>Organizer Sign In</span>
+                {isAuthenticated ? (
+                  <>
+                    <LayoutDashboard className="h-4 w-4 text-[#ffd000] group-hover:translate-x-0.5 transition-transform duration-300 shrink-0" />
+                    <span className="truncate max-w-[140px]">{user?.email || 'Dashboard'}</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="h-4 w-4 text-[#ffd000] group-hover:translate-x-0.5 transition-transform duration-300 shrink-0" />
+                    <span>Organizer Sign In</span>
+                  </>
+                )}
               </button>
             </div>
           </SlideIn>

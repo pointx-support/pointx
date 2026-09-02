@@ -33,6 +33,11 @@ export function App() {
     if (path.startsWith('/dashboard') || path.startsWith('/tournaments')) {
       return 'command-center';
     }
+    // If user has an active stored login session, keep them in their command center workspace on refresh
+    const rawStoredUser = typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem('pointx_auth_session_v1') : null;
+    if (rawStoredUser && (path === '/' || path === '')) {
+      return 'command-center';
+    }
     if (path === '/' || path === '') {
       return 'home';
     }
@@ -125,7 +130,10 @@ export function App() {
       } else if (path.startsWith('/dashboard') || path.startsWith('/tournaments')) {
         setViewMode('command-center');
       } else if (path === '/' || path === '') {
-        setViewMode('home');
+        // If user is logged in, keep their active viewMode (command-center or workspace)
+        if (!viewMode || viewMode === 'home') {
+          setViewMode('home');
+        }
       }
     } else {
       // If unauthenticated and on /admin, show login
