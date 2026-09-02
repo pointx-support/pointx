@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "browser-testing": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+      "description": "Headless browser automation for layout verification, screenshot capture, and visual testing.",
+      "env": {}
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "description": "GitHub integration for repository management, issues, PRs, and commit history.",
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "D:\\tmp\\pointx"],
+      "description": "Direct filesystem access for project file inspections and asset analysis.",
+      "env": {}
+    },
+    "documentation-fetcher": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch"],
+      "description": "Web documentation search and API specification lookup.",
+      "env": {}
+    }
+  }
+}
