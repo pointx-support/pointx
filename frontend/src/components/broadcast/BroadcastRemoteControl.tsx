@@ -52,13 +52,55 @@ const PLACEMENT_POINTS_MAP: Record<number, number> = {
   12: 0  // #12 -> 0 PTS
 };
 
-export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = () => {
-  const { currentTournament, updateMatchResults, createMatch } = useTournamentStore();
+export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ tournamentId: propTournamentId }) => {
+  const store = useTournamentStore();
+  const { updateMatchResults, createMatch } = store;
   const { showToast } = useToast();
 
-  const [tournament, setTournament] = useState<Tournament>(currentTournament);
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const targetTournamentId = propTournamentId || urlParams?.get('tournamentId') || urlParams?.get('tournament') || store.currentTournament.id;
+
+  const resolvedInitialTournament = React.useMemo(() => {
+    if (targetTournamentId && targetTournamentId !== store.currentTournament.id) {
+      const match = store.tournaments.find((t) => t.id === targetTournamentId);
+      if (match) return match;
+    }
+    return store.currentTournament;
+  }, [targetTournamentId, store.currentTournament, store.tournaments]);
+
+  const [tournament, setTournament] = useState<Tournament>(resolvedInitialTournament);
   const [isOverlayVisible, setIsOverlayVisible] = useState<boolean>(true);
   const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
+  const [isConnected, setIsConnected] = useState<boolean>(true);
+  const [lastSyncTime, setLastSyncTime] = useState<number>(Date.now());
+
+  // Subscribe to live tournament updates from other tabs / devices
+  useEffect(() => {
+    const unsubTour = subscribeToTournamentLiveUpdates(targetTournamentId, (updated) => {
+      setTournament(updated);
+      setIsConnected(true);
+      setLastSyncTime(Date.now());
+    });
+
+    const unsubSquad = subscribeToLiveSquadUpdates(targetTournamentId, (data) => {
+      if (data.squads) {
+        setSquadStates(data.squads as any);
+      }
+      if (data.highlightedTeamId !== undefined) {
+        setHighlightedTeamId(data.highlightedTeamId);
+      }
+      if (data.isVisible !== undefined) {
+        setIsOverlayVisible(data.isVisible);
+      }
+      setIsConnected(true);
+      setLastSyncTime(Date.now());
+    });
+
+    return () => {
+      unsubTour();
+      unsubSquad();
+    };
+  }, [targetTournamentId]);
 
   // 2-Step Confirmation States for "+1 Point to All Teams"
   const [isConfirmStep1Open, setIsConfirmStep1Open] = useState<boolean>(false);
@@ -73,7 +115,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = () 
     if (typeof document !== 'undefined') {
       return document.documentElement.getAttribute('data-theme') === 'dark';
     }
-    return false;
+    return true;
   });
 
   const toggleTheme = () => {
@@ -91,13 +133,13 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = () 
     }
   };
 
-  // Elimination sequence tracking (first eliminated -> #12, second -> #11 ... last alive -> #1)
+  // Elimination sequence tracking
   const [eliminationOrder, setEliminationOrder] = useState<string[]>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         const stored =
-          window.localStorage.getItem(`pointx_elim_order_${tournament.id}`) ||
-          window.localStorage.getItem(`strikz_elim_order_${tournament.id}`);
+          window.localStorage.getItem(`pointx_elim_order_${targetTournamentId}`) ||
+          window.localStorage.getItem(`strikz_elim_order_${targetTournamentId}`);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) return parsed;
@@ -107,15 +149,13 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = () 
     return [];
   });
 
-  // 12 squad player states (persists across refreshes)
+  // 12 squad player states
   const [squadStates, setSquadStates] = useState<Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]>>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         const stored =
-          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
-          window.localStorage.getItem('pointx_squads_default') ||
-          window.localStorage.getItem(`strikz_squads_${tournament.id}`) ||
-          window.localStorage.getItem('strikz_squads_default');
+          window.localStorage.getItem(`pointx_squads_${targetTournamentId}`) ||
+          window.localStorage.getItem('pointx_squads_default');
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed?.squads) return parsed.squads;
@@ -124,7 +164,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = () 
     }
 
     const initial: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]> = {};
-    tournament.teams.slice(0, 12).forEach((t) => {
+    resolvedInitialTournament.teams.slice(0, 12).forEach((t) => {
       initial[t.id] = ['alive', 'alive', 'alive', 'alive'];
     });
     return initial;
@@ -134,10 +174,8 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = () 
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         const stored =
-          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
-          window.localStorage.getItem('pointx_squads_default') ||
-          window.localStorage.getItem(`strikz_squads_${tournament.id}`) ||
-          window.localStorage.getItem('strikz_squads_default');
+          window.localStorage.getItem(`pointx_squads_${targetTournamentId}`) ||
+          window.localStorage.getItem('pointx_squads_default');
         if (stored) {
           const parsed = JSON.parse(stored);
           return parsed?.highlightedTeamId || null;
@@ -494,24 +532,6 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = () 
     });
   };
 
-  // Subscribe to live broadcast & squad updates across devices
-  useEffect(() => {
-    const unsubSquads = subscribeToLiveSquadUpdates(tournament.id, (data) => {
-      if (data.squads) setSquadStates(data.squads);
-      if (data.highlightedTeamId !== undefined) setHighlightedTeamId(data.highlightedTeamId);
-      if (data.isVisible !== undefined) setIsOverlayVisible(data.isVisible);
-    });
-
-    const unsubTour = subscribeToTournamentLiveUpdates(tournament.id, (updatedTour) => {
-      setTournament(updatedTour);
-    });
-
-    return () => {
-      unsubSquads();
-      unsubTour();
-    };
-  }, [tournament.id]);
-
   const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
   const liveObsUrl = `${origin}/?mode=broadcast&tournamentId=${tournament.id}&layout=live-squads`;
 
@@ -546,9 +566,12 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = () 
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-[#2ea66e] animate-ping" />
+                <span className={`h-2 w-2 rounded-full ${isConnected ? 'bg-[#2ea66e] animate-ping' : 'bg-rose-500'}`} />
                 <span className="text-[11px] font-mono font-bold text-[#2ea66e] uppercase tracking-wider">
-                  LIVE FREE FIRE AUTO-SCORING DECK
+                  {isConnected ? 'OBS LIVE SYNC ACTIVE (0ms)' : 'OFFLINE'}
+                </span>
+                <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                  {new Date(lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </span>
               </div>
               <h1 className="text-lg sm:text-xl font-bold text-[var(--text-primary)] font-display">

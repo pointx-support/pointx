@@ -17,22 +17,6 @@ export interface SquadLiveStatus {
   highlighted?: boolean;
 }
 
-// Preset squad logos and seed data matching competitive Free Fire standards
-const SEED_TEAM_DATA: Record<string, { tag: string; logoUrl?: string; color?: string }> = {
-  t1: { tag: 'TG' },
-  t2: { tag: 'TE' },
-  t3: { tag: 'OG' },
-  t4: { tag: 'GODL' },
-  t5: { tag: 'BLND' },
-  t6: { tag: 'RNTX' },
-  t7: { tag: 'CTZ' },
-  t8: { tag: 'KING' },
-  t9: { tag: 'RE' },
-  t10: { tag: 'RTP' },
-  t11: { tag: 'PVS' },
-  t12: { tag: 'MVP' }
-};
-
 export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlayProps> = ({
   tournament,
   standings,
@@ -43,9 +27,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
       try {
         const stored =
           window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
-          window.localStorage.getItem('pointx_squads_default') ||
-          window.localStorage.getItem(`strikz_squads_${tournament.id}`) ||
-          window.localStorage.getItem('strikz_squads_default');
+          window.localStorage.getItem('pointx_squads_default');
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed.isVisible !== undefined) return parsed.isVisible;
@@ -55,27 +37,40 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
     return true;
   });
 
-  // Live player state simulator/manager for 12 squads
+  // Live player state initialized to real tournament squad states (all alive by default)
   const [liveSquads, setLiveSquads] = useState<Record<string, [PlayerState, PlayerState, PlayerState, PlayerState]>>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const stored =
+          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
+          window.localStorage.getItem('pointx_squads_default');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.squads) return parsed.squads;
+        }
+      } catch {}
+    }
+
     const initial: Record<string, [PlayerState, PlayerState, PlayerState, PlayerState]> = {};
-    standings.slice(0, 12).forEach((s, idx) => {
-      if (idx === 1 || idx === 4) {
-        initial[s.teamId] = ['eliminated', 'eliminated', 'eliminated', 'eliminated'];
-      } else if (idx === 2) {
-        initial[s.teamId] = ['alive', 'eliminated', 'alive', 'alive'];
-      } else if (idx === 9) {
-        initial[s.teamId] = ['eliminated', 'eliminated', 'eliminated', 'alive'];
-      } else if (idx === 11) {
-        initial[s.teamId] = ['alive', 'knock', 'alive', 'alive'];
-      } else {
-        initial[s.teamId] = ['alive', 'alive', 'alive', 'alive'];
-      }
+    standings.slice(0, 12).forEach((s) => {
+      initial[s.teamId] = ['alive', 'alive', 'alive', 'alive'];
     });
     return initial;
   });
 
   const [highlightedTeamId, setHighlightedTeamId] = useState<string | null>(() => {
-    return standings[10] ? standings[10].teamId : null;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const stored =
+          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
+          window.localStorage.getItem('pointx_squads_default');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return parsed?.highlightedTeamId || null;
+        }
+      } catch {}
+    }
+    return null;
   });
 
   React.useEffect(() => {
@@ -168,13 +163,11 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
             const isHighlighted = highlightedTeamId === teamStanding.teamId;
 
             // Pure Fire Burning Logic:
-            // 1. Alive Leader: Burning vibrant glowing fire
-            // 2. Eliminated Leader: OPAQUE FADED ASH FIRE (Solid matte desaturated burnt color, 100% NOT transparent)
             const isFireLeader = teamStanding.totalKills >= 4 && teamStanding.totalKills === maxKillsInTour && maxKillsInTour >= 4;
             const isFireHotAlive = isFireLeader && !allDead;
             const isFireHotEliminated = isFireLeader && allDead;
 
-            const tag = team?.tag || SEED_TEAM_DATA[team?.id || '']?.tag || team?.name.slice(0, 4).toUpperCase() || `T${rank}`;
+            const tag = team?.tag || (team?.name ? team.name.slice(0, 4).toUpperCase() : `T${rank}`);
 
             return (
               <div
@@ -214,7 +207,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
                 <div className="flex-1 flex items-center gap-2 pl-2 min-w-0 pr-1">
                   {/* Team Logo Icon / Avatar */}
                   <div
-                    className={`h-7 w-7 rounded shrink-0 flex items-center justify-center font-black text-[11px] shadow-sm border ${
+                    className={`h-7 w-7 rounded shrink-0 flex items-center justify-center font-black text-[11px] shadow-sm border overflow-hidden ${
                       isFireHotAlive
                         ? 'bg-[#fff4e6] border-[#ffa94d] text-[#d9480f] font-black'
                         : isFireHotEliminated
@@ -226,7 +219,11 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
                         : 'bg-[#361e56] border-[#4e2c7a] text-white'
                     }`}
                   >
-                    {tag.slice(0, 3)}
+                    {team?.logoUrl ? (
+                      <img src={team.logoUrl} alt={team.name} className="h-full w-full object-cover" />
+                    ) : (
+                      tag.slice(0, 3)
+                    )}
                   </div>
 
                   {/* Team Tag Text with Fire Effect */}
