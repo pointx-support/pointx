@@ -303,6 +303,10 @@ export function App() {
           onBackToDashboard={() => navigateTo('command-center')}
           onOpenAdminDashboard={() => navigateTo('admin-dashboard')}
           onNavigateHome={() => navigateTo('home')}
+          onSelectWorkspaceTab={(targetTab) => {
+            setActiveTab(targetTab);
+            navigateTo('workspace');
+          }}
         />
 
         {/* Main Body Container with balanced widescreen proportions */}
