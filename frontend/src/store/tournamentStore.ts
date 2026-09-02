@@ -233,28 +233,6 @@ export const DEMO_TOURNAMENTS = [DEMO_TOURNAMENT_1, DEMO_TOURNAMENT_2, DEMO_TOUR
 const STORAGE_KEY = 'pointx_tournaments_state';
 
 function loadStoredTournaments(): { tournaments: Tournament[]; activeTournamentId: string; currentTournament: Tournament } {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY) || window.localStorage.getItem('strikz_tournaments_state');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return {
-            tournaments: parsed,
-            activeTournamentId: parsed[0].id,
-            currentTournament: parsed[0]
-          };
-        } else if (Array.isArray(parsed) && parsed.length === 0) {
-          return {
-            tournaments: [],
-            activeTournamentId: '',
-            currentTournament: DEMO_TOURNAMENTS[0]
-          };
-        }
-      }
-    } catch {}
-  }
-
   // Check if admin is currently authenticated in storage
   let isAdmin = false;
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -264,6 +242,39 @@ function loadStoredTournaments(): { tournaments: Tournament[]; activeTournamentI
         const parsed = JSON.parse(rawUser);
         if (parsed?.role === 'admin' || parsed?.isOriginalAdmin) {
           isAdmin = true;
+        }
+      }
+    } catch {}
+  }
+
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          if (!isAdmin) {
+            // For non-admin organizers, guarantee zero demo tournament leakage
+            const nonDemo = parsed.filter(
+              (t) =>
+                t.id !== 'tour-ff-champ-2026' &&
+                t.id !== 'tour-ff-night-scrims' &&
+                t.id !== 'tour-ff-summer-finals' &&
+                !t.id.startsWith('tour-demo-')
+            );
+            return {
+              tournaments: nonDemo,
+              activeTournamentId: nonDemo[0]?.id || '',
+              currentTournament: nonDemo[0] || DEMO_TOURNAMENTS[0]
+            };
+          }
+          if (parsed.length > 0) {
+            return {
+              tournaments: parsed,
+              activeTournamentId: parsed[0].id,
+              currentTournament: parsed[0]
+            };
+          }
         }
       }
     } catch {}

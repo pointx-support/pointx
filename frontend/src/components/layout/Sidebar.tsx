@@ -261,7 +261,10 @@ export const Sidebar: FC<SidebarProps> = ({
               <div className="space-y-1">
                 {group.items.map((item) => {
                   const Icon = item.icon;
-                  const active = viewMode === 'workspace' && activeTab === item.id;
+                  const active =
+                    item.id === 'admin-dashboard'
+                      ? viewMode === 'admin-dashboard'
+                      : viewMode === 'workspace' && activeTab === item.id;
 
                   return (
                     <button

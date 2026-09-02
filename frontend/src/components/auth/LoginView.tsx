@@ -21,11 +21,15 @@ import './LoginView.css';
 export interface LoginViewProps {
   initialMode?: 'signin' | 'signup';
   onBackToHome?: () => void;
+  onModeChange?: (mode: 'signin' | 'signup') => void;
+  onAuthSuccess?: () => void;
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({
   initialMode = 'signin',
   onBackToHome,
+  onModeChange,
+  onAuthSuccess,
 }) => {
   const {
     theme,
@@ -41,6 +45,21 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
   // Mode toggled state: false = Sign In active, true = Sign Up active
   const [isToggled, setIsToggled] = useState(initialMode === 'signup');
+
+  useEffect(() => {
+    setIsToggled(initialMode === 'signup');
+  }, [initialMode]);
+
+  const handleToggleMode = (signUpActive: boolean) => {
+    setIsToggled(signUpActive);
+    onModeChange?.(signUpActive ? 'signup' : 'signin');
+    if (typeof window !== 'undefined') {
+      const targetPath = signUpActive ? '/signup' : '/login';
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState({}, '', targetPath);
+      }
+    }
+  };
 
   // Sign In form fields
   const [loginEmail, setLoginEmail] = useState('');
@@ -86,11 +105,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const emailToUse = loginEmail.includes('@') ? loginEmail.trim() : `${loginEmail.trim()}@pointx.gg`;
     const res = await login(emailToUse, loginPassword);
 
-    if (!res.success) {
+    if (res.success) {
+      onAuthSuccess?.();
+    } else {
       if (res.requiresVerification) {
         setPendingEmail(emailToUse);
         setIsOtpStep(true);
-        setIsToggled(true);
+        handleToggleMode(true);
         setSuccessMessage('Please verify your email with the 6-digit OTP code.');
       } else {
         setErrorMessage(res.error || 'Login failed.');
@@ -132,6 +153,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       setErrorMessage(res.error || 'OTP verification failed.');
     } else {
       setSuccessMessage('🎉 Account activated successfully! Welcome to PointX Arena.');
+      onAuthSuccess?.();
     }
   };
 
@@ -260,7 +282,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               type="button"
               className={`mobile-switch-btn ${!isToggled ? 'active' : ''}`}
               onClick={() => {
-                setIsToggled(false);
+                handleToggleMode(false);
                 setIsOtpStep(false);
                 setErrorMessage(null);
               }}
@@ -271,7 +293,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               type="button"
               className={`mobile-switch-btn ${isToggled ? 'active' : ''}`}
               onClick={() => {
-                setIsToggled(true);
+                handleToggleMode(true);
                 setErrorMessage(null);
               }}
             >
@@ -355,7 +377,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   type="button"
                   className="register-trigger"
                   onClick={() => {
-                    setIsToggled(true);
+                    handleToggleMode(true);
                     setIsOtpStep(false);
                     setErrorMessage(null);
                   }}
@@ -515,7 +537,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     type="button"
                     className="login-trigger"
                     onClick={() => {
-                      setIsToggled(false);
+                      handleToggleMode(false);
                       setIsOtpStep(false);
                       setErrorMessage(null);
                     }}

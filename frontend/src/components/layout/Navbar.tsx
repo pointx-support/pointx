@@ -98,6 +98,19 @@ export const Navbar: FC<NavbarProps> = ({
                   </div>
                 </div>
               </div>
+            ) : viewMode === 'admin-dashboard' ? (
+              /* Admin Control Center Header */
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 border-l border-[var(--border-subtle)] pl-3.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Shield className="h-4 w-4 text-[var(--accent-primary)] shrink-0" />
+                  <h1 className="text-sm sm:text-base font-bold text-[var(--text-primary)] truncate font-display">
+                    Admin Control Center
+                  </h1>
+                  <Badge variant="live" size="sm">
+                    GOVERNANCE
+                  </Badge>
+                </div>
+              </div>
             ) : (
               /* Command Center Subtitle */
               <div className="flex flex-col border-l border-[var(--border-subtle)] pl-3.5 hidden sm:flex">

@@ -44,11 +44,13 @@ import { cn } from '../../lib/utils';
 export interface SuperAdminDashboardProps {
   onExitAdmin?: () => void;
   onOpenTemplateStudio?: () => void;
+  isEmbedded?: boolean;
 }
 
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   onExitAdmin,
   onOpenTemplateStudio,
+  isEmbedded = false,
 }) => {
   const { user, theme, toggleTheme, logout } = useAuthStore();
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -275,7 +277,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const restrictedPct = totalOrgs > 0 ? Math.max(5, 100 - approvedPct - pendingPct) : 10;
 
   return (
-    <div className="min-h-screen bg-[#F6F5F0] dark:bg-[#080A10] text-neutral-900 dark:text-neutral-100 p-3 sm:p-6 lg:p-8 font-sans selection:bg-[var(--accent-primary)]/30 selection:text-[var(--text-primary)] transition-colors duration-300">
+    <div className={cn(
+      isEmbedded
+        ? 'w-full space-y-6 font-sans selection:bg-[var(--accent-primary)]/30 selection:text-[var(--text-primary)] transition-colors duration-300'
+        : 'min-h-screen bg-[#F6F5F0] dark:bg-[#080A10] text-neutral-900 dark:text-neutral-100 p-3 sm:p-6 lg:p-8 font-sans selection:bg-[var(--accent-primary)]/30 selection:text-[var(--text-primary)] transition-colors duration-300'
+    )}>
       
       {/* Toast Notification Banner */}
       {toast && (
@@ -297,41 +303,53 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       )}
 
       {/* Main Dashboard Canvas Frame (Large Rounded Shell Inspired by Reference) */}
-      <div className="max-w-[1440px] mx-auto rounded-[2rem] sm:rounded-[2.75rem] bg-[#FFFFFF] dark:bg-[#10131B] border border-black/[0.06] dark:border-white/[0.08] shadow-2xl shadow-black/5 p-5 sm:p-8 lg:p-10 space-y-8 transition-colors duration-300">
+      <div className={cn(
+        'max-w-[1440px] mx-auto rounded-[2rem] sm:rounded-[2.75rem] bg-[#FFFFFF] dark:bg-[#10131B] border border-black/[0.06] dark:border-white/[0.08] shadow-2xl shadow-black/5 p-5 sm:p-8 lg:p-10 space-y-8 transition-colors duration-300',
+        isEmbedded ? 'border-none shadow-none p-0 sm:p-2 lg:p-4 bg-transparent dark:bg-transparent' : ''
+      )}>
         
         {/* 1. Top Navigation Bar (Reference-Inspired Pill Design) */}
         <header className="flex flex-col lg:flex-row items-center justify-between gap-4 pb-2">
           
-          {/* Left Brand Container */}
-          <div className="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-start">
-            <div className="flex items-center gap-3 px-5 py-2.5 rounded-full border border-black/[0.08] dark:border-white/[0.1] bg-neutral-50/90 dark:bg-neutral-900/90 shadow-xs">
-              <PointXLogo className="h-6 w-auto max-w-[95px] object-contain select-none" />
-              <div className="flex items-center gap-1.5 border-l border-black/10 dark:border-white/10 pl-2.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-primary)] animate-pulse" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--accent-primary)]">
-                  Super Admin
-                </span>
+          {/* Left Brand Container (Shown when standalone or provides title in embedded) */}
+          {!isEmbedded ? (
+            <div className="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-start">
+              <div className="flex items-center gap-3 px-5 py-2.5 rounded-full border border-black/[0.08] dark:border-white/[0.1] bg-neutral-50/90 dark:bg-neutral-900/90 shadow-xs">
+                <PointXLogo className="h-6 w-auto max-w-[95px] object-contain select-none" />
+                <div className="flex items-center gap-1.5 border-l border-black/10 dark:border-white/10 pl-2.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-primary)] animate-pulse" />
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--accent-primary)]">
+                    Super Admin
+                  </span>
+                </div>
+              </div>
+
+              {/* Mobile Actions */}
+              <div className="flex lg:hidden items-center gap-2">
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  className="p-2.5 rounded-full border border-black/[0.08] dark:border-white/[0.1] bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
+                >
+                  {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="p-2.5 rounded-full border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
               </div>
             </div>
-
-            {/* Mobile Actions */}
-            <div className="flex lg:hidden items-center gap-2">
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className="p-2.5 rounded-full border border-black/[0.08] dark:border-white/[0.1] bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
-              >
-                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="p-2.5 rounded-full border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
+          ) : (
+            <div className="hidden lg:flex items-center gap-2.5">
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20 text-[var(--accent-primary)] text-xs font-mono font-bold uppercase tracking-wider">
+                <ShieldCheck className="h-4 w-4" />
+                <span>Governance Control Room</span>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Center Navigation Tabs Strip (Pill Segmented Menu) */}
           <nav className="flex items-center gap-1 p-1.5 rounded-full bg-neutral-100/90 dark:bg-neutral-900/90 border border-black/[0.05] dark:border-white/[0.07] overflow-x-auto no-scrollbar max-w-full shadow-inner">

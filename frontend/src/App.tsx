@@ -13,80 +13,29 @@ import { ToastProvider } from './components/ui/Toast';
 import { useTournamentStore } from './store/tournamentStore';
 import { useAuthStore } from './store/authStore';
 import { preloadAndCacheFonts } from './engine/fontEmbedder';
-import { SuperAdminLogin } from './components/admin/SuperAdminLogin';
 import { SuperAdminDashboard } from './components/admin/SuperAdminDashboard';
 import type { Tournament } from './types/tournament';
 
 export function App() {
   const { currentTournament, setTournament, setActiveTab } = useTournamentStore();
   const { user, isAuthenticated, theme } = useAuthStore();
-  const [viewMode, setViewMode] = useState<'home' | 'command-center' | 'workspace' | 'admin-dashboard'>('command-center');
   
-  // Dynamic Location Path State
-  const [currentPath, setCurrentPath] = useState(() =>
-    typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : '/'
-  );
-
-  useEffect(() => {
-    const handleLocationChange = () => {
-      if (typeof window !== 'undefined') {
-        setCurrentPath(window.location.pathname.toLowerCase());
-      }
-    };
-    window.addEventListener('popstate', handleLocationChange);
-    return () => window.removeEventListener('popstate', handleLocationChange);
-  }, []);
-
-  // Super Admin Path Checks
-  const isSuperAdminLoginRoute = currentPath.startsWith('/super-admin/login') || currentPath.startsWith('/admin/login');
-  const isSuperAdminDashboardRoute =
-    currentPath === '/super-admin' ||
-    currentPath === '/super-admin/' ||
-    currentPath === '/admin' ||
-    currentPath === '/admin/';
-
-  // Dedicated Super Admin Login Route
-  if (isSuperAdminLoginRoute) {
-    return (
-      <ToastProvider>
-        <SuperAdminLogin />
-      </ToastProvider>
-    );
-  }
-
-  // Dedicated Super Admin Dashboard Route
-  if (isSuperAdminDashboardRoute) {
-    if (isAuthenticated && user?.role === 'admin') {
-      return (
-        <ToastProvider>
-          <SuperAdminDashboard
-            onExitAdmin={() => {
-              if (typeof window !== 'undefined') {
-                window.history.pushState({}, '', '/');
-              }
-              setCurrentPath('/');
-              setViewMode('command-center');
-            }}
-            onOpenTemplateStudio={() => {
-              if (typeof window !== 'undefined') {
-                window.history.pushState({}, '', '/');
-              }
-              setCurrentPath('/');
-              setViewMode('workspace');
-              setActiveTab('template-studio');
-            }}
-          />
-        </ToastProvider>
-      );
+  // Dynamic Route & View Mode Resolution
+  const [viewMode, setViewMode] = useState<'home' | 'command-center' | 'workspace' | 'admin-dashboard'>(() => {
+    if (typeof window === 'undefined') return 'command-center';
+    const path = window.location.pathname.toLowerCase();
+    if (path.startsWith('/admin') || path.startsWith('/super-admin')) {
+      return 'admin-dashboard';
     }
-    return (
-      <ToastProvider>
-        <SuperAdminLogin />
-      </ToastProvider>
-    );
-  }
-  
-  // Public sub-route for visitors when not authenticated ('home' | 'login' | 'signup')
+    if (path.startsWith('/workspace')) {
+      return 'workspace';
+    }
+    if (path.startsWith('/dashboard') || path.startsWith('/tournaments')) {
+      return 'command-center';
+    }
+    return 'command-center';
+  });
+
   const [publicRoute, setPublicRoute] = useState<'home' | 'login' | 'signup'>(() => {
     if (typeof window === 'undefined') return 'home';
     const path = window.location.pathname.toLowerCase();
@@ -102,14 +51,84 @@ export function App() {
     return 'home';
   });
 
+  // Centralized Navigation Helper with History Synchronization
+  const navigateTo = useCallback((
+    target: 'home' | 'command-center' | 'workspace' | 'admin-dashboard' | 'login' | 'signup',
+    customUrl?: string
+  ) => {
+    let targetUrl = customUrl;
+    if (!targetUrl) {
+      switch (target) {
+        case 'home':
+          targetUrl = '/';
+          break;
+        case 'login':
+          targetUrl = '/login';
+          break;
+        case 'signup':
+          targetUrl = '/signup';
+          break;
+        case 'command-center':
+          targetUrl = '/dashboard';
+          break;
+        case 'workspace':
+          targetUrl = '/workspace';
+          break;
+        case 'admin-dashboard':
+          targetUrl = '/admin';
+          break;
+      }
+    }
+
+    if (typeof window !== 'undefined' && window.location.pathname !== targetUrl) {
+      window.history.pushState({}, '', targetUrl);
+    }
+
+    if (target === 'login' || target === 'signup' || target === 'home') {
+      setPublicRoute(target);
+    }
+    if (target === 'command-center' || target === 'workspace' || target === 'admin-dashboard' || target === 'home') {
+      setViewMode(target);
+    }
+  }, []);
+
   // Preload and cache all font binary Base64 streams in the background
   useEffect(() => {
     preloadAndCacheFonts();
   }, []);
 
+  // Synchronize authenticated state with URL location
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const path = window.location.pathname.toLowerCase();
+
+    if (isAuthenticated) {
+      // If user is authenticated and currently sitting on /login or /signup, redirect immediately to /dashboard
+      if (path === '/login' || path === '/signup' || path === '/signin' || path === '/register') {
+        navigateTo('command-center', '/dashboard');
+      } else if (path.startsWith('/admin') || path.startsWith('/super-admin')) {
+        if (user?.role === 'admin') {
+          setViewMode('admin-dashboard');
+        } else {
+          navigateTo('command-center', '/dashboard');
+        }
+      } else if (path.startsWith('/workspace')) {
+        setViewMode('workspace');
+      } else if (path.startsWith('/dashboard') || path.startsWith('/tournaments')) {
+        setViewMode('command-center');
+      }
+    } else {
+      // If unauthenticated and on /admin, show login
+      if (path.startsWith('/admin') || path.startsWith('/super-admin')) {
+        setPublicRoute('login');
+      }
+    }
+  }, [isAuthenticated, user?.role, navigateTo]);
+
   // Listen to browser navigation popstate (Back/Forward buttons)
   useEffect(() => {
     const handlePopState = () => {
+      if (typeof window === 'undefined') return;
       const path = window.location.pathname.toLowerCase();
       const search = new URLSearchParams(window.location.search);
       const authParam = search.get('auth') || search.get('view');
@@ -118,22 +137,39 @@ export function App() {
         setPublicRoute('login');
       } else if (path.startsWith('/signup') || path.startsWith('/register') || authParam === 'signup' || authParam === 'register') {
         setPublicRoute('signup');
+      } else if (path.startsWith('/admin') || path.startsWith('/super-admin')) {
+        if (isAuthenticated && user?.role === 'admin') {
+          setViewMode('admin-dashboard');
+        } else {
+          setPublicRoute('login');
+        }
+      } else if (path.startsWith('/workspace')) {
+        setViewMode('workspace');
+      } else if (path.startsWith('/dashboard') || path.startsWith('/tournaments')) {
+        setViewMode('command-center');
       } else if (path === '/' || path === '') {
-        setPublicRoute('home');
+        if (isAuthenticated) {
+          setViewMode('command-center');
+        } else {
+          setPublicRoute('home');
+        }
       }
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [isAuthenticated, user?.role]);
 
-  // Direct URL Navigation Handler (e.g. ?tab=organization or ?tab=organizer)
+  // Direct URL Tab Navigation Handler (e.g. ?tab=organization or ?tab=template-studio)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const searchParams = new URLSearchParams(window.location.search);
       const tab = searchParams.get('tab') || searchParams.get('view');
       if (tab === 'organization' || tab === 'organizer') {
         setActiveTab('organization');
+        setViewMode('workspace');
+      } else if (tab === 'template-studio' || tab === 'templates') {
+        setActiveTab('template-studio');
         setViewMode('workspace');
       }
     }
@@ -174,35 +210,6 @@ export function App() {
     );
   }, []);
 
-  // Navigation handlers connecting Home page to existing authentication & dashboard
-  const handleNavigateLogin = useCallback(() => {
-    setPublicRoute('login');
-    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-      window.history.pushState({}, '', '/login');
-    }
-  }, []);
-
-  const handleNavigateSignup = useCallback(() => {
-    setPublicRoute('signup');
-    if (typeof window !== 'undefined' && window.location.pathname !== '/signup') {
-      window.history.pushState({}, '', '/signup');
-    }
-  }, []);
-
-  const handleBackToHome = useCallback(() => {
-    setPublicRoute('home');
-    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-      window.history.pushState({}, '', '/');
-    }
-  }, []);
-
-  const handleNavigateDashboard = useCallback(() => {
-    setViewMode('command-center');
-    if (typeof window !== 'undefined' && window.location.pathname !== '/dashboard') {
-      window.history.pushState({}, '', '/dashboard');
-    }
-  }, []);
-
   // 1. Dedicated OBS Browser Source: Zero Admin Chrome Transparent Overlay
   if (isBroadcastMode) {
     return <BroadcastContainer />;
@@ -222,7 +229,12 @@ export function App() {
     if (publicRoute === 'login') {
       return (
         <ToastProvider>
-          <LoginView initialMode="signin" onBackToHome={handleBackToHome} />
+          <LoginView
+            initialMode="signin"
+            onBackToHome={() => navigateTo('home')}
+            onModeChange={(mode) => navigateTo(mode === 'signup' ? 'signup' : 'login')}
+            onAuthSuccess={() => navigateTo('command-center', '/dashboard')}
+          />
         </ToastProvider>
       );
     }
@@ -230,7 +242,12 @@ export function App() {
     if (publicRoute === 'signup') {
       return (
         <ToastProvider>
-          <LoginView initialMode="signup" onBackToHome={handleBackToHome} />
+          <LoginView
+            initialMode="signup"
+            onBackToHome={() => navigateTo('home')}
+            onModeChange={(mode) => navigateTo(mode === 'signup' ? 'signup' : 'login')}
+            onAuthSuccess={() => navigateTo('command-center', '/dashboard')}
+          />
         </ToastProvider>
       );
     }
@@ -239,9 +256,9 @@ export function App() {
     return (
       <ToastProvider>
         <HomePage
-          onNavigateLogin={handleNavigateLogin}
-          onNavigateSignup={handleNavigateSignup}
-          onNavigateDashboard={handleNavigateDashboard}
+          onNavigateLogin={() => navigateTo('login')}
+          onNavigateSignup={() => navigateTo('signup')}
+          onNavigateDashboard={() => navigateTo('command-center', '/dashboard')}
         />
       </ToastProvider>
     );
@@ -261,26 +278,10 @@ export function App() {
     return (
       <ToastProvider>
         <HomePage
-          onNavigateLogin={handleNavigateLogin}
-          onNavigateSignup={handleNavigateSignup}
-          onNavigateDashboard={handleNavigateDashboard}
+          onNavigateLogin={() => navigateTo('login')}
+          onNavigateSignup={() => navigateTo('signup')}
+          onNavigateDashboard={() => navigateTo('command-center', '/dashboard')}
         />
-      </ToastProvider>
-    );
-  }
-
-  // 5. Dedicated SaaS Platform Admin Dashboard (Strictly Role Gated to Admins)
-  if (viewMode === 'admin-dashboard' && user?.role === 'admin') {
-    return (
-      <ToastProvider>
-        <SuperAdminDashboard
-          onExitAdmin={() => setViewMode('command-center')}
-          onOpenTemplateStudio={() => {
-            setViewMode('workspace');
-            setActiveTab('template-studio');
-          }}
-        />
-        {isAuthenticated && user && !user.isOnboarded && <OnboardingModal />}
       </ToastProvider>
     );
   }
@@ -288,7 +289,7 @@ export function App() {
   const handleSelectTournament = (tour: Tournament, targetTab: any = 'overview') => {
     setTournament(tour);
     setActiveTab(targetTab);
-    setViewMode('workspace');
+    navigateTo('workspace');
   };
 
   return (
@@ -297,21 +298,21 @@ export function App() {
         {/* Top Bar */}
         <Navbar
           viewMode={viewMode}
-          onBackToDashboard={() => setViewMode('command-center')}
-          onOpenAdminDashboard={() => setViewMode('admin-dashboard')}
+          onBackToDashboard={() => navigateTo('command-center')}
+          onOpenAdminDashboard={() => navigateTo('admin-dashboard')}
         />
 
         {/* Main Body Container with balanced widescreen proportions */}
         <div className="flex-1 flex w-full">
-          {/* Desktop Sidebar (Rendered on Dashboard and Workspace) */}
+          {/* Desktop Sidebar (Rendered on Dashboard, Workspace, and Admin Control Center) */}
           <Sidebar
             viewMode={viewMode}
-            onSelectDashboard={() => setViewMode('command-center')}
+            onSelectDashboard={() => navigateTo('command-center')}
             onSelectWorkspaceTab={(targetTab) => {
               setActiveTab(targetTab);
-              setViewMode('workspace');
+              navigateTo('workspace');
             }}
-            onSelectAdminDashboard={() => setViewMode('admin-dashboard')}
+            onSelectAdminDashboard={() => navigateTo('admin-dashboard')}
           />
 
           {/* Dynamic View Area: 100% Full-width responsive workspace */}
@@ -319,10 +320,19 @@ export function App() {
             <div className="w-full">
               {viewMode === 'command-center' ? (
                 <CommandCenter onSelectTournament={handleSelectTournament} />
+              ) : viewMode === 'admin-dashboard' && user?.role === 'admin' ? (
+                <SuperAdminDashboard
+                  isEmbedded={true}
+                  onExitAdmin={() => navigateTo('command-center')}
+                  onOpenTemplateStudio={() => {
+                    setActiveTab('template-studio');
+                    navigateTo('workspace');
+                  }}
+                />
               ) : (
                 <TournamentWorkspace
                   tournament={currentTournament}
-                  onBackToDashboard={() => setViewMode('command-center')}
+                  onBackToDashboard={() => navigateTo('command-center')}
                 />
               )}
             </div>
