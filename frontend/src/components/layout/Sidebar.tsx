@@ -18,13 +18,15 @@ import {
   ChevronDown,
   Search,
   Shield,
-  Palette
+  Palette,
+  Edit3
 } from 'lucide-react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useAuthStore } from '../../store/authStore';
 import { useToast } from '../ui/Toast';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { EditTournamentModal } from '../tournaments/EditTournamentModal';
 import { cn } from '../../lib/utils';
 import type { AppState } from '../../store/tournamentStore';
 
@@ -48,6 +50,7 @@ export const Sidebar: FC<SidebarProps> = ({
     isSidebarCollapsed,
     toggleSidebar,
     currentTournament,
+    updateTournament,
     triggerDashboardHighlight,
     activeGraphicsCategory,
     setActiveGraphicsCategory
@@ -59,6 +62,7 @@ export const Sidebar: FC<SidebarProps> = ({
   const [isGraphicsTreeOpen, setIsGraphicsTreeOpen] = useState(true);
   const [hoveredFlyout, setHoveredFlyout] = useState<string | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const isDark = theme === 'dark';
   const isCommandCenter = viewMode === 'command-center';
@@ -71,7 +75,8 @@ export const Sidebar: FC<SidebarProps> = ({
     { id: 'teams', label: 'Teams & Slots', icon: Users2 },
     { id: 'players', label: 'Players Roster', icon: UserCheck },
     { id: 'global-teams', label: 'Squads DB', icon: Database },
-    { id: 'statistics', label: 'Statistics & MVPs', icon: BarChart3 }
+    { id: 'statistics', label: 'Statistics & MVPs', icon: BarChart3 },
+    { id: 'edit-tournament', label: 'Edit Tournament Info', icon: Edit3, isAction: true }
   ];
 
   // Sub-items inside Graphics Studio (Strictly 1-at-a-time active selection)
@@ -93,6 +98,20 @@ export const Sidebar: FC<SidebarProps> = ({
 
   const handleNavClick = (tabId: string) => {
     setHoveredFlyout(null);
+
+    if (tabId === 'edit-tournament') {
+      if (isCommandCenter) {
+        triggerDashboardHighlight();
+        showToast({
+          type: 'info',
+          title: 'Tournament Required',
+          message: 'Select or open a tournament to edit its information.'
+        });
+        return;
+      }
+      setShowEditModal(true);
+      return;
+    }
 
     if (tabId === 'admin-dashboard') {
       if (onSelectAdminDashboard) onSelectAdminDashboard();
@@ -204,9 +223,21 @@ export const Sidebar: FC<SidebarProps> = ({
 
             {isExpanded && (
               <div className="min-w-0 flex-1 flex flex-col justify-center leading-tight">
-                <span className="font-display font-black text-sm tracking-wider uppercase truncate">
-                  Point<span className="text-[var(--accent-primary)]">X</span> Arena
-                </span>
+                <div className="flex items-center justify-between gap-1">
+                  <span className="font-display font-black text-sm tracking-wider uppercase truncate">
+                    Point<span className="text-[var(--accent-primary)]">X</span> Arena
+                  </span>
+                  {currentTournament && !isCommandCenter && (
+                    <button
+                      type="button"
+                      onClick={() => setShowEditModal(true)}
+                      className="p-1 rounded-lg hover:bg-white/10 text-[var(--text-muted)] hover:text-[var(--accent-primary)] transition-colors cursor-pointer shrink-0"
+                      title="Edit Tournament Information"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
                 <span className="text-[10px] font-mono text-[var(--text-muted)] truncate">
                   {currentTournament ? currentTournament.title : 'Esports Engine'}
                 </span>
@@ -734,6 +765,22 @@ export const Sidebar: FC<SidebarProps> = ({
           </div>
         </div>
       </Modal>
+      {/* Edit Tournament Modal */}
+      {currentTournament && (
+        <EditTournamentModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          tournament={currentTournament}
+          onSave={(tournamentId, updatedFields) => {
+            updateTournament(tournamentId, updatedFields);
+            showToast({
+              type: 'success',
+              title: 'Tournament Updated',
+              message: 'Tournament details and branding have been saved.'
+            });
+          }}
+        />
+      )}
     </>
   );
 };
