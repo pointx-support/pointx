@@ -13,7 +13,8 @@ dist
 dist-ssr
 frontend/dist
 backend/dist
-*.mp4
+bgvideo1.mp4
+!frontend/public/bgvideo.mp4
 *.local
 
 # Environment & Secret files
