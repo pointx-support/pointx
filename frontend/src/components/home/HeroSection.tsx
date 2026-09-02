@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PointXLogo } from '../ui/PointXLogo';
 import { FadeIn, SlideIn } from '../animation/RevealAnimations';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Trophy,
   Zap,
@@ -8,11 +9,11 @@ import {
   Sparkles,
   ShieldCheck,
   ArrowRight,
-  Flame,
   LogIn,
   BarChart3,
   Cpu,
-  Monitor
+  Monitor,
+  ChevronRight
 } from 'lucide-react';
 
 export interface HeroSectionProps {
@@ -37,7 +38,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   useEffect(() => {
     const timer = setInterval(() => {
       setActiveChipIndex((prev) => (prev + 1) % CAPABILITY_CHIPS.length);
-    }, 2800);
+    }, 3200);
     return () => clearInterval(timer);
   }, []);
 
@@ -75,13 +76,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         
         {/* Top Status Capsule Badge */}
         <FadeIn delay={0.05}>
-          <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-[var(--bg-surface-raised)]/90 border border-white/[0.08] dark:border-white/[0.1] backdrop-blur-2xl text-[var(--text-secondary)] shadow-lg hover:border-[var(--accent-primary)]/40 transition-all cursor-default group mb-4">
-            <Flame className="h-3.5 w-3.5 text-amber-500 animate-pulse shrink-0" />
-            <span className="text-[11px] font-mono font-bold tracking-[0.18em] uppercase text-[var(--text-primary)]">
-              PointX 2.5 • Next-Gen Esports Operating System
-            </span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] font-bold">
-              LIVE ARENA
+          <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-[var(--bg-surface-raised)] border border-[var(--border-subtle)] backdrop-blur-2xl text-[var(--text-secondary)] shadow-sm hover:border-[var(--accent-primary)]/40 transition-all cursor-default group mb-4">
+            <span className="flex h-2 w-2 rounded-full bg-[var(--accent-primary)] shadow-[0_0_8px_rgba(255,208,0,0.8)] animate-pulse shrink-0" />
+            <span className="text-[10px] sm:text-[11px] font-mono font-bold tracking-[0.16em] uppercase text-[var(--text-primary)]">
+              OFFICIAL FREE FIRE ESPORTS AUTOMATION ENGINE
             </span>
           </div>
         </FadeIn>
@@ -110,46 +108,76 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           </div>
         </SlideIn>
 
-        {/* One-by-One Cycling Capability Pill */}
+        {/* Sleek High-Tech Telemetry Capability HUD Strip */}
         <SlideIn direction="up" delay={0.2}>
-          <div className="mt-6 mb-8 flex flex-col items-center gap-2.5">
-            <button
-              type="button"
+          <div className="mt-6 mb-8 w-full max-w-xl mx-auto px-4">
+            <div
               onClick={() => setActiveChipIndex((prev) => (prev + 1) % CAPABILITY_CHIPS.length)}
-              className="group relative flex items-center gap-3 px-5 py-2.5 rounded-full bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-[var(--accent-primary)]/40 hover:border-[var(--accent-primary)] text-left shadow-[0_4px_24px_rgba(0,0,0,0.4)] backdrop-blur-xl transition-all duration-300 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-              title="Click to switch capability"
+              className="relative overflow-hidden rounded-2xl bg-[var(--bg-surface-raised)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/50 p-4 sm:p-5 shadow-lg backdrop-blur-2xl transition-all duration-300 cursor-pointer group"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30 group-hover:scale-110 group-hover:bg-[var(--accent-primary)] group-hover:text-black transition-all">
-                <CurrentIcon className="h-4 w-4" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xs sm:text-sm font-black text-[var(--text-primary)] font-display uppercase tracking-wide flex items-center gap-1.5">
-                  <span>{currentChip.text}</span>
-                  <span className="text-[9px] font-mono text-[var(--accent-primary)] font-bold px-1.5 py-0.2 rounded bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20">
-                    {activeChipIndex + 1}/{CAPABILITY_CHIPS.length}
-                  </span>
-                </span>
-                <span className="text-[10px] sm:text-xs text-[var(--text-secondary)] font-mono">
-                  {currentChip.desc}
-                </span>
-              </div>
-            </button>
+              {/* Subtle Ambient Hover Glow */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--accent-primary)]/5 rounded-full blur-2xl group-hover:bg-[var(--accent-primary)]/15 transition-all" />
 
-            {/* Micro Navigation Dots */}
-            <div className="flex items-center gap-1.5">
-              {CAPABILITY_CHIPS.map((_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setActiveChipIndex(i)}
-                  className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
-                    i === activeChipIndex
-                      ? 'w-6 bg-[var(--accent-primary)] shadow-[0_0_8px_rgba(255,208,0,0.8)]'
-                      : 'w-1.5 bg-[var(--border-strong)] hover:bg-[var(--text-muted)]'
-                  }`}
-                  aria-label={`View capability ${i + 1}`}
-                />
-              ))}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30 group-hover:scale-105 group-hover:bg-[var(--accent-primary)] group-hover:text-black transition-all duration-300 shadow-sm">
+                    <CurrentIcon className="h-5 w-5" />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={activeChipIndex}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.25 }}
+                        className="space-y-0.5"
+                      >
+                        <div className="text-xs sm:text-sm font-black text-[var(--text-primary)] font-display uppercase tracking-wider truncate">
+                          {currentChip.text}
+                        </div>
+                        <div className="text-[11px] sm:text-xs text-[var(--text-secondary)] font-mono truncate">
+                          {currentChip.desc}
+                        </div>
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[11px] font-mono font-bold text-[var(--accent-primary)] px-2 py-1 rounded-lg bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20 font-numbers">
+                    0{activeChipIndex + 1} // 0{CAPABILITY_CHIPS.length}
+                  </span>
+                  <div className="p-1.5 rounded-lg bg-[var(--bg-surface-inset)] text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors">
+                    <ChevronRight className="h-4 w-4" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Segmented Linear Progress Bars */}
+              <div className="grid grid-cols-5 gap-1.5 mt-3.5 pt-3 border-t border-[var(--border-subtle)]">
+                {CAPABILITY_CHIPS.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveChipIndex(i);
+                    }}
+                    className="h-1 rounded-full overflow-hidden bg-[var(--border-subtle)] transition-all cursor-pointer relative"
+                    aria-label={`Switch to capability ${i + 1}`}
+                  >
+                    {i === activeChipIndex && (
+                      <motion.div
+                        layoutId="active-chip-bar"
+                        className="h-full w-full bg-[var(--accent-primary)] shadow-[0_0_8px_rgba(255,208,0,0.8)]"
+                        transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </SlideIn>
