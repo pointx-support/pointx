@@ -66,12 +66,12 @@ export function calculateTournamentStandings(
   }
 ): CalculatedStanding[] {
   const { teams, matches, scoringPreset } = tournament;
-  const includeDrafts = options?.includeDrafts ?? false;
+  const includeDrafts = options?.includeDrafts ?? true;
 
   // Filter eligible matches
   const eligibleMatches = matches
     .filter((m) => {
-      if (!includeDrafts && m.status === 'Draft') return false;
+      if (!includeDrafts && m.status === 'Draft' && (!m.results || m.results.length === 0)) return false;
       if (options?.matchRange?.start && m.matchNumber < options.matchRange.start) return false;
       if (options?.matchRange?.end && m.matchNumber > options.matchRange.end) return false;
       return true;
@@ -109,6 +109,8 @@ export function calculateTournamentStandings(
 
   // Process all eligible matches
   eligibleMatches.forEach((match) => {
+    if (!match.results || !Array.isArray(match.results)) return;
+
     match.results.forEach((res) => {
       const entry = currentAccumulators.get(res.teamId);
       if (!entry) return;
@@ -150,6 +152,42 @@ export function calculateTournamentStandings(
           killPoints: d.killPoints,
           totalPoints: d.totalPoints,
           isBooyah: d.booyah
+        });
+      } else {
+        // Fallback directly to match result values if scoring preset formula was missing or incomplete
+        const kills = Math.max(0, Math.floor(Number(res.kills) || 0));
+        const placement = Math.max(1, Math.floor(Number(res.placement) || 12));
+        const isBooyah = Boolean(res.isBooyah || placement === 1);
+        const placePts = res.placementPoints !== undefined
+          ? Number(res.placementPoints)
+          : (placement === 1 ? 12 : placement === 2 ? 9 : placement === 3 ? 8 : placement === 4 ? 7 : placement === 5 ? 6 : placement === 6 ? 5 : placement === 7 ? 4 : placement === 8 ? 3 : placement === 9 ? 2 : placement === 10 ? 1 : 0);
+        const killMultiplier = Number(scoringPreset?.killPoints) || 1;
+        const killPts = res.killPoints !== undefined ? Number(res.killPoints) : (kills * killMultiplier);
+        const bonus = Number(res.bonusPoints) || 0;
+        const penalty = Number(res.penaltyPoints) || 0;
+        const total = res.totalPoints !== undefined ? Number(res.totalPoints) : Math.max(0, placePts + killPts + bonus - penalty);
+
+        entry.matchesPlayed += 1;
+        if (isBooyah) entry.booyahs += 1;
+        entry.totalKills += kills;
+        entry.placementPoints += placePts;
+        entry.killPoints += killPts;
+        entry.bonusPoints += bonus;
+        entry.penaltyPoints += penalty;
+        entry.totalPoints += total;
+        entry.bestPlacement = Math.min(entry.bestPlacement, placement);
+        entry.bestMatchPoints = Math.max(entry.bestMatchPoints, total);
+        entry.latestMatchPoints = total;
+
+        entry.matchHistory.push({
+          matchNumber: match.matchNumber,
+          mapName: match.mapName,
+          placement,
+          kills,
+          placementPoints: placePts,
+          killPoints: killPts,
+          totalPoints: total,
+          isBooyah
         });
       }
     });

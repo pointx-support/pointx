@@ -3,8 +3,7 @@ import type { Tournament, TeamMatchResult, Match } from '../../types/tournament'
 import { useTournamentStore } from '../../store/tournamentStore';
 import { calculateTournamentStandings } from '../../engine/standingsEngine';
 import {
-  broadcastLiveSquadUpdate,
-  broadcastTournamentUpdate,
+  broadcastFullSync,
   subscribeToLiveSquadUpdates,
   subscribeToTournamentLiveUpdates,
   type LivePlayerState
@@ -381,14 +380,17 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
     setIsReportModalOpen(true);
   };
 
-  // Sync to OBS whenever squad states, highlighted team, or visibility changes
+  // Sync to OBS whenever squad states, highlighted team, visibility, or scores change
   const syncToBroadcast = (
     newSquads: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]>,
     newHighlighted: string | null = highlightedTeamId,
-    visible: boolean = isOverlayVisible
+    visible: boolean = isOverlayVisible,
+    updatedTour?: Tournament
   ) => {
-    broadcastLiveSquadUpdate({
-      tournamentId: tournament.id,
+    const tourToSync = updatedTour || tournament;
+    broadcastFullSync({
+      tournamentId: tourToSync.id,
+      tournament: tourToSync,
       squads: newSquads,
       highlightedTeamId: newHighlighted,
       isVisible: visible,
@@ -461,7 +463,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       matches: matchesList
     };
     setTournament(updatedTour);
-    broadcastTournamentUpdate(updatedTour);
+    syncToBroadcast(currentSquads, highlightedTeamId, isOverlayVisible, updatedTour);
 
     // Save elim order locally
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -602,7 +604,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       matches: matchesList
     };
     setTournament(updatedTour);
-    broadcastTournamentUpdate(updatedTour);
+    syncToBroadcast(squadStates, highlightedTeamId, isOverlayVisible, updatedTour);
   };
 
   // 2-Step Confirmation Point Boost Action
@@ -633,7 +635,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       matches: matchesList
     };
     setTournament(updatedTour);
-    broadcastTournamentUpdate(updatedTour);
+    syncToBroadcast(squadStates, highlightedTeamId, isOverlayVisible, updatedTour);
 
     setIsConfirmStep2Open(false);
 

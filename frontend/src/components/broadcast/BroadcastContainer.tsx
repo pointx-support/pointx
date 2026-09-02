@@ -2,7 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import type { FC } from 'react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { calculateTournamentStandings } from '../../engine/standingsEngine';
-import { subscribeToTournamentLiveUpdates } from '../../services/broadcastSync';
+import {
+  subscribeToTournamentLiveUpdates,
+  subscribeToLiveSquadUpdates
+} from '../../services/broadcastSync';
 import { BroadcastStandings } from './BroadcastStandings';
 import { BroadcastMatchResult } from './BroadcastMatchResult';
 import { BroadcastTopFraggers } from './BroadcastTopFraggers';
@@ -41,8 +44,10 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
   const [tournament, setTournament] = useState(initialTournament);
   const [lastSyncTime, setLastSyncTime] = useState<number>(() => Date.now());
   const [isConnected, setIsConnected] = useState<boolean>(true);
+  const [isOverlayVisible, setIsOverlayVisible] = useState<boolean>(true);
 
-  const resolvedLayout = layoutType || urlParams?.get('layout') || 'standings';
+  // Default to the flagship Free Fire live-squads overlay for OBS streams
+  const resolvedLayout = layoutType || urlParams?.get('layout') || 'live-squads';
   const resolvedTransparent = isTransparent !== undefined
     ? isTransparent
     : urlParams?.get('transparent') !== 'false';
@@ -68,13 +73,16 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
             setIsConnected(true);
           }
         }
+        if (data?.data?.isVisible !== undefined) {
+          setIsOverlayVisible(data.data.isVisible);
+        }
       } catch {}
     };
 
     loadInitialState();
 
-    // Subscribe to cross-tab / cross-network real-time updates
-    const unsubscribe = subscribeToTournamentLiveUpdates(
+    // Subscribe to tournament data updates
+    const unsubTournament = subscribeToTournamentLiveUpdates(
       effectiveTourId,
       (updatedTournament) => {
         setTournament(updatedTournament);
@@ -87,8 +95,18 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
       }
     );
 
+    // Subscribe to live squad state & visibility (Show Table / Hide Table)
+    const unsubSquads = subscribeToLiveSquadUpdates(effectiveTourId, (data) => {
+      if (data.isVisible !== undefined) {
+        setIsOverlayVisible(data.isVisible);
+      }
+      setLastSyncTime(Date.now());
+      setIsConnected(true);
+    });
+
     return () => {
-      unsubscribe();
+      unsubTournament();
+      unsubSquads();
     };
   }, [effectiveTourId]);
 
@@ -124,45 +142,97 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
         </div>
       )}
 
+      {/* Standings Table Layout with Show/Hide Support */}
       {resolvedLayout === 'standings' && (
-        <BroadcastStandings
-          tournament={tournament}
-          standings={standings}
-          isTransparent={resolvedTransparent}
-        />
+        <div
+          className={`w-full min-h-screen transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] transform ${
+            isOverlayVisible
+              ? 'opacity-100 translate-y-0 scale-100'
+              : 'opacity-0 -translate-y-12 pointer-events-none scale-95'
+          }`}
+        >
+          <BroadcastStandings
+            tournament={tournament}
+            standings={standings}
+            isTransparent={resolvedTransparent}
+          />
+        </div>
       )}
+
+      {/* Match Result Layout */}
       {resolvedLayout === 'match' && (
-        <BroadcastMatchResult
-          tournament={tournament}
-          matchNumber={targetMatchNumber}
-          isTransparent={resolvedTransparent}
-        />
+        <div
+          className={`w-full min-h-screen transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] transform ${
+            isOverlayVisible
+              ? 'opacity-100 translate-y-0 scale-100'
+              : 'opacity-0 -translate-y-12 pointer-events-none scale-95'
+          }`}
+        >
+          <BroadcastMatchResult
+            tournament={tournament}
+            matchNumber={targetMatchNumber}
+            isTransparent={resolvedTransparent}
+          />
+        </div>
       )}
+
+      {/* Top Fraggers Layout */}
       {resolvedLayout === 'fraggers' && (
-        <BroadcastTopFraggers
-          tournament={tournament}
-          isTransparent={resolvedTransparent}
-        />
+        <div
+          className={`w-full min-h-screen transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] transform ${
+            isOverlayVisible
+              ? 'opacity-100 translate-y-0 scale-100'
+              : 'opacity-0 -translate-y-12 pointer-events-none scale-95'
+          }`}
+        >
+          <BroadcastTopFraggers
+            tournament={tournament}
+            isTransparent={resolvedTransparent}
+          />
+        </div>
       )}
+
+      {/* Flagship Free Fire Live Squads Overlay (Supports internal horizontal slide) */}
       {(resolvedLayout === 'live-squads' || resolvedLayout === 'pro' || resolvedLayout === 'live') && (
         <BroadcastFreeFireLiveOverlay
           tournament={tournament}
           standings={standings}
           isTransparent={resolvedTransparent}
+          isOverlayVisible={isOverlayVisible}
         />
       )}
+
+      {/* Lower Third Layout */}
       {resolvedLayout === 'lower-third' && (
-        <BroadcastLowerThird
-          tournament={tournament}
-          standings={standings}
-          isTransparent={resolvedTransparent}
-        />
+        <div
+          className={`w-full min-h-screen transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] transform ${
+            isOverlayVisible
+              ? 'opacity-100 translate-y-0'
+              : 'opacity-0 translate-y-12 pointer-events-none'
+          }`}
+        >
+          <BroadcastLowerThird
+            tournament={tournament}
+            standings={standings}
+            isTransparent={resolvedTransparent}
+          />
+        </div>
       )}
+
+      {/* Graphic Poster Layout */}
       {(resolvedLayout === 'graphic' || resolvedLayout === 'graphic-poster' || resolvedLayout === 'poster') && (
-        <BroadcastGraphicPoster
-          tournament={tournament}
-          isTransparent={resolvedTransparent}
-        />
+        <div
+          className={`w-full min-h-screen transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] transform ${
+            isOverlayVisible
+              ? 'opacity-100 scale-100'
+              : 'opacity-0 scale-95 pointer-events-none'
+          }`}
+        >
+          <BroadcastGraphicPoster
+            tournament={tournament}
+            isTransparent={resolvedTransparent}
+          />
+        </div>
       )}
     </div>
   );

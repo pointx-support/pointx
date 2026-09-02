@@ -269,6 +269,37 @@ export function broadcastLiveSquadUpdate(data: LiveSquadSyncState): void {
   });
 }
 
+export interface FullSyncPayload {
+  tournamentId: string;
+  tournament?: Tournament;
+  squads?: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]>;
+  highlightedTeamId?: string | null;
+  isVisible?: boolean;
+  timestamp?: number;
+}
+
+export function broadcastFullSync(payload: FullSyncPayload): void {
+  const ts = payload.timestamp || Date.now();
+  if (payload.tournament) {
+    broadcastTournamentUpdate(payload.tournament);
+  }
+  if (payload.squads || payload.isVisible !== undefined) {
+    broadcastLiveSquadUpdate({
+      tournamentId: payload.tournamentId,
+      squads: payload.squads || ({} as any),
+      highlightedTeamId: payload.highlightedTeamId,
+      isVisible: payload.isVisible !== undefined ? payload.isVisible : true,
+      timestamp: ts
+    });
+  }
+
+  // Network sync to backend
+  postNetworkSync({
+    ...payload,
+    timestamp: ts
+  });
+}
+
 export function subscribeToLiveSquadUpdates(
   tournamentId: string,
   onUpdate: (data: LiveSquadSyncState) => void

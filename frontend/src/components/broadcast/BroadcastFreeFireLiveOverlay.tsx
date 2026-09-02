@@ -7,6 +7,7 @@ export interface BroadcastFreeFireLiveOverlayProps {
   tournament: Tournament;
   standings: CalculatedStanding[];
   isTransparent?: boolean;
+  isOverlayVisible?: boolean;
 }
 
 export type PlayerState = 'alive' | 'knock' | 'eliminated';
@@ -20,9 +21,11 @@ export interface SquadLiveStatus {
 export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlayProps> = ({
   tournament,
   standings,
-  isTransparent = true
+  isTransparent = true,
+  isOverlayVisible: propIsOverlayVisible
 }) => {
   const [isOverlayVisible, setIsOverlayVisible] = useState<boolean>(() => {
+    if (propIsOverlayVisible !== undefined) return propIsOverlayVisible;
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         const stored =
@@ -74,6 +77,12 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
   });
 
   React.useEffect(() => {
+    if (propIsOverlayVisible !== undefined) {
+      setIsOverlayVisible(propIsOverlayVisible);
+    }
+  }, [propIsOverlayVisible]);
+
+  React.useEffect(() => {
     const unsubscribe = subscribeToLiveSquadUpdates(tournament.id, (data) => {
       if (data.squads) {
         setLiveSquads(data.squads as any);
@@ -103,7 +112,15 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
   };
 
   const displayTeams = standings.slice(0, 12);
-  const maxKillsInTour = Math.max(...displayTeams.map((s) => s.totalKills), 0);
+  const activeMatch = tournament.matches && tournament.matches.length > 0 ? tournament.matches[0] : null;
+
+  const maxKillsInTour = Math.max(
+    ...displayTeams.map((s) => {
+      const mr = activeMatch?.results?.find((r) => r.teamId === s.teamId);
+      return (mr?.kills !== undefined && mr.kills > 0) ? mr.kills : (s.totalKills || 0);
+    }),
+    0
+  );
 
   return (
     <div
@@ -156,14 +173,30 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
         {/* ================= 2. ROWS 1 TO 12 ================= */}
         <div className="flex flex-col divide-y divide-[#cfb99f]">
           {displayTeams.map((teamStanding, index) => {
-            const team = tournament.teams.find((t) => t.id === teamStanding.teamId);
+            const team = tournament.teams.find(
+              (t) => t.id === teamStanding.teamId || (t as any)._id === teamStanding.teamId
+            );
             const rank = index + 1;
-            const squadPlayers = liveSquads[teamStanding.teamId] || ['alive', 'alive', 'alive', 'alive'];
+            const squadPlayers =
+              liveSquads[teamStanding.teamId] ||
+              (team && liveSquads[team.id]) ||
+              ['alive', 'alive', 'alive', 'alive'];
             const allDead = squadPlayers.every((p) => p === 'eliminated');
             const isHighlighted = highlightedTeamId === teamStanding.teamId;
 
+            // Live Match / Standings Kills & Points
+            const matchResult = activeMatch?.results?.find((r) => r.teamId === teamStanding.teamId);
+            const currentKills =
+              matchResult?.kills !== undefined && matchResult.kills > 0
+                ? matchResult.kills
+                : (teamStanding.totalKills || 0);
+            const currentTotalPoints =
+              matchResult?.totalPoints !== undefined && matchResult.totalPoints > 0
+                ? matchResult.totalPoints
+                : (teamStanding.totalPoints || 0);
+
             // Pure Fire Burning Logic:
-            const isFireLeader = teamStanding.totalKills >= 4 && teamStanding.totalKills === maxKillsInTour && maxKillsInTour >= 4;
+            const isFireLeader = currentKills >= 4 && currentKills === maxKillsInTour && maxKillsInTour >= 4;
             const isFireHotAlive = isFireLeader && !allDead;
             const isFireHotEliminated = isFireLeader && allDead;
 
@@ -179,9 +212,9 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
                     : isFireHotEliminated
                     ? 'border-y-2 border-[#5c3a28] bg-gradient-to-r from-[#422215] via-[#522d1d] to-[#3a1d12] text-[#d4bca4] shadow-md'
                     : isHighlighted
-                    ? 'bg-[#281149] text-white'
+                    ? 'bg-[#281149] text-white ring-2 ring-amber-400'
                     : allDead
-                    ? 'bg-[#b6aa9c] text-[#4d443b]'
+                    ? 'bg-[#2b2520] border-l-4 border-l-red-600 text-[#8f847b] opacity-90'
                     : 'bg-gradient-to-b from-[#eedecf] to-[#e4ceb9] text-[#1c140d]'
                 }`}
               >
@@ -194,6 +227,8 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
                       ? 'bg-[#2b140a] text-[#c49b80] border-[#401f11] font-bold'
                       : isHighlighted
                       ? 'bg-[#1a0b32] text-white border-[#3d1a6d]'
+                      : allDead
+                      ? 'bg-[#1a1410] text-[#786c63] border-[#302620]'
                       : 'bg-[#23123f] text-white border-[#341b5c]'
                   }`}
                   style={{
@@ -215,7 +250,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
                         : isHighlighted
                         ? 'bg-[#3b1968] border-[#5d27a4] text-white'
                         : allDead
-                        ? 'bg-[#918579] border-[#7d7165] text-[#2c2621]'
+                        ? 'bg-[#3d3228] border-[#524438] text-[#9c8e82]'
                         : 'bg-[#361e56] border-[#4e2c7a] text-white'
                     }`}
                   >
@@ -235,7 +270,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
                           : isFireHotEliminated
                           ? 'text-[#f0d8c2]'
                           : allDead
-                          ? 'text-[#3e362f]'
+                          ? 'text-[#9c8e82] line-through'
                           : 'text-[#1a110a]'
                       }`}
                       style={{
@@ -254,38 +289,44 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
                   </div>
                 </div>
 
-                {/* ALIVE 4-Player Status Indicator Bars */}
-                <div className="w-20 flex items-center justify-center gap-[3.5px] px-1">
-                  {squadPlayers.map((status, pIdx) => {
-                    return (
-                      <button
-                        key={pIdx}
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          togglePlayerState(teamStanding.teamId, pIdx);
-                        }}
-                        title={`Player ${pIdx + 1}: ${status.toUpperCase()} (Click to toggle)`}
-                        className={`h-5 w-[11px] rounded-[2px] transition-all cursor-pointer ${
-                          status === 'alive'
-                            ? isFireHotAlive
-                              ? 'bg-[#fff4e6] shadow-sm'
-                              : 'bg-[#c3822d] shadow-sm'
-                            : status === 'knock'
-                            ? 'bg-[#b91c1c] animate-pulse shadow-sm'
-                            : isFireHotAlive
-                            ? 'border-[1.5px] border-[#fff4e6]/80 bg-transparent'
-                            : isFireHotEliminated
-                            ? 'border-[1.5px] border-[#6b3c25] bg-transparent'
-                            : isHighlighted
-                            ? 'border-[1.5px] border-[#c3822d]/60 bg-transparent'
-                            : allDead
-                            ? 'border-[1.5px] border-[#6b6055] bg-transparent'
-                            : 'border-[1.5px] border-[#a0743a] bg-transparent'
-                        }`}
-                      />
-                    );
-                  })}
+                {/* ALIVE 4-Player Status Indicator Bars OR Wipeout Status */}
+                <div className="w-20 flex items-center justify-center px-1">
+                  {allDead ? (
+                    <div className="flex items-center justify-center bg-red-950/90 border border-red-600/70 rounded px-1.5 py-0.5 shadow-sm">
+                      <span className="text-[10px] font-black tracking-wider text-red-400 uppercase font-mono leading-none">
+                        ELIMINATED
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center gap-[3.5px]">
+                      {squadPlayers.map((status, pIdx) => (
+                        <button
+                          key={pIdx}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            togglePlayerState(teamStanding.teamId, pIdx);
+                          }}
+                          title={`Player ${pIdx + 1}: ${status.toUpperCase()} (Click to toggle)`}
+                          className={`h-5 w-[11px] rounded-[2px] transition-all cursor-pointer ${
+                            status === 'alive'
+                              ? isFireHotAlive
+                                ? 'bg-[#fff4e6] shadow-sm'
+                                : 'bg-[#c3822d] shadow-sm'
+                              : status === 'knock'
+                              ? 'bg-[#b91c1c] animate-pulse shadow-sm'
+                              : isFireHotAlive
+                              ? 'border-[1.5px] border-[#fff4e6]/80 bg-transparent'
+                              : isFireHotEliminated
+                              ? 'border-[1.5px] border-[#6b3c25] bg-transparent'
+                              : isHighlighted
+                              ? 'border-[1.5px] border-[#c3822d]/60 bg-transparent'
+                              : 'border-[1.5px] border-[#a0743a] bg-transparent'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* ELIMS Count */}
@@ -298,14 +339,14 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
                       : isHighlighted
                       ? 'text-white'
                       : allDead
-                      ? 'text-[#3b342e]'
+                      ? 'text-red-400/80 font-bold'
                       : 'text-[#1b120a]'
                   }`}
                   style={{
                     fontFamily: "'Rajdhani', sans-serif"
                   }}
                 >
-                  {teamStanding.totalKills}
+                  {currentKills}
                 </div>
 
                 {/* T.PTS. Count */}
@@ -318,14 +359,14 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
                       : isHighlighted
                       ? 'text-white'
                       : allDead
-                      ? 'text-[#3b342e]'
+                      ? 'text-[#9c8e82]'
                       : 'text-[#1b120a]'
                   }`}
                   style={{
                     fontFamily: "'Rajdhani', sans-serif"
                   }}
                 >
-                  {teamStanding.totalPoints}
+                  {currentTotalPoints}
                 </div>
               </div>
             );

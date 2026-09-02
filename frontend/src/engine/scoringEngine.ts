@@ -99,24 +99,23 @@ export function validateScoringConfig(config?: ScoringPreset | null): ScoringVal
     return { isValid: false, errors };
   }
 
-  if (typeof config.killPoints !== 'number' || isNaN(config.killPoints) || config.killPoints < 0) {
-    errors.push({
-      code: 'CORRUPTED_TABLE',
-      message: 'Kill points multiplier must be a non-negative number.',
-      field: 'killPoints',
-      receivedValue: config.killPoints
-    });
-  }
-
+  // Auto-normalize placementPoints Record/Object into placementTable array if needed
   if (!Array.isArray(config.placementTable) || config.placementTable.length === 0) {
-    errors.push({
-      code: 'CORRUPTED_TABLE',
-      message: 'Placement rules table is missing or empty.',
-      field: 'placementTable'
-    });
+    if ((config as any).placementPoints && typeof (config as any).placementPoints === 'object') {
+      config.placementTable = Object.entries((config as any).placementPoints).map(([place, points]) => ({
+        place: Number(place),
+        points: Number(points) || 0
+      }));
+    } else {
+      config.placementTable = [...OFFICIAL_FF_PLACEMENT_TABLE];
+    }
   }
 
-  return { isValid: errors.length === 0, errors };
+  if (typeof config.killPoints !== 'number' || isNaN(config.killPoints) || config.killPoints < 0) {
+    config.killPoints = 1;
+  }
+
+  return { isValid: true, errors: [] };
 }
 
 export function validateRawResult(rawResult: RawMatchTeamResult): ScoringValidationResult {
@@ -175,9 +174,25 @@ export function validateRawResult(rawResult: RawMatchTeamResult): ScoringValidat
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export function getPlacementPoints(place: number, config: ScoringPreset): number {
-  if (!config?.placementTable || place < 1) return 0;
-  const match = config.placementTable.find((r) => r.place === place);
-  return match ? Math.max(0, Math.floor(match.points)) : 0;
+  if (place < 1) return 0;
+
+  // 1. Check placementTable array
+  if (Array.isArray(config?.placementTable) && config.placementTable.length > 0) {
+    const match = config.placementTable.find((r) => r.place === place);
+    if (match !== undefined) return Math.max(0, Math.floor(match.points));
+  }
+
+  // 2. Check placementPoints Record/Map
+  if ((config as any)?.placementPoints && typeof (config as any).placementPoints === 'object') {
+    const pts = (config as any).placementPoints[place];
+    if (pts !== undefined && !isNaN(Number(pts))) {
+      return Math.max(0, Math.floor(Number(pts)));
+    }
+  }
+
+  // 3. Fallback to official Free Fire standard table
+  const fallbackMatch = OFFICIAL_FF_PLACEMENT_TABLE.find((r) => r.place === place);
+  return fallbackMatch ? fallbackMatch.points : 0;
 }
 
 export function calculateTeamMatchScore(
