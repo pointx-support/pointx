@@ -12,7 +12,7 @@ import type {
   TeamMatchResult
 } from '../types/tournament';
 import type { RawMatchTeamResult } from '../types/scoring';
-import { DEFAULT_FREE_FIRE_SCORING, calculateTeamMatchScore } from '../engine/scoringEngine';
+import { DEFAULT_FREE_FIRE_SCORING, calculateTeamMatchScore, normalizeScoringConfig, getPlacementPoints } from '../engine/scoringEngine';
 import {
   calculateTournamentStandings,
   calculateTopFraggers,
@@ -768,7 +768,9 @@ export const useTournamentStore = create<AppState>((set, get) => ({
     const targetMatch = targetTournament.matches.find((m) => m.id === matchId);
     if (!targetMatch) return;
 
-    // Execute raw results strictly through Phase 5 scoring engine
+    // Execute raw results strictly through normalized scoring engine
+    const normalizedPreset = normalizeScoringConfig(targetTournament.scoringPreset);
+
     const calculatedTeamResults: TeamMatchResult[] = rawResults.map((raw) => {
       const calc = calculateTeamMatchScore(
         {
@@ -780,21 +782,29 @@ export const useTournamentStore = create<AppState>((set, get) => ({
           bonusPoints: raw.bonusPoints,
           penaltyPoints: raw.penaltyPoints
         },
-        targetTournament.scoringPreset
+        normalizedPreset
       );
 
-      const isSuccess = calc.success && !!calc.data;
+      const d = calc.success && calc.data ? calc.data : null;
+      const placement = d ? d.placement : Math.max(0, Math.floor(Number(raw.placement) || 0));
+      const kills = d ? d.kills : Math.max(0, Math.floor(Number(raw.kills) || 0));
+      const placePts = d ? d.placementPoints : getPlacementPoints(placement, normalizedPreset);
+      const killPts = d ? d.killPoints : (kills * normalizedPreset.killPoints);
+      const bonus = d ? d.customBonusPoints : Math.floor(Number(raw.bonusPoints) || 0);
+      const penalty = d ? d.penaltyPoints : Math.max(0, Math.floor(Number(raw.penaltyPoints) || 0));
+      const total = d ? d.totalPoints : Math.max(0, placePts + killPts + bonus - penalty);
+      const isBooyah = d ? d.booyah : Boolean(raw.booyah || (placement === 1 && placement > 0));
 
       return {
         teamId: raw.teamId,
-        placement: raw.placement,
-        kills: raw.kills,
-        isBooyah: isSuccess && calc.data ? calc.data.booyah : (raw.booyah || raw.placement === 1),
-        bonusPoints: raw.bonusPoints || 0,
-        penaltyPoints: raw.penaltyPoints || 0,
-        placementPoints: isSuccess && calc.data ? calc.data.placementPoints : 0,
-        killPoints: isSuccess && calc.data ? calc.data.killPoints : 0,
-        totalPoints: isSuccess && calc.data ? calc.data.totalPoints : 0,
+        placement,
+        kills,
+        isBooyah,
+        bonusPoints: bonus,
+        penaltyPoints: penalty,
+        placementPoints: placePts,
+        killPoints: killPts,
+        totalPoints: total,
         playerStats: raw.playerKills?.map((pk) => ({ playerId: pk.playerId, kills: pk.kills }))
       };
     });
@@ -807,8 +817,8 @@ export const useTournamentStore = create<AppState>((set, get) => ({
             mapName: mapName !== undefined ? mapName : m.mapName,
             status,
             results: calculatedTeamResults,
-            scoringConfigId: targetTournament.scoringPreset.id,
-            scoringVersion: targetTournament.scoringPreset.version,
+            scoringConfigId: normalizedPreset.id,
+            scoringVersion: normalizedPreset.version,
             updatedAt: new Date().toISOString()
           }
         : m

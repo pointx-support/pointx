@@ -5,14 +5,15 @@ import type {
   CalculatedMatchTeamResult,
   ScoringCalculationResult,
   ScoringValidationResult,
-  ScoringError
+  ScoringError,
+  TieBreakCriteria
 } from '../types/scoring';
 import type { Match, CalculatedStanding, TeamMatchResult, Tournament } from '../types/tournament';
 import { calculateTournamentStandings } from './standingsEngine';
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ?????????????????????????????????????????????????????????????????????????
 // PRESET TEMPLATES
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ?????????????????????????????????????????????????????????????????????????
 
 export const OFFICIAL_FF_PLACEMENT_TABLE: PlacementRule[] = [
   { place: 1, points: 12 },
@@ -84,37 +85,76 @@ export const FREE_FIRE_SURVIVAL_BOOST_SCORING: ScoringPreset = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// VALIDATION UTILITIES
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ?????????????????????????????????????????????????????????????????????????
+// NORMALIZATION & VALIDATION UTILITIES
+// ?????????????????????????????????????????????????????????????????????????
 
-export function validateScoringConfig(config?: ScoringPreset | null): ScoringValidationResult {
-  const errors: ScoringError[] = [];
-
+/**
+ * Normalizes any tournament scoring configuration (MongoDB Mongoose map, custom preset, or official preset)
+ * into a strongly typed, deterministic ScoringPreset.
+ */
+export function normalizeScoringConfig(config?: any): ScoringPreset {
   if (!config) {
-    errors.push({
-      code: 'MISSING_CONFIG',
-      message: 'Scoring configuration is missing or undefined.'
-    });
-    return { isValid: false, errors };
+    return { ...DEFAULT_FREE_FIRE_SCORING };
   }
 
-  // Auto-normalize placementPoints Record/Object into placementTable array if needed
-  if (!Array.isArray(config.placementTable) || config.placementTable.length === 0) {
-    if ((config as any).placementPoints && typeof (config as any).placementPoints === 'object') {
-      config.placementTable = Object.entries((config as any).placementPoints).map(([place, points]) => ({
-        place: Number(place),
-        points: Number(points) || 0
-      }));
-    } else {
-      config.placementTable = [...OFFICIAL_FF_PLACEMENT_TABLE];
-    }
+  // 1. Placement table normalization
+  let placementTable: PlacementRule[] = [];
+  if (Array.isArray(config.placementTable) && config.placementTable.length > 0) {
+    placementTable = config.placementTable.map((r: any) => ({
+      place: Number(r.place),
+      points: Math.max(0, Math.floor(Number(r.points) || 0))
+    }));
+  } else if (config.placementPoints && typeof config.placementPoints === 'object') {
+    const rawEntries: [any, any][] = config.placementPoints instanceof Map
+      ? Array.from(config.placementPoints.entries())
+      : Object.entries(config.placementPoints);
+
+    placementTable = rawEntries.map(([place, points]) => ({
+      place: Number(place),
+      points: Math.max(0, Math.floor(Number(points) || 0))
+    }));
   }
 
-  if (typeof config.killPoints !== 'number' || isNaN(config.killPoints) || config.killPoints < 0) {
-    config.killPoints = 1;
+  if (placementTable.length === 0) {
+    placementTable = [...OFFICIAL_FF_PLACEMENT_TABLE];
   }
 
+  // 2. Kill points multiplier
+  const killPoints = Math.max(0, Math.floor(Number(config.killPoints ?? config.kill_points ?? 1)));
+
+  // 3. Booyah bonus points
+  const booyahBonusPoints = Math.max(0, Math.floor(Number(config.booyahBonusPoints ?? config.booyahBonus ?? config.booyah_bonus ?? 0)));
+
+  // 4. Tie break order
+  const rawTieBreakers = config.tieBreakOrder || config.tieBreakers || [];
+  const tieBreakOrder: TieBreakCriteria[] = Array.isArray(rawTieBreakers) && rawTieBreakers.length > 0
+    ? rawTieBreakers.map((t: string) => {
+        if (t === 'total_points' || t === 'totalPoints') return 'totalPoints';
+        if (t === 'total_kills' || t === 'totalKills') return 'totalKills';
+        if (t === 'total_booyahs' || t === 'booyahs') return 'booyahs';
+        if (t === 'placement_points' || t === 'placementPoints') return 'placementPoints';
+        if (t === 'highest_placement' || t === 'highestPlacement') return 'highestPlacement';
+        return 'totalPoints';
+      })
+    : ['totalPoints', 'totalKills', 'booyahs', 'highestPlacement'];
+
+  return {
+    id: config.id || 'preset-custom',
+    name: config.name || 'Tournament Scoring Matrix',
+    version: Number(config.version) || 1,
+    game: config.game || 'Free Fire',
+    isOfficial: Boolean(config.isOfficial),
+    killPoints,
+    placementTable,
+    booyahBonusPoints,
+    tieBreakOrder,
+    createdAt: config.createdAt || new Date().toISOString(),
+    updatedAt: config.updatedAt || new Date().toISOString()
+  };
+}
+
+export function validateScoringConfig(_config?: ScoringPreset | null): ScoringValidationResult {
   return { isValid: true, errors: [] };
 }
 
@@ -129,101 +169,49 @@ export function validateRawResult(rawResult: RawMatchTeamResult): ScoringValidat
     });
   }
 
-  if (
-    typeof rawResult.placement !== 'number' ||
-    isNaN(rawResult.placement) ||
-    !Number.isInteger(rawResult.placement) ||
-    rawResult.placement < 1
-  ) {
-    errors.push({
-      code: 'INVALID_PLACEMENT',
-      message: 'Placement must be a positive integer greater than or equal to 1.',
-      field: 'placement',
-      receivedValue: rawResult.placement
-    });
-  }
-
-  if (
-    typeof rawResult.kills !== 'number' ||
-    isNaN(rawResult.kills) ||
-    !Number.isInteger(rawResult.kills) ||
-    rawResult.kills < 0
-  ) {
-    errors.push({
-      code: 'INVALID_KILLS',
-      message: 'Kills must be a non-negative integer (0 or greater).',
-      field: 'kills',
-      receivedValue: rawResult.kills
-    });
-  }
-
-  if (rawResult.penaltyPoints !== undefined && (isNaN(rawResult.penaltyPoints) || rawResult.penaltyPoints < 0)) {
-    errors.push({
-      code: 'INVALID_PENALTY',
-      message: 'Penalty points must be a non-negative number.',
-      field: 'penaltyPoints',
-      receivedValue: rawResult.penaltyPoints
-    });
-  }
-
   return { isValid: errors.length === 0, errors };
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// CORE CALCULATION FUNCTIONS (PURE MATHEMATICS)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ?????????????????????????????????????????????????????????????????????????
+// CORE CALCULATION FUNCTIONS (PURE DETERMINISTIC MATHEMATICS)
+// ?????????????????????????????????????????????????????????????????????????
 
-export function getPlacementPoints(place: number, config: ScoringPreset): number {
+export function getPlacementPoints(place: number, config?: any): number {
   if (place < 1) return 0;
+  const normalized = normalizeScoringConfig(config);
+  const match = normalized.placementTable.find((r) => r.place === place);
+  if (match !== undefined) return match.points;
 
-  // 1. Check placementTable array
-  if (Array.isArray(config?.placementTable) && config.placementTable.length > 0) {
-    const match = config.placementTable.find((r) => r.place === place);
-    if (match !== undefined) return Math.max(0, Math.floor(match.points));
-  }
-
-  // 2. Check placementPoints Record/Map
-  if ((config as any)?.placementPoints && typeof (config as any).placementPoints === 'object') {
-    const pts = (config as any).placementPoints[place];
-    if (pts !== undefined && !isNaN(Number(pts))) {
-      return Math.max(0, Math.floor(Number(pts)));
-    }
-  }
-
-  // 3. Fallback to official Free Fire standard table
-  const fallbackMatch = OFFICIAL_FF_PLACEMENT_TABLE.find((r) => r.place === place);
-  return fallbackMatch ? fallbackMatch.points : 0;
+  // Fallback to official standard table
+  const fallback = OFFICIAL_FF_PLACEMENT_TABLE.find((r) => r.place === place);
+  return fallback ? fallback.points : 0;
 }
 
 export function calculateTeamMatchScore(
   rawResult: RawMatchTeamResult,
   config?: ScoringPreset | null
 ): ScoringCalculationResult {
-  // Validate configuration
-  const configValidation = validateScoringConfig(config);
-  if (!configValidation.isValid || !config) {
-    return { success: false, error: configValidation.errors[0] };
+  const normalizedConfig = normalizeScoringConfig(config);
+
+  const teamId = rawResult.teamId || '';
+  if (!teamId) {
+    return {
+      success: false,
+      error: { code: 'INVALID_PLACEMENT', message: 'Team ID is required', field: 'teamId' }
+    };
   }
 
-  // Validate raw match entry
-  const resultValidation = validateRawResult(rawResult);
-  if (!resultValidation.isValid) {
-    return { success: false, error: resultValidation.errors[0] };
-  }
-
-  // Pure integer calculations
-  const placement = Math.floor(rawResult.placement);
-  const kills = Math.floor(rawResult.kills);
-  const killMultiplier = Math.floor(config.killPoints);
-  const placementPoints = getPlacementPoints(placement, config);
+  const placement = Math.max(0, Math.floor(Number(rawResult.placement) || 0));
+  const kills = Math.max(0, Math.floor(Number(rawResult.kills) || 0));
+  const killMultiplier = normalizedConfig.killPoints;
+  const placementPoints = getPlacementPoints(placement, normalizedConfig);
   const killPoints = kills * killMultiplier;
 
-  // Booyah logic
-  const isBooyah = rawResult.booyah !== undefined ? rawResult.booyah : placement === 1;
-  const booyahBonusPoints = isBooyah ? Math.floor(config.booyahBonusPoints || 0) : 0;
+  const isBooyah = Boolean(rawResult.booyah !== undefined ? rawResult.booyah : (placement === 1 && placement > 0));
+  const booyahBonusPoints = isBooyah ? normalizedConfig.booyahBonusPoints : 0;
 
-  const customBonusPoints = Math.floor(rawResult.bonusPoints || 0);
-  const penaltyPoints = Math.floor(rawResult.penaltyPoints || 0);
+  const customBonusPoints = Math.floor(Number(rawResult.bonusPoints) || 0);
+  const penaltyPoints = Math.max(0, Math.floor(Number(rawResult.penaltyPoints) || 0));
 
   const totalPoints = Math.max(
     0,
@@ -231,7 +219,7 @@ export function calculateTeamMatchScore(
   );
 
   const calculatedResult: CalculatedMatchTeamResult = {
-    teamId: rawResult.teamId,
+    teamId,
     matchId: rawResult.matchId,
     placement,
     kills,
@@ -242,8 +230,8 @@ export function calculateTeamMatchScore(
     customBonusPoints,
     penaltyPoints,
     totalPoints,
-    scoringConfigId: config.id,
-    scoringVersion: config.version || 1,
+    scoringConfigId: normalizedConfig.id,
+    scoringVersion: normalizedConfig.version,
     breakdown: {
       placement,
       placementPoints,
@@ -280,8 +268,11 @@ export function computeTeamMatchPoints(
   );
 
   if (!calc.success || !calc.data) {
-    const placementPoints = getPlacementPoints(result.placement, scoringPreset);
-    const killPoints = result.kills * scoringPreset.killPoints;
+    const placement = Math.max(0, Math.floor(Number(result.placement) || 0));
+    const kills = Math.max(0, Math.floor(Number(result.kills) || 0));
+    const placementPoints = getPlacementPoints(placement, scoringPreset);
+    const killMultiplier = Math.max(0, Math.floor(Number(scoringPreset?.killPoints) || 1));
+    const killPoints = kills * killMultiplier;
     return { placementPoints, killPoints, totalPoints: placementPoints + killPoints };
   }
 
@@ -310,7 +301,9 @@ export function recalculateMatchScores(
   match: Match,
   newConfig: ScoringPreset = DEFAULT_FREE_FIRE_SCORING
 ): Match {
-  const recalculatedResults = match.results.map((r) => {
+  const normalizedConfig = normalizeScoringConfig(newConfig);
+
+  const recalculatedResults: TeamMatchResult[] = match.results.map((r) => {
     const calc = calculateTeamMatchScore(
       {
         teamId: r.teamId,
@@ -321,13 +314,28 @@ export function recalculateMatchScores(
         bonusPoints: r.bonusPoints,
         penaltyPoints: r.penaltyPoints
       },
-      newConfig
+      normalizedConfig
     );
 
-    if (!calc.success || !calc.data) return r;
+    if (!calc.success || !calc.data) {
+      const placement = Math.max(0, Math.floor(Number(r.placement) || 0));
+      const kills = Math.max(0, Math.floor(Number(r.kills) || 0));
+      const placePts = getPlacementPoints(placement, normalizedConfig);
+      const killPts = kills * normalizedConfig.killPoints;
+      return {
+        ...r,
+        placement,
+        kills,
+        placementPoints: placePts,
+        killPoints: killPts,
+        totalPoints: placePts + killPts
+      };
+    }
 
     return {
       ...r,
+      placement: calc.data.placement,
+      kills: calc.data.kills,
       placementPoints: calc.data.placementPoints,
       killPoints: calc.data.killPoints,
       totalPoints: calc.data.totalPoints,
@@ -337,8 +345,8 @@ export function recalculateMatchScores(
 
   return {
     ...match,
-    scoringConfigId: newConfig.id,
-    scoringVersion: newConfig.version,
+    scoringConfigId: normalizedConfig.id,
+    scoringVersion: normalizedConfig.version,
     results: recalculatedResults
   };
 }
@@ -355,8 +363,8 @@ export function calculateStandings(
     game: 'Free Fire',
     tournamentType: 'Battle Royale',
     status: 'Live',
-    structure: { teamCount: teams.length, matchCount: matches.length, roundRobin: false },
-    scoringPreset: scoringConfig,
+    structure: { teamCount: teams.length, matchCount: matches.length, roundRobin: false, slotsPerMatch: 12 },
+    scoringPreset: normalizeScoringConfig(scoringConfig),
     teams,
     matches,
     createdAt: '',

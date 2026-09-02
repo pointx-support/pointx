@@ -40,6 +40,7 @@ export const ResponsiveStandingsTable: React.FC<ResponsiveStandingsTableProps> =
                 <th className="py-3.5 px-4 font-sans">Team Name</th>
                 <th className="py-3.5 px-3 text-center w-24">Played</th>
                 <th className="py-3.5 px-3 text-center w-28">Booyahs</th>
+                <th className="py-3.5 px-3 text-center w-28">Kills</th>
                 <th className="py-3.5 px-3 text-right w-28">Place Pts</th>
                 <th className="py-3.5 px-3 text-right w-28">Kill Pts</th>
                 <th className="py-3.5 pl-3 pr-5 text-right w-32 font-bold text-[var(--accent-primary)]">Total Pts</th>
@@ -113,6 +114,13 @@ export const ResponsiveStandingsTable: React.FC<ResponsiveStandingsTableProps> =
                         )}
                       </td>
 
+                      {/* Total Kills */}
+                      <td className="py-3.5 px-3 text-center font-numbers">
+                        <span className="inline-flex items-center gap-1 font-bold text-[var(--status-danger)] text-sm">
+                          {s.totalKills}
+                        </span>
+                      </td>
+
                       {/* Place Pts */}
                       <td className="py-3.5 px-3 text-right text-[var(--text-secondary)] font-numbers font-semibold">
                         +{s.placementPoints}
@@ -142,7 +150,7 @@ export const ResponsiveStandingsTable: React.FC<ResponsiveStandingsTableProps> =
                     {/* Expandable Match-by-Match Strip */}
                     {isExpanded && s.matchHistory && (
                       <tr className="bg-[var(--bg-surface-inset)] border-b border-[var(--border-subtle)]">
-                        <td colSpan={7} className="p-4 pl-8">
+                        <td colSpan={8} className="p-4 pl-8">
                           <div className="space-y-2">
                             <div className="text-xs uppercase font-bold text-[var(--text-secondary)] font-mono">
                               Match Breakdown ({s.matchHistory.length} Matches)
@@ -218,10 +226,14 @@ export const ResponsiveStandingsTable: React.FC<ResponsiveStandingsTableProps> =
               </div>
 
               {/* Sub Metrics */}
-              <div className="grid grid-cols-3 gap-1.5 pt-2.5 border-t border-[var(--border-subtle)] text-center font-mono text-xs">
+              <div className="grid grid-cols-4 gap-1.5 pt-2.5 border-t border-[var(--border-subtle)] text-center font-mono text-xs">
                 <div>
                   <span className="text-xs text-[var(--text-muted)] block font-sans font-semibold">Booyahs</span>
                   <span className="font-bold text-[var(--accent-gold)] font-numbers text-sm">{s.booyahs}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-[var(--text-muted)] block font-sans font-semibold">Kills</span>
+                  <span className="font-bold text-[var(--status-danger)] font-numbers text-sm">{s.totalKills}</span>
                 </div>
                 <div>
                   <span className="text-xs text-[var(--text-muted)] block font-sans font-semibold">Place Pts</span>

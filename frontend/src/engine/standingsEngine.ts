@@ -6,7 +6,7 @@ import type {
   TournamentStatisticsSummary
 } from '../types/tournament';
 import type { TieBreakCriteria } from '../types/scoring';
-import { calculateTeamMatchScore } from './scoringEngine';
+import { calculateTeamMatchScore, normalizeScoringConfig } from './scoringEngine';
 
 // Internal accumulator for standings computation
 interface TeamStandingAccumulator {
@@ -65,29 +65,35 @@ export function calculateTournamentStandings(
     includeDrafts?: boolean;
   }
 ): CalculatedStanding[] {
-  const { teams, matches, scoringPreset } = tournament;
+  if (!tournament) return [];
+
+  const teams = Array.isArray(tournament.teams) ? tournament.teams : [];
+  const matches = Array.isArray(tournament.matches) ? tournament.matches : [];
+  const scoringPreset = normalizeScoringConfig(tournament.scoringPreset);
   const includeDrafts = options?.includeDrafts ?? true;
 
   // Filter eligible matches
   const eligibleMatches = matches
     .filter((m) => {
+      if (!m) return false;
       if (!includeDrafts && m.status === 'Draft' && (!m.results || m.results.length === 0)) return false;
       if (options?.matchRange?.start && m.matchNumber < options.matchRange.start) return false;
       if (options?.matchRange?.end && m.matchNumber > options.matchRange.end) return false;
       return true;
     })
-    .sort((a, b) => a.matchNumber - b.matchNumber);
+    .sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0));
 
   // Initialize accumulators for all teams
   const createFreshAccumulators = () => {
     const map = new Map<string, TeamStandingAccumulator>();
     teams.forEach((t) => {
+      if (!t || !t.id) return;
       map.set(t.id, {
         teamId: t.id,
-        teamName: t.name,
-        teamTag: t.tag,
+        teamName: t.name || 'Unnamed Team',
+        teamTag: t.tag || 'TEAM',
         teamLogo: t.logoUrl,
-        slotNumber: t.slotNumber,
+        slotNumber: t.slotNumber || 1,
         matchesPlayed: 0,
         booyahs: 0,
         totalKills: 0,
@@ -111,11 +117,39 @@ export function calculateTournamentStandings(
   eligibleMatches.forEach((match) => {
     if (!match.results || !Array.isArray(match.results)) return;
 
-    match.results.forEach((res) => {
-      const entry = currentAccumulators.get(res.teamId);
-      if (!entry) return;
+    // Track teams seen in this match to prevent duplicate result corruption
+    const seenTeamsInMatch = new Set<string>();
 
-      // Calculate score dynamically through scoring engine
+    match.results.forEach((res) => {
+      if (!res || !res.teamId) return;
+      if (seenTeamsInMatch.has(res.teamId)) return; // Prevent double-counting duplicate records
+      seenTeamsInMatch.add(res.teamId);
+
+      let entry = currentAccumulators.get(res.teamId);
+      if (!entry) {
+        // Dynamically add team if result exists for unregistered team ID
+        entry = {
+          teamId: res.teamId,
+          teamName: res.teamId,
+          teamTag: 'TEAM',
+          slotNumber: currentAccumulators.size + 1,
+          matchesPlayed: 0,
+          booyahs: 0,
+          totalKills: 0,
+          placementPoints: 0,
+          killPoints: 0,
+          bonusPoints: 0,
+          penaltyPoints: 0,
+          totalPoints: 0,
+          bestPlacement: 999,
+          bestMatchPoints: 0,
+          latestMatchPoints: 0,
+          matchHistory: []
+        };
+        currentAccumulators.set(res.teamId, entry);
+      }
+
+      // Calculate score deterministically through central scoring engine
       const calcResult = calculateTeamMatchScore(
         {
           teamId: res.teamId,
@@ -139,7 +173,9 @@ export function calculateTournamentStandings(
         entry.bonusPoints += d.customBonusPoints;
         entry.penaltyPoints += d.penaltyPoints;
         entry.totalPoints += d.totalPoints;
-        entry.bestPlacement = Math.min(entry.bestPlacement, d.placement);
+        if (d.placement > 0) {
+          entry.bestPlacement = Math.min(entry.bestPlacement, d.placement);
+        }
         entry.bestMatchPoints = Math.max(entry.bestMatchPoints, d.totalPoints);
         entry.latestMatchPoints = d.totalPoints;
 
@@ -152,42 +188,6 @@ export function calculateTournamentStandings(
           killPoints: d.killPoints,
           totalPoints: d.totalPoints,
           isBooyah: d.booyah
-        });
-      } else {
-        // Fallback directly to match result values if scoring preset formula was missing or incomplete
-        const kills = Math.max(0, Math.floor(Number(res.kills) || 0));
-        const placement = Math.max(1, Math.floor(Number(res.placement) || 12));
-        const isBooyah = Boolean(res.isBooyah || placement === 1);
-        const placePts = res.placementPoints !== undefined
-          ? Number(res.placementPoints)
-          : (placement === 1 ? 12 : placement === 2 ? 9 : placement === 3 ? 8 : placement === 4 ? 7 : placement === 5 ? 6 : placement === 6 ? 5 : placement === 7 ? 4 : placement === 8 ? 3 : placement === 9 ? 2 : placement === 10 ? 1 : 0);
-        const killMultiplier = Number(scoringPreset?.killPoints) || 1;
-        const killPts = res.killPoints !== undefined ? Number(res.killPoints) : (kills * killMultiplier);
-        const bonus = Number(res.bonusPoints) || 0;
-        const penalty = Number(res.penaltyPoints) || 0;
-        const total = res.totalPoints !== undefined ? Number(res.totalPoints) : Math.max(0, placePts + killPts + bonus - penalty);
-
-        entry.matchesPlayed += 1;
-        if (isBooyah) entry.booyahs += 1;
-        entry.totalKills += kills;
-        entry.placementPoints += placePts;
-        entry.killPoints += killPts;
-        entry.bonusPoints += bonus;
-        entry.penaltyPoints += penalty;
-        entry.totalPoints += total;
-        entry.bestPlacement = Math.min(entry.bestPlacement, placement);
-        entry.bestMatchPoints = Math.max(entry.bestMatchPoints, total);
-        entry.latestMatchPoints = total;
-
-        entry.matchHistory.push({
-          matchNumber: match.matchNumber,
-          mapName: match.mapName,
-          placement,
-          kills,
-          placementPoints: placePts,
-          killPoints: killPts,
-          totalPoints: total,
-          isBooyah
         });
       }
     });
@@ -213,7 +213,11 @@ export function calculateTournamentStandings(
     const prevAccumulators = createFreshAccumulators();
 
     prevMatches.forEach((match) => {
+      const seen = new Set<string>();
       match.results.forEach((res) => {
+        if (!res?.teamId || seen.has(res.teamId)) return;
+        seen.add(res.teamId);
+
         const entry = prevAccumulators.get(res.teamId);
         if (!entry) return;
 
@@ -237,8 +241,13 @@ export function calculateTournamentStandings(
           entry.totalKills += d.kills;
           entry.placementPoints += d.placementPoints;
           entry.killPoints += d.killPoints;
+          entry.bonusPoints += d.customBonusPoints;
+          entry.penaltyPoints += d.penaltyPoints;
           entry.totalPoints += d.totalPoints;
-          entry.bestPlacement = Math.min(entry.bestPlacement, d.placement);
+          if (d.placement > 0) {
+            entry.bestPlacement = Math.min(entry.bestPlacement, d.placement);
+          }
+          entry.bestMatchPoints = Math.max(entry.bestMatchPoints, d.totalPoints);
           entry.latestMatchPoints = d.totalPoints;
         }
       });
@@ -253,186 +262,193 @@ export function calculateTournamentStandings(
     });
   }
 
-  return sortedCurrent.map((item, index) => {
-    const currentRank = index + 1;
-    const previousRank = previousRanksMap.get(item.teamId) || currentRank;
-    const rankDelta = previousRank - currentRank; // e.g. was #3, now #1 => delta = +2
+  // Format final standings
+  return sortedCurrent.map((acc, index) => {
+    const rank = index + 1;
+    const previousRank = previousRanksMap.get(acc.teamId) || rank;
+    const rankDelta = previousRank - rank;
 
-    const avgPointsPerMatch =
-      item.matchesPlayed > 0 ? Number((item.totalPoints / item.matchesPlayed).toFixed(1)) : 0;
-    const avgKillsPerMatch =
-      item.matchesPlayed > 0 ? Number((item.totalKills / item.matchesPlayed).toFixed(1)) : 0;
+    const avgPointsPerMatch = acc.matchesPlayed > 0 ? Number((acc.totalPoints / acc.matchesPlayed).toFixed(1)) : 0;
+    const avgKillsPerMatch = acc.matchesPlayed > 0 ? Number((acc.totalKills / acc.matchesPlayed).toFixed(1)) : 0;
 
     return {
-      rank: currentRank,
+      rank,
       previousRank,
       rankDelta,
-      teamId: item.teamId,
-      teamName: item.teamName,
-      teamTag: item.teamTag,
-      teamLogo: item.teamLogo,
-      slotNumber: item.slotNumber,
-      matchesPlayed: item.matchesPlayed,
-      booyahs: item.booyahs,
-      totalKills: item.totalKills,
-      placementPoints: item.placementPoints,
-      killPoints: item.killPoints,
-      bonusPoints: item.bonusPoints,
-      penaltyPoints: item.penaltyPoints,
-      totalPoints: item.totalPoints,
+      teamId: acc.teamId,
+      teamName: acc.teamName,
+      teamTag: acc.teamTag,
+      teamLogo: acc.teamLogo,
+      slotNumber: acc.slotNumber,
+      matchesPlayed: acc.matchesPlayed,
+      booyahs: acc.booyahs,
+      totalKills: acc.totalKills,
+      placementPoints: acc.placementPoints,
+      killPoints: acc.killPoints,
+      bonusPoints: acc.bonusPoints,
+      penaltyPoints: acc.penaltyPoints,
+      totalPoints: acc.totalPoints,
       avgPointsPerMatch,
       avgKillsPerMatch,
-      bestPlacement: item.bestPlacement === 999 ? 0 : item.bestPlacement,
-      bestMatchPoints: item.bestMatchPoints,
-      matchHistory: item.matchHistory
+      bestPlacement: acc.bestPlacement === 999 ? 0 : acc.bestPlacement,
+      bestMatchPoints: acc.bestMatchPoints,
+      matchHistory: acc.matchHistory
     };
   });
 }
 
 /**
- * Calculates top fraggers / MVP ranking based on individual player stats.
+ * Calculates MVP and Individual Player Leaderboards across tournament matches
  */
-export function calculateTopFraggers(
+export function calculatePlayerLeaderboard(
   tournament: Tournament,
   options?: {
     matchRange?: { start?: number; end?: number };
   }
 ): PlayerLeaderboardStats[] {
   const { teams, matches } = tournament;
-  const playerMap = new Map<
-    string,
-    {
-      playerId: string;
-      playerName: string;
-      inGameId?: string;
-      teamId: string;
-      teamName: string;
-      teamTag: string;
-      totalKills: number;
-      matchesPlayed: number;
-      bestMatchKills: number;
-      headshots: number;
-      damage: number;
-    }
-  >();
+  const playerMap = new Map<string, {
+    playerId: string;
+    playerName: string;
+    inGameId?: string;
+    teamId: string;
+    teamName: string;
+    teamTag: string;
+    totalKills: number;
+    matchesPlayed: number;
+    bestMatchKills: number;
+    headshots?: number;
+    damage?: number;
+  }>();
 
-  // Register all known players
-  teams.forEach((t) => {
-    t.players.forEach((p) => {
-      playerMap.set(p.id, {
-        playerId: p.id,
-        playerName: p.name,
-        inGameId: p.inGameId,
-        teamId: t.id,
-        teamName: t.name,
-        teamTag: t.tag,
-        totalKills: 0,
-        matchesPlayed: 0,
-        bestMatchKills: 0,
-        headshots: 0,
-        damage: 0
-      });
-    });
-  });
-
-  const eligibleMatches = matches.filter((m) => {
-    if (m.status === 'Draft') return false;
-    if (options?.matchRange?.start && m.matchNumber < options.matchRange.start) return false;
-    if (options?.matchRange?.end && m.matchNumber > options.matchRange.end) return false;
-    return true;
-  });
-
-  eligibleMatches.forEach((match) => {
-    match.results.forEach((res) => {
-      if (res.playerStats && res.playerStats.length > 0) {
-        res.playerStats.forEach((ps) => {
-          const entry = playerMap.get(ps.playerId);
-          if (entry) {
-            entry.matchesPlayed += 1;
-            entry.totalKills += ps.kills;
-            entry.bestMatchKills = Math.max(entry.bestMatchKills, ps.kills);
-            if (ps.headshots) entry.headshots += ps.headshots;
-            if (ps.damage) entry.damage += ps.damage;
-          }
+  // Initialize registered players
+  (teams || []).forEach((t) => {
+    if (t && t.players) {
+      t.players.forEach((p) => {
+        if (!p) return;
+        playerMap.set(p.id, {
+          playerId: p.id,
+          playerName: p.name || 'Player',
+          inGameId: p.inGameId,
+          teamId: t.id,
+          teamName: t.name,
+          teamTag: t.tag,
+          totalKills: 0,
+          matchesPlayed: 0,
+          bestMatchKills: 0,
+          headshots: 0,
+          damage: 0
         });
-      }
-    });
+      });
+    }
   });
 
-  const sortedPlayers = Array.from(playerMap.values())
-    .filter((p) => p.totalKills > 0 || p.matchesPlayed > 0)
-    .sort((a, b) => {
-      if (b.totalKills !== a.totalKills) return b.totalKills - a.totalKills;
-      return b.bestMatchKills - a.bestMatchKills;
-    });
+  // Accumulate player kills
+  (matches || []).forEach((m) => {
+    if (!m) return;
+    if (options?.matchRange?.start && m.matchNumber < options.matchRange.start) return;
+    if (options?.matchRange?.end && m.matchNumber > options.matchRange.end) return;
 
-  return sortedPlayers.map((p, index) => ({
-    rank: index + 1,
-    playerId: p.playerId,
-    playerName: p.playerName,
-    inGameId: p.inGameId,
-    teamId: p.teamId,
-    teamName: p.teamName,
-    teamTag: p.teamTag,
-    totalKills: p.totalKills,
-    matchesPlayed: p.matchesPlayed,
-    avgKills: p.matchesPlayed > 0 ? Number((p.totalKills / p.matchesPlayed).toFixed(1)) : p.totalKills,
-    bestMatchKills: p.bestMatchKills,
-    headshots: p.headshots,
-    damage: p.damage
-  }));
+    if (m.results) {
+      m.results.forEach((r) => {
+        if (r && r.playerStats) {
+          r.playerStats.forEach((ps) => {
+            if (!ps || !ps.playerId) return;
+            let player = playerMap.get(ps.playerId);
+            if (!player) {
+              const team = teams?.find((t) => t.id === r.teamId);
+              player = {
+                playerId: ps.playerId,
+                playerName: ps.playerId,
+                teamId: r.teamId,
+                teamName: team?.name || r.teamId,
+                teamTag: team?.tag || 'TEAM',
+                totalKills: 0,
+                matchesPlayed: 0,
+                bestMatchKills: 0,
+                headshots: 0,
+                damage: 0
+              };
+              playerMap.set(ps.playerId, player);
+            }
+            const kills = Math.max(0, Number(ps.kills) || 0);
+            player.totalKills += kills;
+            player.matchesPlayed += 1;
+            player.bestMatchKills = Math.max(player.bestMatchKills, kills);
+            player.headshots = (player.headshots || 0) + (Number(ps.headshots) || 0);
+            player.damage = (player.damage || 0) + (Number(ps.damage) || 0);
+          });
+        }
+      });
+    }
+  });
+
+  return Array.from(playerMap.values())
+    .sort((a, b) => b.totalKills - a.totalKills || b.bestMatchKills - a.bestMatchKills)
+    .map((p, index) => ({
+      rank: index + 1,
+      playerId: p.playerId,
+      playerName: p.playerName,
+      inGameId: p.inGameId,
+      teamId: p.teamId,
+      teamName: p.teamName,
+      teamTag: p.teamTag,
+      totalKills: p.totalKills,
+      matchesPlayed: p.matchesPlayed,
+      avgKills: p.matchesPlayed > 0 ? Number((p.totalKills / p.matchesPlayed).toFixed(1)) : 0,
+      bestMatchKills: p.bestMatchKills,
+      headshots: p.headshots,
+      damage: p.damage
+    }));
 }
 
+export const calculateTopFraggers = calculatePlayerLeaderboard;
+
 /**
- * Calculates tournament overall statistics summary & objective performance insights.
+ * High-level tournament statistics summary (Totals, Averages, Highlights)
  */
 export function calculateTournamentSummary(tournament: Tournament): TournamentStatisticsSummary {
   const standings = calculateTournamentStandings(tournament);
-  const topFraggers = calculateTopFraggers(tournament);
+  const players = calculatePlayerLeaderboard(tournament);
 
-  const completedMatches = tournament.matches.filter((m) => m.status === 'Finalized' || m.status === 'Completed');
+  const completedMatches = tournament.matches?.filter((m) => m && (m.status === 'Completed' || m.status === 'Finalized')).length || 0;
+  const totalMatches = tournament.matches?.length || 0;
   const totalKills = standings.reduce((sum, s) => sum + s.totalKills, 0);
   const totalBooyahs = standings.reduce((sum, s) => sum + s.booyahs, 0);
-  const avgMatchKills = completedMatches.length > 0 ? Number((totalKills / completedMatches.length).toFixed(1)) : 0;
+  const avgMatchKills = completedMatches > 0 ? Number((totalKills / completedMatches).toFixed(1)) : 0;
 
-  const topScoring = standings[0];
-  const mostKills = [...standings].sort((a, b) => b.totalKills - a.totalKills)[0];
-  const mostBooyahs = [...standings].sort((a, b) => b.booyahs - a.booyahs)[0];
-  const topFragger = topFraggers[0];
+  const topScoringTeam = standings.length > 0
+    ? { teamName: standings[0].teamName, teamTag: standings[0].teamTag, totalPoints: standings[0].totalPoints }
+    : undefined;
 
-  // Single-match record highlights
-  let highestSingleMatchScore: { teamName: string; matchNumber: number; points: number } | undefined;
-  let highestSingleMatchKills: { teamName: string; matchNumber: number; kills: number } | undefined;
+  const mostKillsTeam = standings.length > 0
+    ? (() => {
+        const sorted = [...standings].sort((a, b) => b.totalKills - a.totalKills);
+        return { teamName: sorted[0].teamName, teamTag: sorted[0].teamTag, totalKills: sorted[0].totalKills };
+      })()
+    : undefined;
 
-  tournament.matches.forEach((m) => {
-    m.results.forEach((r) => {
-      const team = tournament.teams.find((t) => t.id === r.teamId);
-      if (!team) return;
+  const mostBooyahsTeam = standings.length > 0
+    ? (() => {
+        const sorted = [...standings].sort((a, b) => b.booyahs - a.booyahs);
+        return { teamName: sorted[0].teamName, teamTag: sorted[0].teamTag, booyahs: sorted[0].booyahs };
+      })()
+    : undefined;
 
-      const pts = r.totalPoints || 0;
-      const k = r.kills || 0;
-
-      if (!highestSingleMatchScore || pts > highestSingleMatchScore.points) {
-        highestSingleMatchScore = { teamName: team.name, matchNumber: m.matchNumber, points: pts };
-      }
-      if (!highestSingleMatchKills || k > highestSingleMatchKills.kills) {
-        highestSingleMatchKills = { teamName: team.name, matchNumber: m.matchNumber, kills: k };
-      }
-    });
-  });
+  const topFragger = players.length > 0
+    ? { playerName: players[0].playerName, teamTag: players[0].teamTag, totalKills: players[0].totalKills }
+    : undefined;
 
   return {
-    totalTeams: tournament.teams.length,
-    totalMatches: tournament.matches.length,
-    completedMatches: completedMatches.length,
+    totalTeams: tournament.teams?.length || 0,
+    totalMatches,
+    completedMatches,
     totalKills,
     totalBooyahs,
     avgMatchKills,
-    topScoringTeam: topScoring ? { teamName: topScoring.teamName, teamTag: topScoring.teamTag, totalPoints: topScoring.totalPoints } : undefined,
-    mostKillsTeam: mostKills ? { teamName: mostKills.teamName, teamTag: mostKills.teamTag, totalKills: mostKills.totalKills } : undefined,
-    mostBooyahsTeam: mostBooyahs ? { teamName: mostBooyahs.teamName, teamTag: mostBooyahs.teamTag, booyahs: mostBooyahs.booyahs } : undefined,
-    topFragger: topFragger ? { playerName: topFragger.playerName, teamTag: topFragger.teamTag, totalKills: topFragger.totalKills } : undefined,
-    highestSingleMatchScore,
-    highestSingleMatchKills
+    topScoringTeam,
+    mostKillsTeam,
+    mostBooyahsTeam,
+    topFragger
   };
 }
