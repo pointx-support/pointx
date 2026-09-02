@@ -9,7 +9,6 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { PointXLogo } from '../ui/PointXLogo';
 import { useAuthStore } from '../../store/authStore';
 import { cn } from '../../lib/utils';
 
@@ -95,28 +94,30 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
         )}
       >
         
-        {/* Left: Circular Brand Identity Emblem Badge */}
+        {/* Left: Circular Brand Identity Emblem */}
         <a
           href="#"
           onClick={(e) => {
             e.preventDefault();
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className="flex items-center gap-2 sm:gap-3 group select-none cursor-pointer pl-1 shrink-0"
+          className="flex items-center gap-2.5 sm:gap-3 group select-none cursor-pointer pl-1 shrink-0"
           title="PointX Home"
         >
           <div
             className={cn(
-              'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center font-black transition-transform duration-300 group-hover:scale-105 shadow-md p-1.5',
+              'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center font-black transition-transform duration-300 group-hover:scale-105 shadow-md shrink-0',
               isDark
-                ? 'bg-white text-black'
-                : 'bg-[#111215] text-white'
+                ? 'bg-white text-black shadow-[0_2px_12px_rgba(255,255,255,0.15)]'
+                : 'bg-[#111215] text-white shadow-[0_2px_12px_rgba(0,0,0,0.15)]'
             )}
           >
-            <PointXLogo className="h-5 sm:h-6 w-auto object-contain select-none" />
+            <span className="font-display font-black text-base sm:text-lg tracking-tighter select-none leading-none">
+              P<span className="text-[#ffd000]">X</span>
+            </span>
           </div>
-          <span className="hidden sm:inline font-display font-black text-sm tracking-wider uppercase">
-            Point<span className="text-[var(--accent-primary)]">X</span>
+          <span className="font-display font-black text-sm sm:text-base tracking-wider uppercase">
+            Point<span className="text-[#ffd000]">X</span>
           </span>
         </a>
 
