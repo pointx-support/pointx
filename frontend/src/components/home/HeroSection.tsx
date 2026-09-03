@@ -69,6 +69,102 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
   const isDark = theme === 'dark';
 
+  // High-Visibility 60 FPS Floating Embers & Stardust Energy Canvas
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animId: number;
+    let width = 0;
+    let height = 0;
+
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = canvas.parentElement?.clientWidth || window.innerWidth;
+      height = canvas.parentElement?.clientHeight || window.innerHeight;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      ctx.scale(dpr, dpr);
+    };
+
+    resize();
+    window.addEventListener('resize', resize);
+
+    const colors = isDark
+      ? ['rgba(245, 158, 11, ', 'rgba(251, 191, 36, ', 'rgba(56, 189, 248, ', 'rgba(244, 63, 94, ']
+      : ['rgba(217, 119, 6, ', 'rgba(245, 158, 11, ', 'rgba(14, 165, 233, ', 'rgba(225, 29, 72, '];
+
+    const count = 48;
+    const particles = Array.from({ length: count }, () => ({
+      x: Math.random() * (width || window.innerWidth),
+      y: Math.random() * (height || window.innerHeight),
+      radius: Math.random() * 2.2 + 0.9,
+      speedY: Math.random() * 0.65 + 0.25,
+      speedX: (Math.random() - 0.5) * 0.35,
+      opacity: isDark ? Math.random() * 0.55 + 0.25 : Math.random() * 0.45 + 0.2,
+      pulse: Math.random() * Math.PI * 2,
+      pulseSpeed: Math.random() * 0.03 + 0.015,
+      color: colors[Math.floor(Math.random() * colors.length)]
+    }));
+
+    let running = true;
+    const onVisibility = () => {
+      running = !document.hidden;
+      if (running) {
+        last = performance.now();
+        loop(last);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    let last = performance.now();
+    const loop = (now: number) => {
+      if (!running) return;
+      const dt = Math.min((now - last) / 16.67, 2);
+      last = now;
+
+      ctx.clearRect(0, 0, width, height);
+
+      for (let i = 0; i < count; i++) {
+        const p = particles[i];
+        p.y -= p.speedY * dt;
+        p.x += Math.sin(p.pulse) * 0.45 * dt + p.speedX * dt;
+        p.pulse += p.pulseSpeed * dt;
+
+        const currentOpacity = Math.max(0.12, p.opacity + Math.sin(p.pulse) * 0.22);
+
+        if (p.y < -15) {
+          p.y = height + 15;
+          p.x = Math.random() * width;
+        }
+        if (p.x < -15) p.x = width + 15;
+        if (p.x > width + 15) p.x = -15;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `${p.color}${currentOpacity})`;
+        ctx.shadowColor = `${p.color}0.85)`;
+        ctx.shadowBlur = isDark ? 8 : 4;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      animId = requestAnimationFrame(loop);
+    };
+
+    animId = requestAnimationFrame(loop);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener('resize', resize);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [isDark]);
+
   return (
     <div className="relative w-full overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)] transition-colors duration-500">
       
@@ -77,7 +173,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       {/* ========================================================================= */}
       <section className="relative w-full min-h-[92vh] lg:min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-12 pt-28 pb-16 overflow-hidden">
         
-        {/* Silky-Smooth Organic Animated Ambient Background (Zero Grids, Zero Video Lag) */}
+        {/* Silky-Smooth Organic Animated Ambient Background + Floating Stardust Canvas */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
           {/* Dark Mode Organic Animated Auras */}
           <div
@@ -86,13 +182,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             }`}
           >
             {/* Primary Golden Floating Atmospheric Core */}
-            <div className="absolute top-[-5%] left-1/2 -translate-x-1/2 w-[750px] lg:w-[1100px] h-[450px] lg:h-[600px] bg-gradient-to-b from-amber-500/[0.14] via-amber-500/[0.04] to-transparent rounded-full blur-[150px] animate-orb-primary pointer-events-none" />
+            <div className="absolute top-[-5%] left-1/2 -translate-x-1/2 w-[750px] lg:w-[1100px] h-[450px] lg:h-[600px] bg-gradient-to-b from-amber-500/[0.16] via-amber-500/[0.05] to-transparent rounded-full blur-[140px] animate-orb-primary pointer-events-none" />
             
             {/* Secondary Cyan Broadcast Aurora (Drifting & Breathing) */}
-            <div className="absolute top-[20%] right-[-5%] w-[550px] lg:w-[850px] h-[450px] lg:h-[650px] bg-gradient-to-b from-sky-500/[0.08] via-cyan-500/[0.02] to-transparent rounded-full blur-[140px] animate-orb-secondary pointer-events-none" />
+            <div className="absolute top-[20%] right-[-5%] w-[550px] lg:w-[850px] h-[450px] lg:h-[650px] bg-gradient-to-b from-sky-500/[0.1] via-cyan-500/[0.03] to-transparent rounded-full blur-[130px] animate-orb-secondary pointer-events-none" />
             
             {/* Tertiary Violet/Gold Ambient Pulse Pool */}
-            <div className="absolute top-[40%] left-[5%] w-[450px] lg:w-[650px] h-[350px] lg:h-[500px] bg-gradient-to-b from-amber-400/[0.06] via-violet-500/[0.02] to-transparent rounded-full blur-[160px] animate-orb-pulse pointer-events-none" />
+            <div className="absolute top-[40%] left-[5%] w-[450px] lg:w-[650px] h-[350px] lg:h-[500px] bg-gradient-to-b from-amber-400/[0.08] via-violet-500/[0.03] to-transparent rounded-full blur-[150px] animate-orb-pulse pointer-events-none" />
             
             {/* Deep Horizon Grounding Vignette */}
             <div className="absolute bottom-0 left-0 right-0 h-36 bg-gradient-to-t from-[var(--bg-base)] to-transparent pointer-events-none" />
@@ -105,14 +201,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             }`}
           >
             {/* Warm Sunrise Animated Bloom */}
-            <div className="absolute top-[-5%] left-1/2 -translate-x-1/2 w-[750px] lg:w-[1100px] h-[450px] lg:h-[600px] bg-gradient-to-b from-amber-400/[0.12] via-amber-300/[0.03] to-transparent rounded-full blur-[140px] animate-orb-primary pointer-events-none" />
+            <div className="absolute top-[-5%] left-1/2 -translate-x-1/2 w-[750px] lg:w-[1100px] h-[450px] lg:h-[600px] bg-gradient-to-b from-amber-400/[0.14] via-amber-300/[0.04] to-transparent rounded-full blur-[130px] animate-orb-primary pointer-events-none" />
             
             {/* Soft Cerulean Drifting Light */}
-            <div className="absolute top-[15%] right-[-5%] w-[550px] lg:w-[800px] h-[400px] lg:h-[600px] bg-gradient-to-b from-sky-400/[0.06] to-transparent rounded-full blur-[130px] animate-orb-secondary pointer-events-none" />
+            <div className="absolute top-[15%] right-[-5%] w-[550px] lg:w-[800px] h-[400px] lg:h-[600px] bg-gradient-to-b from-sky-400/[0.08] to-transparent rounded-full blur-[120px] animate-orb-secondary pointer-events-none" />
             
             {/* Soft Mist Grounding */}
             <div className="absolute bottom-0 left-0 right-0 h-36 bg-gradient-to-t from-[var(--bg-base)] to-transparent pointer-events-none" />
           </div>
+
+          {/* 100% Visibly Moving Stardust & Energy Particle Canvas */}
+          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none z-0" />
         </div>
 
         {/* ========================================================================= */}
@@ -126,7 +225,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             {/* ─────────────────────────────────────────────────────────────────── */}
             <div className="lg:col-span-7 flex flex-col items-center lg:items-start text-center lg:text-left space-y-5">
               
-              {/* Top Eyebrow Status Capsule (Upgraded Rajdhani Esports Font) */}
+              {/* Top Eyebrow Status Capsule */}
               <FadeIn delay={0.05}>
                 <div
                   className={`inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border text-xs backdrop-blur-xl shadow-sm transition-colors duration-300 ${
@@ -134,7 +233,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       ? 'bg-black/60 border-white/15 text-zinc-300'
                       : 'bg-white/90 border-slate-300 text-slate-800 shadow-sm'
                   }`}
-                  style={{ fontFamily: "'Rajdhani', sans-serif" }}
+                  style={{ fontFamily: "'Outfit', sans-serif" }}
                 >
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -183,12 +282,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </div>
               </div>
 
-              {/* Bold Editorial Headline with Chiseled Rajdhani Typography */}
+              {/* Bold Editorial Headline with Luxury Outfit Typography */}
               <SlideIn direction="up" delay={0.15}>
                 <div className="space-y-3">
                   <h1
-                    className="text-4xl sm:text-5xl md:text-6xl lg:text-[66px] font-black uppercase tracking-tight leading-[0.98] drop-shadow-sm"
-                    style={{ fontFamily: "'Rajdhani', sans-serif" }}
+                    className="text-4xl sm:text-5xl md:text-6xl lg:text-[64px] font-black uppercase tracking-[-0.03em] leading-[1.02] drop-shadow-sm"
+                    style={{ fontFamily: "'Outfit', sans-serif" }}
                   >
                     <span className={isDark ? 'text-white' : 'text-slate-900'}>
                       THE REAL-TIME ENGINE
@@ -199,13 +298,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     </span>
                   </h1>
 
-                  {/* Refined Supporting Narrative */}
+                  {/* Refined Supporting Narrative with Luxury Outfit Typography */}
                   <p
-                    className={`font-normal text-sm sm:text-base md:text-lg max-w-xl leading-relaxed tracking-[-0.012em] ${
+                    className={`font-normal text-sm sm:text-base md:text-lg max-w-xl leading-relaxed tracking-[-0.015em] ${
                       isDark ? 'text-zinc-300/90' : 'text-slate-700'
                     }`}
                     style={{
-                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif"
+                      fontFamily: "'Outfit', sans-serif"
                     }}
                   >
                     Automate points tables in &lt;50ms, manage multi-team championship brackets with zero manual errors, and stream broadcast-grade 4K overlays directly to OBS Studio.
