@@ -7,7 +7,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import type { Variants } from 'motion/react';
 import { useAuthStore } from '../../store/authStore';
-import { cn, triggerHaptic } from '../../lib/utils';
+import { cn } from '../../lib/utils';
+import { haptics } from '../../lib/haptics';
 import { AnimatedHamburger, AnimatedThemeToggle } from '../animation';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { mobileDrawerVariants, mobileDrawerItemVariants, MOTION_EASINGS } from '../animation/motionTokens';
@@ -98,7 +99,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
 
   const handleScrollTo = (e: React.MouseEvent<HTMLAnchorElement>, href: string, id: string) => {
     e.preventDefault();
-    triggerHaptic(8);
+    haptics.light();
     setActiveSection(id);
     setIsMobileMenuOpen(false);
 
@@ -312,7 +313,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               variants={itemEntranceVariants}
               type="button"
               onClick={() => {
-                triggerHaptic(12);
+                haptics.medium();
                 onNavigateDashboard();
               }}
               whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}
@@ -337,7 +338,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               variants={itemEntranceVariants}
               type="button"
               onClick={() => {
-                triggerHaptic(12);
+                haptics.medium();
                 onNavigateLogin();
               }}
               whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}

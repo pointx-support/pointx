@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { FC } from 'react';
+import { haptics } from '../../lib/haptics';
 import {
   Trophy,
   LayoutGrid,
@@ -193,12 +194,14 @@ export const Sidebar: FC<SidebarProps> = ({
 
     // Organization and Account are ALWAYS accessible before choosing or creating a tournament
     if (tabId === 'organization' || tabId === 'account') {
+      haptics.light();
       if (onSelectWorkspaceTab) onSelectWorkspaceTab(tabId as any);
       else setActiveTab(tabId as any);
       return;
     }
 
     if (tabId === 'admin-dashboard') {
+      haptics.light();
       setExpandedSection('admin');
       if (onSelectAdminDashboard) onSelectAdminDashboard();
       return;
@@ -206,10 +209,13 @@ export const Sidebar: FC<SidebarProps> = ({
 
     // All tournament arena tabs, live broadcast, and graphics require an active tournament
     if (isTournamentLocked) {
+      haptics.warning();
       triggerDashboardHighlight();
       setShowTournamentRequiredModal(true);
       return;
     }
+
+    haptics.light();
 
     if (tabId === 'graphics') {
       setExpandedSection('graphics');

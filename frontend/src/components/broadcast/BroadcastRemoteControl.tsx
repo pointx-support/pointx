@@ -11,6 +11,7 @@ import { tournamentsApi } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
+import { haptics } from '../../lib/haptics';
 import {
   Smartphone,
   RotateCcw,
@@ -584,6 +585,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   };
 
   const handleTogglePlayer = (teamId: string, playerIndex: number) => {
+    haptics.selection();
     setSquadStates((prev) => {
       const current = prev[teamId] || ['alive', 'alive', 'alive', 'alive'];
       const cycle: Record<LivePlayerState, LivePlayerState> = {
@@ -613,6 +615,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   };
 
   const handleWipeSquad = (teamId: string) => {
+    haptics.medium();
     const nextState = {
       ...squadStates,
       [teamId]: ['eliminated', 'eliminated', 'eliminated', 'eliminated'] as [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]
@@ -641,6 +644,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   };
 
   const handleReviveSquad = (teamId: string) => {
+    haptics.light();
     const nextState = {
       ...squadStates,
       [teamId]: ['alive', 'alive', 'alive', 'alive'] as [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]
@@ -655,6 +659,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   };
 
   const handleResetAllAlive = () => {
+    haptics.warning();
     const nextState = { ...squadStates };
     tournament.teams.forEach((t) => {
       nextState[t.id] = ['alive', 'alive', 'alive', 'alive'];
@@ -672,12 +677,14 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   };
 
   const handleHighlightOnStream = (teamId: string) => {
+    haptics.light();
     const nextHighlight = highlightedTeamId === teamId ? null : teamId;
     setHighlightedTeamId(nextHighlight);
     syncToBroadcast(squadStates, nextHighlight);
   };
 
   const handleAdjustKills = (teamId: string, delta: number) => {
+    haptics.selection();
     if (!activeMatch) return;
 
     const currentResult = activeMatch.results.find((r: TeamMatchResult) => r.teamId === teamId);
@@ -714,6 +721,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
   // 2-Step Confirmation Point Boost Action
   const executeAddPointToAllTeams = () => {
+    haptics.success();
     if (!activeMatch) return;
 
     const updatedResults = activeMatch.results.map((r: TeamMatchResult) => {
@@ -845,6 +853,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
     syncToBroadcast(resetSquads, null, isOverlayVisible, updatedTour);
 
     setIsReportModalOpen(false);
+    haptics.success();
 
     showToast({
       type: 'success',

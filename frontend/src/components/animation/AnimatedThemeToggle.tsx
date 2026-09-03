@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { MOTION_EASINGS } from './motionTokens';
+import { haptics } from '../../lib/haptics';
 
 export interface AnimatedThemeToggleProps {
   isDark: boolean;
@@ -25,7 +26,10 @@ export const AnimatedThemeToggle: React.FC<AnimatedThemeToggleProps> = ({
   return (
     <motion.button
       type="button"
-      onClick={onToggle}
+      onClick={() => {
+        haptics.medium();
+        onToggle();
+      }}
       whileHover={prefersReducedMotion ? {} : { scale: 1.08 }}
       whileTap={prefersReducedMotion ? {} : { scale: 0.92 }}
       transition={{ type: 'spring', stiffness: 450, damping: 26 }}

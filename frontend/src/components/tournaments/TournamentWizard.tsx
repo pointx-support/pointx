@@ -10,6 +10,7 @@ import {
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Badge } from '../ui/Badge';
+import { haptics } from '../../lib/haptics';
 import {
   Trophy,
   Swords,
@@ -82,21 +83,25 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
   const handleNext = () => {
     if (currentStep === 1) {
       if (!title.trim()) {
+        haptics.error();
         setTitleError('Tournament title is required');
         return;
       }
       if (title.trim().length < 3) {
+        haptics.error();
         setTitleError('Title must be at least 3 characters long');
         return;
       }
       setTitleError('');
     }
+    haptics.light();
     if (currentStep < 6) {
       setCurrentStep((prev) => (prev + 1) as any);
     }
   };
 
   const handleBack = () => {
+    haptics.light();
     if (currentStep > 1) {
       setCurrentStep((prev) => (prev - 1) as any);
     } else {
@@ -234,6 +239,7 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
       updatedAt: new Date().toISOString()
     };
 
+    haptics.success();
     onComplete(newTournament);
   };
 

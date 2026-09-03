@@ -9,6 +9,7 @@ import { Badge } from '../ui/Badge';
 import { Modal } from '../ui/Modal';
 import { CalculationLoader } from '../ui/CalculationLoader';
 import { useToast } from '../ui/Toast';
+import { haptics } from '../../lib/haptics';
 import {
   ArrowLeft,
   Save,
@@ -110,6 +111,7 @@ export const MatchEditor: React.FC<MatchEditorProps> = ({
     value: any
   ) => {
     if (isFinalized) return;
+    haptics.selection();
 
     setRawResults((prev) =>
       prev.map((r) => {
@@ -128,6 +130,7 @@ export const MatchEditor: React.FC<MatchEditorProps> = ({
   };
 
   const handleSaveDraft = () => {
+    haptics.medium();
     updateMatchResults(tournament.id, match.id, rawResults, 'Draft', customLabel, mapName);
     showToast({
       type: 'info',
@@ -148,6 +151,7 @@ export const MatchEditor: React.FC<MatchEditorProps> = ({
       setIsCalculating(false);
 
       if (res.success) {
+        haptics.success();
         showToast({
           type: 'success',
           title: 'Match Finalized',
@@ -155,6 +159,7 @@ export const MatchEditor: React.FC<MatchEditorProps> = ({
         });
         onBack();
       } else {
+        haptics.error();
         showToast({
           type: 'error',
           title: 'Finalization Failed',

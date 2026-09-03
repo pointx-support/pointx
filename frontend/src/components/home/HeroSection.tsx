@@ -4,7 +4,7 @@ import { PointXLogo } from '../ui/PointXLogo';
 import { FadeIn, SlideIn } from '../animation/RevealAnimations';
 import { useAuthStore } from '../../store/authStore';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { triggerHaptic } from '../../lib/utils';
+import { haptics } from '../../lib/haptics';
 import {
   Zap,
   ArrowRight,
@@ -272,7 +272,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      triggerHaptic(14);
+                      haptics.medium();
                       if (isAuthenticated) {
                         (onNavigateDashboard || onNavigateLogin)();
                       } else {
@@ -301,7 +301,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      triggerHaptic(14);
+                      haptics.medium();
                       if (isAuthenticated) {
                         (onNavigateDashboard || onNavigateLogin)();
                       } else {

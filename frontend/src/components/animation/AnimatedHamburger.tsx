@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { cn } from '../../lib/utils';
 import { MOTION_SPRINGS } from './motionTokens';
+import { haptics } from '../../lib/haptics';
 
 export interface AnimatedHamburgerProps {
   isOpen: boolean;
@@ -22,7 +23,10 @@ export const AnimatedHamburger: React.FC<AnimatedHamburgerProps> = ({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        haptics.light();
+        onClick?.();
+      }}
       className={cn(
         'relative flex flex-col justify-center items-center w-8 h-8 rounded-full transition-colors cursor-pointer select-none focus:outline-none',
         className

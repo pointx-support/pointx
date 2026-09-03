@@ -7,6 +7,7 @@ import {
   User as UserIcon
 } from 'lucide-react';
 import { useTournamentStore } from '../../store/tournamentStore';
+import { haptics } from '../../lib/haptics';
 import type { FC } from 'react';
 
 export const BottomNav: FC = () => {
@@ -30,7 +31,10 @@ export const BottomNav: FC = () => {
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => {
+                haptics.light();
+                setActiveTab(item.id);
+              }}
               className={`relative flex-1 min-w-0 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all cursor-pointer ${
                 isActive
                   ? 'bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] font-bold'

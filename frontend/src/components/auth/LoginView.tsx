@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { PointXLogo } from '../ui/PointXLogo';
 import { cn } from '../../lib/utils';
+import { haptics } from '../../lib/haptics';
 import './LoginView.css';
 
 export interface LoginViewProps {
@@ -51,6 +52,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   }, [initialMode]);
 
   const handleToggleMode = (signUpActive: boolean) => {
+    haptics.light();
     setIsToggled(signUpActive);
     onModeChange?.(signUpActive ? 'signup' : 'signin');
     if (typeof window !== 'undefined') {
@@ -108,8 +110,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const res = await login(emailToUse, loginPassword);
 
     if (res.success) {
+      haptics.success();
       onAuthSuccess?.();
     } else {
+      haptics.error();
       if (res.requiresVerification) {
         setPendingEmail(emailToUse);
         setIsOtpStep(true);
@@ -134,8 +138,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const res = await signup(signupUsername, emailToUse, signupPassword, 'Independent Esports Organizer');
 
     if (!res.success) {
+      haptics.error();
       setErrorMessage(res.error || 'Registration failed.');
     } else {
+      haptics.success();
       setPendingEmail(emailToUse);
       setIsOtpStep(true);
       setResendCooldown(60);
@@ -150,14 +156,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
     const cleanOtp = otpCode.trim();
     if (cleanOtp.length !== 6) {
+      haptics.warning();
       setErrorMessage('Please enter the 6-digit OTP code.');
       return;
     }
 
     const res = await verifyOtp(pendingEmail.trim().toLowerCase(), cleanOtp, 'signup');
     if (!res.success) {
+      haptics.error();
       setErrorMessage(res.error || 'OTP verification failed.');
     } else {
+      haptics.success();
       setSuccessMessage('🎉 Account activated successfully! Welcome to PointX Arena.');
       onAuthSuccess?.();
     }
