@@ -342,10 +342,9 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
                   : 'bg-[#0B0D14] text-white hover:bg-neutral-900 shadow-[0_2px_10px_rgba(0,0,0,0.18)]'
               )}
             >
-              <LogIn className="h-3.5 w-3.5 text-neutral-300 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+              <LogIn className="h-3.5 w-3.5 text-[#ffd000] shrink-0 group-hover:translate-x-0.5 transition-transform" />
               <span className="hidden sm:inline font-semibold tracking-[-0.01em]">Organizer Sign In</span>
               <span className="sm:hidden font-semibold">Sign In</span>
-              <ArrowRight className="h-3.5 w-3.5 text-neutral-400 group-hover:text-white group-hover:translate-x-1 transition-all duration-200 ease-out shrink-0" />
             </motion.button>
           )}
 
