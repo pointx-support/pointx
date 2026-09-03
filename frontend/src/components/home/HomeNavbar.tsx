@@ -163,7 +163,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
         initial="hidden"
         animate="visible"
         className={cn(
-          'pointer-events-auto w-full max-w-[900px] lg:max-w-[980px] h-15 sm:h-16 lg:h-[68px] rounded-full px-3 sm:px-4 flex items-center justify-between transition-all duration-300 backdrop-blur-2xl',
+          'pointer-events-auto w-full max-w-[960px] lg:max-w-[1080px] xl:max-w-[1140px] h-16 sm:h-[68px] lg:h-[72px] rounded-full px-3.5 sm:px-4.5 flex items-center justify-between transition-all duration-300 backdrop-blur-2xl',
           isDark
             ? isScrolled
               ? 'bg-[#101319]/95 border border-white/[0.14] text-white shadow-[0_20px_50px_rgba(0,0,0,0.8)]'
@@ -183,7 +183,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
             setActiveSection('live-matrix');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className="flex items-center gap-2.5 sm:gap-3 group select-none cursor-pointer pl-0.5 sm:pl-1 shrink-0"
+          className="flex items-center gap-2.5 sm:gap-3 group select-none cursor-pointer pl-1 shrink-0"
           title="PointX Esports"
         >
           {/* PX Circular Emblem */}
@@ -233,21 +233,21 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
                 onClick={(e) => handleScrollTo(e, link.href, link.id)}
                 onMouseEnter={() => setHoveredNav(link.id)}
                 className={cn(
-                  'relative z-10 h-10 sm:h-11 px-4 sm:px-5 rounded-full text-[13px] sm:text-[14px] font-medium whitespace-nowrap shrink-0 transition-colors duration-200 select-none cursor-pointer font-nav flex items-center justify-center gap-2 leading-none',
+                  'relative z-10 h-[46px] sm:h-[50px] px-4 sm:px-5 rounded-full text-[13px] sm:text-[14px] font-medium whitespace-nowrap shrink-0 transition-colors duration-200 select-none cursor-pointer font-nav flex items-center justify-center gap-2 leading-none',
                   isCurrentActive
-                    ? (isDark ? 'text-white font-semibold' : 'text-neutral-950 font-semibold')
+                    ? (isDark ? 'text-white font-bold' : 'text-neutral-950 font-bold')
                     : (isDark ? 'text-neutral-400 hover:text-white font-medium' : 'text-neutral-600 hover:text-neutral-950 font-medium')
                 )}
               >
-                {/* Active Sliding Pill Indicator with Single Smooth Spring Motion */}
+                {/* Active Sliding Pill Indicator with Generous Height & Single Smooth Spring Motion */}
                 {isCurrentActive && (
                   <motion.div
                     layoutId="navbar-active-capsule"
                     className={cn(
                       'absolute inset-0 rounded-full -z-10 shadow-xs pointer-events-none',
                       isDark
-                        ? 'bg-white/[0.16] border border-white/[0.22] shadow-[0_4px_16px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.15)]'
-                        : 'bg-neutral-900/[0.08] border border-neutral-900/[0.12] shadow-[0_2px_8px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.8)]'
+                        ? 'bg-white/[0.18] border border-white/[0.25] shadow-[0_4px_18px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.2)]'
+                        : 'bg-neutral-900/[0.09] border border-neutral-900/[0.14] shadow-[0_2px_10px_rgba(0,0,0,0.08),inset_0_1px_1px_rgba(255,255,255,0.85)]'
                     )}
                     transition={{
                       type: 'spring',
@@ -268,8 +268,8 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
                     className={cn(
                       'absolute inset-0 rounded-full -z-10 pointer-events-none',
                       isDark
-                        ? 'bg-white/[0.06]'
-                        : 'bg-neutral-900/[0.035]'
+                        ? 'bg-white/[0.07]'
+                        : 'bg-neutral-900/[0.04]'
                     )}
                   />
                 )}
@@ -288,14 +288,14 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
                   </span>
                 )}
 
-                <span className="whitespace-nowrap select-none font-semibold tracking-[-0.01em]">{link.label}</span>
+                <span className="whitespace-nowrap select-none font-bold tracking-[-0.01em]">{link.label}</span>
               </a>
             );
           })}
         </nav>
 
-        {/* Right: Theme Toggle & Signature Capsule Action Button */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5">
+        {/* Right: Theme Toggle & Signature Capsule Action Button (Safely Padded from Outer Lid) */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 pr-1 shrink-0">
           
           {/* Smooth Animated Theme Toggle Button */}
           <motion.div variants={itemEntranceVariants}>
@@ -305,7 +305,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
             />
           </motion.div>
 
-          {/* High-Contrast Capsule Account Button */}
+          {/* High-Contrast Capsule Account Button with Bold Clean Outfit Typography */}
           {isAuthenticated ? (
             <motion.button
               variants={itemEntranceVariants}
@@ -315,17 +315,18 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 450, damping: 28 }}
               className={cn(
-                'h-10 sm:h-11 inline-flex items-center gap-2 sm:gap-2.5 px-4 sm:px-5 rounded-full text-xs sm:text-[13px] font-semibold transition-all duration-300 cursor-pointer shadow-sm group select-none font-nav',
+                'h-10 sm:h-11 inline-flex items-center gap-2 sm:gap-2.5 px-3.5 sm:px-4 rounded-full text-xs sm:text-[13px] font-bold transition-all duration-300 cursor-pointer shadow-sm group select-none shrink-0',
                 isDark
                   ? 'bg-[#181B24] border border-white/15 text-white hover:border-white/30 hover:bg-[#202532] shadow-[0_2px_12px_rgba(0,0,0,0.4)]'
                   : 'bg-[#0B0D14] text-white hover:bg-neutral-900 shadow-[0_2px_10px_rgba(0,0,0,0.18)]'
               )}
+              style={{ fontFamily: "'Outfit', sans-serif" }}
             >
-              <LayoutGrid className="h-4 w-4 text-neutral-300 shrink-0 transition-transform duration-200 group-hover:rotate-6" />
-              <span className="truncate max-w-[110px] sm:max-w-[150px] md:max-w-[180px] font-semibold text-white tracking-[-0.01em]">
+              <LayoutGrid className="h-3.5 w-3.5 text-neutral-300 shrink-0 transition-transform duration-200 group-hover:rotate-6" />
+              <span className="truncate max-w-[95px] sm:max-w-[125px] md:max-w-[145px] font-bold text-white tracking-wide">
                 {user?.email || 'admin@pointx.gg'}
               </span>
-              <ArrowRight className="h-4 w-4 text-neutral-400 group-hover:text-white group-hover:translate-x-1 transition-all duration-200 ease-out shrink-0" />
+              <ArrowRight className="h-3.5 w-3.5 text-neutral-400 group-hover:text-white group-hover:translate-x-1 transition-all duration-200 ease-out shrink-0" />
             </motion.button>
           ) : (
             <motion.button
@@ -336,15 +337,16 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 450, damping: 28 }}
               className={cn(
-                'h-10 sm:h-11 inline-flex items-center gap-2 sm:gap-2.5 px-4 sm:px-5 rounded-full text-xs sm:text-[13px] font-semibold transition-all duration-300 cursor-pointer shadow-sm group select-none font-nav',
+                'h-10 sm:h-11 inline-flex items-center gap-2 sm:gap-2.5 px-4 sm:px-5 rounded-full text-xs sm:text-[13px] font-bold tracking-wide transition-all duration-300 cursor-pointer shadow-sm group select-none shrink-0',
                 isDark
                   ? 'bg-[#181B24] border border-white/15 text-white hover:border-white/30 hover:bg-[#202532] shadow-[0_2px_12px_rgba(0,0,0,0.4)]'
                   : 'bg-[#0B0D14] text-white hover:bg-neutral-900 shadow-[0_2px_10px_rgba(0,0,0,0.18)]'
               )}
+              style={{ fontFamily: "'Outfit', sans-serif" }}
             >
               <LogIn className="h-4 w-4 text-[#ffd000] shrink-0 group-hover:translate-x-0.5 transition-transform" />
-              <span className="hidden sm:inline font-semibold tracking-[-0.01em]">Organizer Sign In</span>
-              <span className="sm:hidden font-semibold">Sign In</span>
+              <span className="hidden sm:inline font-bold tracking-wide">Organizer Sign In</span>
+              <span className="sm:hidden font-bold">Sign In</span>
             </motion.button>
           )}
 

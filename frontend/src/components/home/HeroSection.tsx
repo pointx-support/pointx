@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { PointXLogo } from '../ui/PointXLogo';
 import { FadeIn, SlideIn } from '../animation/RevealAnimations';
 import { useAuthStore } from '../../store/authStore';
@@ -68,6 +69,36 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   }, [theme, prefersReducedMotion]);
 
   const isDark = theme === 'dark';
+
+  // Rotating Championship Value Propositions (Fixed Height Container = 0 Layout Shift)
+  const ROTATING_HEADLINES = [
+    {
+      line1: 'THE REAL-TIME ENGINE',
+      line2: 'FOR ESPORTS TOURNAMENTS',
+    },
+    {
+      line1: 'INSTANT LIVE LEADERBOARDS',
+      line2: '& AUTOMATED SCORING',
+    },
+    {
+      line1: 'BROADCAST-GRADE 4K',
+      line2: 'OVERLAYS FOR OBS STUDIO',
+    },
+    {
+      line1: 'ZERO MANUAL ERRORS',
+      line2: 'FOR CHAMPIONSHIP BRACKETS',
+    },
+  ];
+
+  const [headlineIdx, setHeadlineIdx] = useState(0);
+
+  useEffect(() => {
+    if (prefersReducedMotion) return;
+    const interval = setInterval(() => {
+      setHeadlineIdx((prev) => (prev + 1) % ROTATING_HEADLINES.length);
+    }, 4200);
+    return () => clearInterval(interval);
+  }, [prefersReducedMotion]);
 
   return (
     <div className="relative w-full overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)] transition-colors duration-500">
@@ -169,7 +200,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   }`}
                 />
 
-                {/* Animated Logo Container with Requirement 12 Transition Behavior */}
+                {/* Telemetry Radar Pulse Waves (Active Transmission Field) */}
+                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] sm:w-[460px] h-[320px] sm:h-[460px] rounded-full border pointer-events-none animate-radar-slow ${isDark ? 'border-amber-400/25' : 'border-amber-500/15'}`} />
+                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[220px] sm:w-[320px] h-[220px] sm:h-[320px] rounded-full border pointer-events-none animate-radar-fast ${isDark ? 'border-amber-400/35' : 'border-amber-500/20'}`} />
+
+                {/* Animated Logo Container with Zero Black Shade in Light Theme */}
                 <div
                   className={`relative z-10 transition-all duration-300 ease-out select-none ${
                     logoPhase === 'fading_out'
@@ -181,7 +216,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   style={{ willChange: 'opacity, transform, filter' }}
                 >
                   <PointXLogo
-                    className="h-20 sm:h-28 md:h-36 lg:h-44 w-auto max-w-[280px] sm:max-w-[420px] md:max-w-[560px] object-contain hover:scale-[1.02] transition-transform duration-300 drop-shadow-[0_16px_36px_rgba(0,0,0,0.35)] dark:drop-shadow-[0_20px_48px_rgba(0,0,0,0.85)]"
+                    className="h-20 sm:h-28 md:h-36 lg:h-44 w-auto max-w-[280px] sm:max-w-[420px] md:max-w-[560px] object-contain hover:scale-[1.02] transition-transform duration-300 drop-shadow-none dark:drop-shadow-[0_20px_48px_rgba(0,0,0,0.85)]"
                     alt="PointX Esports Infrastructure Platform"
                     forceTheme={effectiveLogoTheme}
                     withShine={true}
@@ -189,21 +224,31 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </div>
               </div>
 
-              {/* Bold Editorial Headline with Luxury Outfit Typography */}
+              {/* Bold Editorial Headline with Smooth Rotating Sentences & Zero Layout Shift */}
               <SlideIn direction="up" delay={0.15}>
                 <div className="space-y-3">
-                  <h1
-                    className="text-4xl sm:text-5xl md:text-6xl lg:text-[64px] font-black uppercase tracking-[-0.03em] leading-[1.02] drop-shadow-sm"
-                    style={{ fontFamily: "'Outfit', sans-serif" }}
-                  >
-                    <span className={isDark ? 'text-white' : 'text-slate-900'}>
-                      THE REAL-TIME ENGINE
-                    </span>{' '}
-                    <br className="hidden sm:inline" />
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 dark:from-amber-300 dark:via-yellow-200 dark:to-amber-400">
-                      FOR ESPORTS TOURNAMENTS
-                    </span>
-                  </h1>
+                  {/* Fixed-Height Display Container (Guarantees zero UI jumping) */}
+                  <div className="h-[96px] sm:h-[120px] md:h-[142px] lg:h-[155px] flex flex-col justify-center overflow-hidden">
+                    <AnimatePresence mode="wait">
+                      <motion.h1
+                        key={headlineIdx}
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -16 }}
+                        transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+                        className="text-4xl sm:text-5xl md:text-6xl lg:text-[64px] font-black uppercase tracking-[-0.03em] leading-[1.02] drop-shadow-sm"
+                        style={{ fontFamily: "'Outfit', sans-serif" }}
+                      >
+                        <span className={isDark ? 'text-white' : 'text-slate-900'}>
+                          {ROTATING_HEADLINES[headlineIdx].line1}
+                        </span>{' '}
+                        <br className="hidden sm:inline" />
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 dark:from-amber-300 dark:via-yellow-200 dark:to-amber-400">
+                          {ROTATING_HEADLINES[headlineIdx].line2}
+                        </span>
+                      </motion.h1>
+                    </AnimatePresence>
+                  </div>
 
                   {/* Refined Supporting Narrative with Luxury Outfit Typography */}
                   <p
@@ -219,32 +264,32 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </div>
               </SlideIn>
 
-              {/* Primary & Secondary Action Buttons */}
+              {/* Primary & Secondary Action Buttons with Bold Clean Outfit Typography */}
               <SlideIn direction="up" delay={0.2}>
                 <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5 w-full sm:w-auto pt-2">
-                  {/* Primary CTA */}
+                  {/* Primary CTA: Enter the Arena / Enter Console */}
                   <button
                     type="button"
                     onClick={isAuthenticated ? (onNavigateDashboard || onNavigateLogin) : onNavigateLogin}
                     className="relative w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 sm:px-10 py-4 rounded-2xl text-sm sm:text-base font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-[0_8px_30px_rgba(255,208,0,0.4)] hover:shadow-[0_0_40px_rgba(255,208,0,0.65)] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer uppercase tracking-wider group overflow-hidden border border-amber-300/80"
-                    style={{ fontFamily: "'Rajdhani', sans-serif" }}
+                    style={{ fontFamily: "'Outfit', sans-serif" }}
                   >
                     <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none" />
                     {isAuthenticated ? (
                       <>
                         <LayoutDashboard className="h-4 w-4 fill-black text-black group-hover:rotate-12 transition-transform duration-300 shrink-0" />
-                        <span>ENTER CONSOLE</span>
+                        <span className="font-black">ENTER CONSOLE</span>
                       </>
                     ) : (
                       <>
                         <Zap className="h-4 w-4 fill-black text-black group-hover:rotate-12 transition-transform duration-300 shrink-0" />
-                        <span>ENTER THE ARENA</span>
+                        <span className="font-black">ENTER THE ARENA</span>
                       </>
                     )}
                     <ArrowRight className="h-4 w-4 stroke-[3] text-black group-hover:translate-x-1 transition-transform duration-300 shrink-0" />
                   </button>
 
-                  {/* Secondary CTA */}
+                  {/* Secondary CTA: Organizer Sign In / Dashboard */}
                   <button
                     type="button"
                     onClick={isAuthenticated ? (onNavigateDashboard || onNavigateLogin) : onNavigateLogin}
@@ -253,7 +298,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                         ? 'bg-black/60 hover:bg-black/80 border-white/20 hover:border-amber-400/60 text-white'
                         : 'bg-white hover:bg-slate-100 border-slate-300 hover:border-amber-500 text-slate-900 shadow-sm'
                     }`}
-                    style={{ fontFamily: "'Rajdhani', sans-serif" }}
+                    style={{ fontFamily: "'Outfit', sans-serif" }}
                   >
                     {isAuthenticated ? (
                       <>

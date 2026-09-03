@@ -304,6 +304,68 @@
   will-change: transform, opacity;
 }
 
+@keyframes ping-radar-slow {
+  0% {
+    transform: translate(-50%, -50%) scale(0.65);
+    opacity: 0.65;
+  }
+  60% {
+    transform: translate(-50%, -50%) scale(1.35);
+    opacity: 0.15;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes ping-radar-fast {
+  0% {
+    transform: translate(-50%, -50%) scale(0.45);
+    opacity: 0.75;
+  }
+  65% {
+    transform: translate(-50%, -50%) scale(1.15);
+    opacity: 0.2;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
+}
+
+@keyframes light-laser-sweep {
+  0% {
+    transform: translateX(-100%) rotate(-6deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.75;
+  }
+  80% {
+    opacity: 0.75;
+  }
+  100% {
+    transform: translateX(100%) rotate(-6deg);
+    opacity: 0;
+  }
+}
+
+.animate-radar-slow {
+  animation: ping-radar-slow 4.5s cubic-bezier(0.1, 0.2, 0.7, 1) infinite;
+  will-change: transform, opacity;
+}
+
+.animate-radar-fast {
+  animation: ping-radar-fast 3.2s cubic-bezier(0.1, 0.2, 0.7, 1) infinite 1.4s;
+  will-change: transform, opacity;
+}
+
+.animate-laser-sweep {
+  animation: light-laser-sweep 7s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
 /* Glass Button Slide Navigation System */
 .glass-nav-item {
   position: relative;
