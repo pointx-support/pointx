@@ -60,6 +60,7 @@ export interface PlatformSettings {
   maxTeamsPerTournament: number;
   defaultExportResolution: '1080p' | '4k';
   requireOnboardingVerification: boolean;
+  demoTournamentsEnabled?: boolean;
   systemAnnouncements: SystemAnnouncement[];
 }
 

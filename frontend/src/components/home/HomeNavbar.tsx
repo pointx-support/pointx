@@ -165,7 +165,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
         initial="hidden"
         animate="visible"
         className={cn(
-          'pointer-events-auto w-full max-w-[920px] lg:max-w-[1020px] xl:max-w-[1080px] h-[52px] sm:h-[56px] lg:h-[60px] rounded-full px-3 sm:px-4 flex items-center justify-between transition-all duration-300 backdrop-blur-2xl',
+          'pointer-events-auto w-full max-w-[920px] lg:max-w-[1020px] xl:max-w-[1080px] h-[52px] sm:h-[56px] lg:h-[60px] rounded-full px-3 sm:px-4 flex items-center justify-between transition-colors duration-200 backdrop-blur-2xl',
           isDark
             ? isScrolled
               ? 'bg-[#101319]/95 border border-white/[0.14] text-white shadow-[0_20px_50px_rgba(0,0,0,0.8)]'

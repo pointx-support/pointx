@@ -29,7 +29,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   onNavigateDashboard,
 }) => {
   return (
-    <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] flex flex-col selection:bg-[var(--accent-primary)]/30 selection:text-[var(--text-primary)] font-sans antialiased overflow-x-hidden transition-colors duration-200">
+    <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] flex flex-col selection:bg-[var(--accent-primary)]/30 selection:text-[var(--text-primary)] font-sans antialiased overflow-x-hidden">
       {/* Public Landing Navigation Bar */}
       <HomeNavbar
         onNavigateLogin={onNavigateLogin}

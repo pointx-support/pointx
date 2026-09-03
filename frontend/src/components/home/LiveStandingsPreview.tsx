@@ -143,7 +143,7 @@ export const LiveStandingsPreview: React.FC = () => {
         </div>
 
         {/* Interactive Preview Canvas (Widescreen High-Resolution Panel) */}
-        <div className="w-full rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] shadow-2xl p-6 sm:p-8 lg:p-10 overflow-hidden relative backdrop-blur-2xl transition-all">
+        <div className="w-full rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] shadow-2xl p-6 sm:p-8 lg:p-10 overflow-hidden relative backdrop-blur-2xl transition-colors duration-200">
           
           {/* TAB 1: Live Interactive Admin Scoring Matrix Table */}
           {activeTab === 'matrix' && (

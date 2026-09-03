@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import type { Tournament } from '../../types/tournament';
-import { useTournamentStore } from '../../store/tournamentStore';
+import { useTournamentStore, DEMO_TOURNAMENTS } from '../../store/tournamentStore';
 import { useAuthStore } from '../../store/authStore';
 import { TournamentCard } from '../tournaments/TournamentCard';
 import { TournamentWizard } from '../tournaments/TournamentWizard';
@@ -54,7 +54,9 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
     isLoadingTournaments,
     hasLoadedFromDatabase,
     adminDemoEnabled,
+    isLoadingDemoSetting,
     fetchTournaments,
+    fetchAdminDemoSetting,
     createTournament,
     updateTournament,
     cloneTournament,
@@ -96,10 +98,12 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
   }, [hasLoadedFromDatabase, fetchTournaments]);
 
   React.useEffect(() => {
-    if (user && user.role !== 'admin') {
+    if (user?.role === 'admin') {
+      fetchAdminDemoSetting();
+    } else if (user) {
       useTournamentStore.getState().sanitizeTournamentsForRole(user.role);
     }
-  }, [user?.role]);
+  }, [user?.role, fetchAdminDemoSetting]);
 
   // Modal / Wizard Triggers
   const [isWizardOpen, setIsWizardOpen] = useState(false);
@@ -113,11 +117,28 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
     t.id === 'tour-ff-summer-finals' ||
     t.id.startsWith('tour-demo-');
 
-  const visibleTournaments = tournaments.filter((t) => {
-    if (user?.role !== 'admin') return !isDemo(t);
-    if (!adminDemoEnabled) return !isDemo(t);
-    return true;
-  });
+  // Authoritative separation: extract pure real database tournaments
+  const realTournaments = React.useMemo(() => {
+    return tournaments.filter((t) => !isDemo(t));
+  }, [tournaments]);
+
+  // Authoritative single source of truth for visible tournaments
+  const visibleTournaments = React.useMemo(() => {
+    // 1. Normal organizers NEVER see demo information under any circumstance
+    if (user?.role !== 'admin') {
+      return realTournaments;
+    }
+
+    // 2. If Admin enabled demo info, provide official demo tournaments deterministically
+    if (adminDemoEnabled) {
+      const existingIds = new Set(realTournaments.map((t) => t.id));
+      const demoToAdd = DEMO_TOURNAMENTS.filter((d) => !existingIds.has(d.id));
+      return [...realTournaments, ...demoToAdd];
+    }
+
+    // 3. Otherwise, return pure real database tournaments
+    return realTournaments;
+  }, [user?.role, adminDemoEnabled, realTournaments]);
 
   const filteredTournaments = visibleTournaments
     .filter((t) => {
@@ -144,6 +165,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
   const liveCount = visibleTournaments.filter((t) => t.status === 'Live' || t.status === 'Ongoing').length;
   const upcomingCount = visibleTournaments.filter((t) => t.status === 'Upcoming').length;
   const completedCount = visibleTournaments.filter((t) => t.status === 'Completed').length;
+  const archivedCount = visibleTournaments.filter((t) => t.status === 'Archived').length;
   const totalTournamentsCount = visibleTournaments.length;
 
   const handleWizardComplete = (newTour: Tournament) => {
@@ -540,11 +562,11 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
           {/* Quick Filter Status Tabs */}
           <div className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-surface-inset)] p-1.5 rounded-2xl border border-[var(--border-subtle)]">
             {[
-              { id: 'All', label: 'All Events', count: tournaments.length },
+              { id: 'All', label: 'All Events', count: totalTournamentsCount },
               { id: 'Live', label: 'Live Now', count: liveCount, dot: true },
               { id: 'Upcoming', label: 'Upcoming', count: upcomingCount },
               { id: 'Completed', label: 'Completed', count: completedCount },
-              { id: 'Archived', label: 'Archived', count: tournaments.filter((t) => t.status === 'Archived').length }
+              { id: 'Archived', label: 'Archived', count: archivedCount }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -592,7 +614,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
         </div>
 
         {/* Tournament Cards List */}
-        {isLoadingTournaments ? (
+        {isLoadingTournaments || (user?.role === 'admin' && isLoadingDemoSetting && !hasLoadedFromDatabase) ? (
           <div className="grid grid-cols-1 gap-3.5">
             {[1, 2, 3].map((i) => (
               <div

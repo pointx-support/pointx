@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 export const AdminSettingsView: React.FC = () => {
-  const { adminDemoEnabled, setAdminDemoEnabled } = useTournamentStore();
+  const { adminDemoEnabled, setAdminDemoEnabled, fetchAdminDemoSetting } = useTournamentStore();
   const {
     platformSettings,
     toggleMaintenanceMode,
@@ -29,6 +29,10 @@ export const AdminSettingsView: React.FC = () => {
   } = useAdminStore();
 
   const { showToast } = useToast();
+
+  React.useEffect(() => {
+    fetchAdminDemoSetting();
+  }, [fetchAdminDemoSetting]);
 
   const [isAnnModalOpen, setIsAnnModalOpen] = useState(false);
   const [annTitle, setAnnTitle] = useState('');
@@ -136,9 +140,9 @@ export const AdminSettingsView: React.FC = () => {
             <Button
               variant={adminDemoEnabled ? 'outline' : 'primary'}
               size="sm"
-              onClick={() => {
+              onClick={async () => {
                 const next = !adminDemoEnabled;
-                setAdminDemoEnabled(next);
+                await setAdminDemoEnabled(next);
                 showToast({
                   type: next ? 'success' : 'info',
                   title: next ? 'Demo Tournaments Enabled' : 'Demo Tournaments Disabled',

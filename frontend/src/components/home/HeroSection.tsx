@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PointXLogo } from '../ui/PointXLogo';
 import { FadeIn, SlideIn } from '../animation/RevealAnimations';
@@ -31,29 +31,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
   const prefersReducedMotion = useReducedMotion();
-
-  // Smooth PointX Logo Theme Transition (GPU-optimized: zero layout shift, zero blur lag)
-  const [logoPhase, setLogoPhase] = useState<'idle' | 'transitioning'>('idle');
-  const isInitialMount = useRef(true);
-
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-
-    if (prefersReducedMotion) {
-      setLogoPhase('idle');
-      return;
-    }
-
-    setLogoPhase('transitioning');
-    const timer = setTimeout(() => {
-      setLogoPhase('idle');
-    }, 220);
-
-    return () => clearTimeout(timer);
-  }, [theme, prefersReducedMotion]);
 
   const isDark = theme === 'dark';
 
@@ -116,8 +93,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             {/* Dynamic Stage Floor Moving Beam Sweep */}
             <div className="absolute top-[35%] left-1/2 -translate-x-1/2 w-[850px] lg:w-[1350px] h-[300px] lg:h-[400px] bg-gradient-to-r from-transparent via-amber-400/[0.14] to-transparent rounded-full blur-[90px] animate-beam-sweep pointer-events-none" />
 
-            {/* Deep Stage Floor Grounding Scrim */}
-            <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[var(--bg-base)] to-transparent pointer-events-none" />
+            {/* Deep Stage Floor Grounding Scrim (Dark Hex #101319 prevents white flash on toggle) */}
+            <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#101319] to-transparent pointer-events-none" />
           </div>
 
           {/* Light Mode: Luxury Architectural Sunbeam & Stage Illumination */}
@@ -136,8 +113,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             {/* Center Radiant Core */}
             <div className="absolute top-[8%] left-1/2 -translate-x-1/2 w-[650px] sm:w-[900px] lg:w-[1150px] h-[400px] sm:h-[500px] lg:h-[600px] bg-gradient-to-b from-amber-400/[0.18] via-amber-300/[0.05] to-transparent rounded-full blur-[100px] animate-horizon-glow pointer-events-none" />
 
-            {/* Deep Horizon Mist Grounding */}
-            <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[var(--bg-base)] to-transparent pointer-events-none" />
+            {/* Deep Horizon Mist Grounding (Light Hex #EEF1F5 prevents dark flash on toggle) */}
+            <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#EEF1F5] to-transparent pointer-events-none" />
           </div>
         </div>
 
@@ -194,14 +171,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[220px] sm:w-[320px] h-[220px] sm:h-[320px] rounded-full border pointer-events-none animate-radar-fast ${isDark ? 'border-amber-400/35' : 'border-amber-500/20'}`} />
 
                 {/* Animated Logo Container with Zero Black Shade in Light Theme */}
-                <div
-                  className={`relative z-10 transition-transform duration-200 ease-out select-none ${
-                    logoPhase === 'transitioning'
-                      ? 'scale-[0.98]'
-                      : 'scale-100'
-                  }`}
-                  style={{ willChange: 'transform' }}
-                >
+                <div className="relative z-10 select-none">
                   <PointXLogo
                     className="h-20 sm:h-28 md:h-36 lg:h-44 w-auto max-w-[280px] sm:max-w-[420px] md:max-w-[560px] object-contain hover:scale-[1.02] transition-transform duration-300 drop-shadow-none dark:drop-shadow-[0_20px_48px_rgba(0,0,0,0.85)]"
                     alt="PointX Esports Infrastructure Platform"

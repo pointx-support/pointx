@@ -19,7 +19,7 @@ import {
   calculateTournamentSummary
 } from '../engine/standingsEngine';
 import { broadcastTournamentUpdate } from '../services/broadcastSync';
-import { tournamentsApi } from '../services/api';
+import { tournamentsApi, adminApi } from '../services/api';
 
 export interface AppState {
   tournaments: Tournament[];
@@ -49,7 +49,9 @@ export interface AppState {
   archiveTournament: (tournamentId: string) => Promise<void>;
   deleteTournament: (tournamentId: string) => Promise<void>;
   adminDemoEnabled: boolean;
-  setAdminDemoEnabled: (enabled: boolean) => void;
+  isLoadingDemoSetting: boolean;
+  fetchAdminDemoSetting: () => Promise<boolean>;
+  setAdminDemoEnabled: (enabled: boolean) => Promise<void>;
   loadDemoTournaments: () => void;
   clearAllTournaments: () => void;
   sanitizeTournamentsForRole: (role?: string) => void;
@@ -338,6 +340,7 @@ export const useTournamentStore = create<AppState>((set, get) => ({
   isLoadingTournaments: false,
   hasLoadedFromDatabase: false,
   adminDemoEnabled: typeof window !== 'undefined' ? window.localStorage.getItem('pointx_admin_demo_enabled') === 'true' : false,
+  isLoadingDemoSetting: false,
   activeTab: 'overview',
   previousTab: null,
   activeGraphicsCategory: 'standings',
@@ -373,7 +376,7 @@ export const useTournamentStore = create<AppState>((set, get) => ({
   },
 
   setCurrentTournamentId: (id) => {
-    const tour = get().tournaments.find((t) => t.id === id) || get().tournaments[0] || get().currentTournament;
+    const tour = get().tournaments.find((t) => t.id === id) || DEMO_TOURNAMENTS.find((t) => t.id === id) || get().tournaments[0] || get().currentTournament;
     if (tour) {
       set({
         activeTournamentId: tour.id,
@@ -631,44 +634,49 @@ export const useTournamentStore = create<AppState>((set, get) => ({
     } catch {}
   },
 
-  setAdminDemoEnabled: (enabled: boolean) => {
+  fetchAdminDemoSetting: async () => {
+    const userRole = typeof window !== 'undefined' ? (() => {
+      try {
+        const raw = window.localStorage.getItem('pointx_auth_storage_v2');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return parsed?.state?.user?.role;
+        }
+      } catch {}
+      return null;
+    })() : null;
+
+    if (userRole !== 'admin') {
+      set({ adminDemoEnabled: false, isLoadingDemoSetting: false });
+      return false;
+    }
+
+    set({ isLoadingDemoSetting: true });
+    try {
+      const res = await adminApi.getSettings();
+      if (res.success && res.data) {
+        const isEnabled = Boolean(res.data.demoTournamentsEnabled);
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('pointx_admin_demo_enabled', String(isEnabled));
+        }
+        set({ adminDemoEnabled: isEnabled, isLoadingDemoSetting: false });
+        return isEnabled;
+      }
+    } catch {}
+    set({ isLoadingDemoSetting: false });
+    return get().adminDemoEnabled;
+  },
+
+  setAdminDemoEnabled: async (enabled: boolean) => {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('pointx_admin_demo_enabled', String(enabled));
     }
     set({ adminDemoEnabled: enabled });
-    if (!enabled) {
-      set((state) => {
-        const nonDemo = state.tournaments.filter(
-          (t) =>
-            t.id !== 'tour-ff-champ-2026' &&
-            t.id !== 'tour-ff-night-scrims' &&
-            t.id !== 'tour-ff-summer-finals' &&
-            !t.id.startsWith('tour-demo-')
-        );
-        const matching = state.activeTournamentId ? nonDemo.find((t) => t.id === state.activeTournamentId) : null;
-        const active = matching || createBlankTournament();
-        persistTournaments(nonDemo);
-        return {
-          tournaments: nonDemo,
-          activeTournamentId: matching ? matching.id : '',
-          currentTournament: active
-        };
-      });
-    } else {
-      set((state) => {
-        const hasDemos = state.tournaments.some((t) => t.id.startsWith('tour-demo-') || t.id === 'tour-ff-champ-2026');
-        if (!hasDemos) {
-          const merged = [...state.tournaments, ...DEMO_TOURNAMENTS];
-          persistTournaments(merged);
-          return {
-            tournaments: merged,
-            activeTournamentId: state.activeTournamentId,
-            currentTournament: state.currentTournament
-          };
-        }
-        return state;
-      });
-    }
+
+    // Persist authoritatively to database platform settings in MongoDB
+    try {
+      await adminApi.saveSettings({ demoTournamentsEnabled: enabled });
+    } catch {}
   },
 
   loadDemoTournaments: () => {
@@ -718,12 +726,27 @@ export const useTournamentStore = create<AppState>((set, get) => ({
 
   setTournament: (tournament) => {
     set((state) => {
+      const isDemo =
+        tournament.id.startsWith('tour-demo-') ||
+        tournament.id === 'tour-ff-champ-2026' ||
+        tournament.id === 'tour-ff-night-scrims' ||
+        tournament.id === 'tour-ff-summer-finals';
+
       const exists = state.tournaments.some((t) => t.id === tournament.id);
       const updatedTournaments = exists
         ? state.tournaments.map((t) => (t.id === tournament.id ? tournament : t))
         : [tournament, ...state.tournaments];
 
-      persistTournaments(updatedTournaments);
+      if (!isDemo) {
+        const nonDemo = updatedTournaments.filter(
+          (t) =>
+            t.id !== 'tour-ff-champ-2026' &&
+            t.id !== 'tour-ff-night-scrims' &&
+            t.id !== 'tour-ff-summer-finals' &&
+            !t.id.startsWith('tour-demo-')
+        );
+        persistTournaments(nonDemo);
+      }
       broadcastTournamentUpdate(tournament);
       return {
         tournaments: updatedTournaments,

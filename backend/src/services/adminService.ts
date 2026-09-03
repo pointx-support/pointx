@@ -569,6 +569,7 @@ export async function getPlatformSettings(): Promise<IPlatformSettings> {
       maxTeamsPerTournament: 48,
       defaultExportResolution: '4k',
       requireOnboardingVerification: true,
+      demoTournamentsEnabled: false,
       systemAnnouncements: [
         {
           id: 'ann-01',

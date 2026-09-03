@@ -19,6 +19,7 @@ export interface IPlatformSettings extends Document {
   maxTeamsPerTournament: number;
   defaultExportResolution: string;
   requireOnboardingVerification: boolean;
+  demoTournamentsEnabled: boolean;
   systemAnnouncements: ISystemAnnouncement[];
   createdAt: Date;
   updatedAt: Date;
@@ -47,6 +48,7 @@ const PlatformSettingsSchema = new Schema<IPlatformSettings>(
     maxTeamsPerTournament: { type: Number, default: 48 },
     defaultExportResolution: { type: String, default: '4k' },
     requireOnboardingVerification: { type: Boolean, default: true },
+    demoTournamentsEnabled: { type: Boolean, default: false },
     systemAnnouncements: { type: [SystemAnnouncementSchema], default: [] },
   },
   { timestamps: true }
