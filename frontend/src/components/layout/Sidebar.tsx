@@ -28,6 +28,9 @@ import {
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useAuthStore } from '../../store/authStore';
 import { useAdminStore } from '../../store/adminStore';
+import { motion, AnimatePresence } from 'motion/react';
+import type { Variants } from 'motion/react';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useToast } from '../ui/Toast';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -64,9 +67,21 @@ export const Sidebar: FC<SidebarProps> = ({
   const { showToast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [isMainTreeOpen, setIsMainTreeOpen] = useState(true);
-  const [isGraphicsTreeOpen, setIsGraphicsTreeOpen] = useState(true);
-  const [isAdminTreeOpen, setIsAdminTreeOpen] = useState(true);
+  const prefersReducedMotion = useReducedMotion();
+
+  // Single-expanded accordion model: 'tournament' | 'graphics' | 'admin' | null
+  const [expandedSection, setExpandedSection] = useState<'tournament' | 'graphics' | 'admin' | null>(
+    activeTab === 'graphics' ? 'graphics' : viewMode === 'admin-dashboard' ? 'admin' : 'tournament'
+  );
+
+  const isMainTreeOpen = expandedSection === 'tournament';
+  const isGraphicsTreeOpen = expandedSection === 'graphics';
+  const isAdminTreeOpen = expandedSection === 'admin';
+
+  const toggleSection = (section: 'tournament' | 'graphics' | 'admin') => {
+    setExpandedSection((prev) => (prev === section ? null : section));
+  };
+
   const { activeAdminTab, setActiveAdminTab } = useAdminStore();
   const [hoveredFlyout, setHoveredFlyout] = useState<string | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -75,6 +90,39 @@ export const Sidebar: FC<SidebarProps> = ({
   const isDark = theme === 'dark';
   const isCommandCenter = viewMode === 'command-center';
   const isExpanded = !isSidebarCollapsed;
+
+  // Best-in-class accordion expand / collapse motion variants
+  const accordionVariants: Variants = {
+    collapsed: {
+      height: 0,
+      opacity: 0,
+      transition: {
+        height: { duration: prefersReducedMotion ? 0.08 : 0.28, ease: [0.16, 1, 0.3, 1] },
+        opacity: { duration: prefersReducedMotion ? 0.08 : 0.18, ease: 'easeIn' },
+      },
+    },
+    expanded: {
+      height: 'auto',
+      opacity: 1,
+      transition: {
+        height: { duration: prefersReducedMotion ? 0.08 : 0.35, ease: [0.16, 1, 0.3, 1] },
+        opacity: { duration: prefersReducedMotion ? 0.08 : 0.25, delay: prefersReducedMotion ? 0 : 0.04, ease: 'easeOut' },
+      },
+    },
+  };
+
+  const branchItemVariants: Variants = {
+    collapsed: { opacity: 0, x: prefersReducedMotion ? 0 : -8 },
+    expanded: (i: number) => ({
+      opacity: 1,
+      x: 0,
+      transition: {
+        delay: prefersReducedMotion ? 0 : i * 0.024,
+        duration: prefersReducedMotion ? 0.08 : 0.24,
+        ease: [0.16, 1, 0.3, 1],
+      },
+    }),
+  };
 
   // Sub-items inside the Main Tournament Tree
   const tournamentSubItems = [
@@ -115,11 +163,26 @@ export const Sidebar: FC<SidebarProps> = ({
 
   const handleAdminSubClick = (subId: AdminTab) => {
     setActiveAdminTab(subId);
+    setExpandedSection('admin');
     handleNavClick('admin-dashboard');
+  };
+
+  const handleGraphicsSubClick = (categoryId: any) => {
+    setActiveGraphicsCategory(categoryId);
+    setExpandedSection('graphics');
+    handleNavClick('graphics');
   };
 
   const handleNavClick = (tabId: string) => {
     setHoveredFlyout(null);
+
+    if (tabId === 'graphics') {
+      setExpandedSection('graphics');
+    } else if (tabId === 'admin-dashboard') {
+      setExpandedSection('admin');
+    } else if (tabId === 'overview' || tournamentSubItems.some((s) => s.id === tabId)) {
+      setExpandedSection('tournament');
+    }
 
     if (tabId === 'edit-tournament') {
       if (isCommandCenter) {
@@ -161,11 +224,6 @@ export const Sidebar: FC<SidebarProps> = ({
     } else {
       setActiveTab(tabId as any);
     }
-  };
-
-  const handleGraphicsSubClick = (subId: 'standings' | 'warheads' | 'fraggers' | 'team-poster' | 'slots-list' | 'certificate') => {
-    setActiveGraphicsCategory(subId);
-    handleNavClick('graphics');
   };
 
   const handleDashboardClick = () => {
@@ -356,7 +414,7 @@ export const Sidebar: FC<SidebarProps> = ({
                 type="button"
                 onClick={() => {
                   if (isExpanded) {
-                    setIsMainTreeOpen(!isMainTreeOpen);
+                    toggleSection('tournament');
                     handleNavClick('overview');
                   } else {
                     handleNavClick('overview');
@@ -382,8 +440,8 @@ export const Sidebar: FC<SidebarProps> = ({
                 {isExpanded && (
                   <ChevronDown
                     className={cn(
-                      'h-3.5 w-3.5 text-[var(--text-muted)] transition-transform duration-200',
-                      isMainTreeOpen ? 'rotate-0' : '-rotate-90'
+                      'h-3.5 w-3.5 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
+                      isMainTreeOpen ? 'rotate-0 text-[var(--accent-primary)]' : '-rotate-90 text-[var(--text-muted)]'
                     )}
                   />
                 )}
@@ -424,47 +482,63 @@ export const Sidebar: FC<SidebarProps> = ({
                 </div>
               )}
 
-              {/* Expanded Branch Tree Connectors */}
-              {isExpanded && isMainTreeOpen && (
-                <div className="relative ml-4 pl-4.5 border-l-2 border-white/15 dark:border-white/15 light:border-black/15 mt-1.5 space-y-1">
-                  {filteredSubItems.map((sub) => {
-                    const isActive = activeTab === sub.id && !isCommandCenter;
-                    const SubIcon = sub.icon;
+              {/* Expanded Branch Tree Connectors with Accordion Animation */}
+              <AnimatePresence initial={false}>
+                {isExpanded && isMainTreeOpen && (
+                  <motion.div
+                    key="tournament-tree-branch"
+                    variants={accordionVariants}
+                    initial="collapsed"
+                    animate="expanded"
+                    exit="collapsed"
+                    className="overflow-hidden"
+                  >
+                    <div className="relative ml-4 pl-4.5 border-l-2 border-white/15 dark:border-white/15 light:border-black/15 mt-1.5 space-y-1">
+                      {filteredSubItems.map((sub, idx) => {
+                        const isActive = activeTab === sub.id && !isCommandCenter;
+                        const SubIcon = sub.icon;
 
-                    return (
-                      <div key={sub.id} className="relative flex items-center">
-                        {/* Curved Connector Branch Stub */}
-                        <div className="absolute -left-[19px] top-1/2 -translate-y-1/2 w-3.5 h-[2px] bg-white/20 dark:bg-white/20 light:bg-black/20 rounded-full" />
+                        return (
+                          <motion.div
+                            key={sub.id}
+                            custom={idx}
+                            variants={branchItemVariants}
+                            className="relative flex items-center"
+                          >
+                            {/* Curved Connector Branch Stub */}
+                            <div className="absolute -left-[19px] top-1/2 -translate-y-1/2 w-3.5 h-[2px] bg-white/20 dark:bg-white/20 light:bg-black/20 rounded-full" />
 
-                        <button
-                          type="button"
-                          onClick={() => handleNavClick(sub.id)}
-                          className={cn(
-                            'w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer group',
-                            isActive
-                              ? (isDark
-                                  ? 'bg-white/15 text-white font-bold shadow-sm'
-                                  : 'bg-black/10 text-black font-bold shadow-sm')
-                              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
-                          )}
-                        >
-                          <div className="flex items-center gap-2 truncate">
-                            <SubIcon className={cn(
-                              'h-3.5 w-3.5 transition-transform group-hover:scale-110',
-                              isActive ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'
-                            )} />
-                            <span className="truncate">{sub.label}</span>
-                          </div>
+                            <button
+                              type="button"
+                              onClick={() => handleNavClick(sub.id)}
+                              className={cn(
+                                'w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer group',
+                                isActive
+                                  ? (isDark
+                                      ? 'bg-white/15 text-white font-bold shadow-sm'
+                                      : 'bg-black/10 text-black font-bold shadow-sm')
+                                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
+                              )}
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                <SubIcon className={cn(
+                                  'h-3.5 w-3.5 transition-transform group-hover:scale-110',
+                                  isActive ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'
+                                )} />
+                                <span className="truncate">{sub.label}</span>
+                              </div>
 
-                          {isActive && (
-                            <div className="h-1.5 w-1.5 rounded-full bg-[var(--accent-primary)] shadow-[0_0_8px_rgba(255,208,0,0.8)] shrink-0" />
-                          )}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                              {isActive && (
+                                <div className="h-1.5 w-1.5 rounded-full bg-[var(--accent-primary)] shadow-[0_0_8px_rgba(255,208,0,0.8)] shrink-0" />
+                              )}
+                            </button>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* 3. Live Broadcast Overlays (OBS) */}
@@ -504,7 +578,7 @@ export const Sidebar: FC<SidebarProps> = ({
                 type="button"
                 onClick={() => {
                   if (isExpanded) {
-                    setIsGraphicsTreeOpen(!isGraphicsTreeOpen);
+                    toggleSection('graphics');
                     handleNavClick('graphics');
                   } else {
                     handleNavClick('graphics');
@@ -530,8 +604,8 @@ export const Sidebar: FC<SidebarProps> = ({
                 {isExpanded && (
                   <ChevronDown
                     className={cn(
-                      'h-3.5 w-3.5 text-[var(--text-muted)] transition-transform duration-200',
-                      isGraphicsTreeOpen ? 'rotate-0' : '-rotate-90'
+                      'h-3.5 w-3.5 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
+                      isGraphicsTreeOpen ? 'rotate-0 text-[var(--accent-primary)]' : '-rotate-90 text-[var(--text-muted)]'
                     )}
                   />
                 )}
@@ -579,43 +653,59 @@ export const Sidebar: FC<SidebarProps> = ({
                 </div>
               )}
 
-              {/* Expanded Branch Tree Connectors for Graphics Studio */}
-              {isExpanded && isGraphicsTreeOpen && (
-                <div className="relative ml-4 pl-4.5 border-l-2 border-white/15 dark:border-white/15 light:border-black/15 mt-1.5 space-y-1">
-                  {graphicsSubItems.map((sub) => {
-                    const isSubActive = isGraphicsActive && activeGraphicsCategory === sub.id && !isCommandCenter;
+              {/* Expanded Branch Tree Connectors for Graphics Studio with Accordion Animation */}
+              <AnimatePresence initial={false}>
+                {isExpanded && isGraphicsTreeOpen && (
+                  <motion.div
+                    key="graphics-tree-branch"
+                    variants={accordionVariants}
+                    initial="collapsed"
+                    animate="expanded"
+                    exit="collapsed"
+                    className="overflow-hidden"
+                  >
+                    <div className="relative ml-4 pl-4.5 border-l-2 border-white/15 dark:border-white/15 light:border-black/15 mt-1.5 space-y-1">
+                      {graphicsSubItems.map((sub, idx) => {
+                        const isSubActive = isGraphicsActive && activeGraphicsCategory === sub.id && !isCommandCenter;
 
-                    return (
-                      <div key={sub.id} className="relative flex items-center">
-                        {/* Curved Connector Branch Stub */}
-                        <div className="absolute -left-[19px] top-1/2 -translate-y-1/2 w-3.5 h-[2px] bg-white/20 dark:bg-white/20 light:bg-black/20 rounded-full" />
+                        return (
+                          <motion.div
+                            key={sub.id}
+                            custom={idx}
+                            variants={branchItemVariants}
+                            className="relative flex items-center"
+                          >
+                            {/* Curved Connector Branch Stub */}
+                            <div className="absolute -left-[19px] top-1/2 -translate-y-1/2 w-3.5 h-[2px] bg-white/20 dark:bg-white/20 light:bg-black/20 rounded-full" />
 
-                        <button
-                          type="button"
-                          onClick={() => handleGraphicsSubClick(sub.id)}
-                          className={cn(
-                            'w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer group',
-                            isSubActive
-                              ? (isDark
-                                  ? 'bg-white/15 text-white font-bold shadow-sm'
-                                  : 'bg-black/10 text-black font-bold shadow-sm')
-                              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
-                          )}
-                        >
-                          <span className="truncate">{sub.label}</span>
-                          {isSubActive ? (
-                            <div className="h-1.5 w-1.5 rounded-full bg-[var(--accent-primary)] shadow-[0_0_8px_rgba(255,208,0,0.8)] shrink-0" />
-                          ) : sub.isPro && (
-                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 shrink-0">
-                              PRO
-                            </span>
-                          )}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                            <button
+                              type="button"
+                              onClick={() => handleGraphicsSubClick(sub.id)}
+                              className={cn(
+                                'w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer group',
+                                isSubActive
+                                  ? (isDark
+                                      ? 'bg-white/15 text-white font-bold shadow-sm'
+                                      : 'bg-black/10 text-black font-bold shadow-sm')
+                                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
+                              )}
+                            >
+                              <span className="truncate">{sub.label}</span>
+                              {isSubActive ? (
+                                <div className="h-1.5 w-1.5 rounded-full bg-[var(--accent-primary)] shadow-[0_0_8px_rgba(255,208,0,0.8)] shrink-0" />
+                              ) : sub.isPro && (
+                                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 shrink-0">
+                                  PRO
+                                </span>
+                              )}
+                            </button>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 
@@ -670,7 +760,7 @@ export const Sidebar: FC<SidebarProps> = ({
                   type="button"
                   onClick={() => {
                     if (isExpanded) {
-                      setIsAdminTreeOpen(!isAdminTreeOpen);
+                      toggleSection('admin');
                     }
                     handleNavClick('admin-dashboard');
                   }}
@@ -694,59 +784,75 @@ export const Sidebar: FC<SidebarProps> = ({
                       </span>
                       <ChevronDown
                         className={cn(
-                          'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
-                          isAdminTreeOpen ? 'rotate-180' : 'rotate-0'
+                          'h-3.5 w-3.5 text-neutral-400 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
+                          isAdminTreeOpen ? 'rotate-0 text-amber-400' : '-rotate-90'
                         )}
                       />
                     </div>
                   )}
                 </button>
 
-                {/* Sub-Navigation Items Under Admin Center on Sidebar */}
-                {isExpanded && isAdminTreeOpen && (
-                  <div className="relative ml-4 pl-4.5 border-l-2 border-amber-500/20 mt-1.5 space-y-1">
-                    {adminSubItems.map((sub) => {
-                      const Icon = sub.icon;
-                      const isSubActive =
-                        viewMode === 'admin-dashboard' &&
-                        (activeAdminTab === sub.id ||
-                          (sub.id === 'templates' && activeAdminTab === 'template-studio') ||
-                          (sub.id === 'settings' &&
-                            (activeAdminTab === 'requests' ||
-                              activeAdminTab === 'mongodb' ||
-                              activeAdminTab === 'cloudinary' ||
-                              activeAdminTab === 'brevo' ||
-                              activeAdminTab === 'health')));
+                {/* Sub-Navigation Items Under Admin Center on Sidebar with Accordion Animation */}
+                <AnimatePresence initial={false}>
+                  {isExpanded && isAdminTreeOpen && (
+                    <motion.div
+                      key="admin-tree-branch"
+                      variants={accordionVariants}
+                      initial="collapsed"
+                      animate="expanded"
+                      exit="collapsed"
+                      className="overflow-hidden"
+                    >
+                      <div className="relative ml-4 pl-4.5 border-l-2 border-amber-500/20 mt-1.5 space-y-1">
+                        {adminSubItems.map((sub, idx) => {
+                          const Icon = sub.icon;
+                          const isSubActive =
+                            viewMode === 'admin-dashboard' &&
+                            (activeAdminTab === sub.id ||
+                              (sub.id === 'templates' && activeAdminTab === 'template-studio') ||
+                              (sub.id === 'settings' &&
+                                (activeAdminTab === 'requests' ||
+                                  activeAdminTab === 'mongodb' ||
+                                  activeAdminTab === 'cloudinary' ||
+                                  activeAdminTab === 'brevo' ||
+                                  activeAdminTab === 'health')));
 
-                      return (
-                        <div key={sub.id} className="relative flex items-center">
-                          {/* Curved Connector Branch Stub */}
-                          <div className="absolute -left-[19px] top-1/2 -translate-y-1/2 w-3.5 h-[2px] bg-amber-500/30 rounded-full" />
-                          <button
-                            type="button"
-                            onClick={() => handleAdminSubClick(sub.id)}
-                            className={cn(
-                              'w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer group',
-                              isSubActive
-                                ? isDark
-                                  ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 shadow-xs'
-                                  : 'bg-amber-500/15 text-amber-900 font-bold border border-amber-500/30 shadow-xs'
-                                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
-                            )}
-                          >
-                            <div className="flex items-center gap-2 truncate">
-                              <Icon className={cn('h-3.5 w-3.5 shrink-0', isSubActive ? 'text-amber-400' : 'text-neutral-400')} />
-                              <span className="truncate">{sub.label}</span>
-                            </div>
-                            {isSubActive && (
-                              <div className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.8)] shrink-0" />
-                            )}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                          return (
+                            <motion.div
+                              key={sub.id}
+                              custom={idx}
+                              variants={branchItemVariants}
+                              className="relative flex items-center"
+                            >
+                              {/* Curved Connector Branch Stub */}
+                              <div className="absolute -left-[19px] top-1/2 -translate-y-1/2 w-3.5 h-[2px] bg-amber-500/30 rounded-full" />
+                              <button
+                                type="button"
+                                onClick={() => handleAdminSubClick(sub.id)}
+                                className={cn(
+                                  'w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer group',
+                                  isSubActive
+                                    ? isDark
+                                      ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 shadow-xs'
+                                      : 'bg-amber-500/15 text-amber-900 font-bold border border-amber-500/30 shadow-xs'
+                                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
+                                )}
+                              >
+                                <div className="flex items-center gap-2 truncate">
+                                  <Icon className={cn('h-3.5 w-3.5 shrink-0', isSubActive ? 'text-amber-400' : 'text-neutral-400')} />
+                                  <span className="truncate">{sub.label}</span>
+                                </div>
+                                {isSubActive && (
+                                  <div className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.8)] shrink-0" />
+                                )}
+                              </button>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             )}
           </div>
