@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PointXLogo } from '../ui/PointXLogo';
 import { FadeIn, SlideIn } from '../animation/RevealAnimations';
 import { useAuthStore } from '../../store/authStore';
@@ -75,48 +75,59 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     <div className="relative w-full overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)] transition-colors duration-500">
       
       {/* ========================================================================= */}
-      {/* 1. CINEMATIC BACKGROUND VIDEO WITH THEME-AWARE CONTRAST SCRIM             */}
+      {/* 1. SOPHISTICATED MINIMALIST BACKGROUND (DUAL-THEME LIGHT & DARK CANVAS)     */}
       {/* ========================================================================= */}
       <section className="relative w-full min-h-[92vh] lg:min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-12 pt-28 pb-16 overflow-hidden">
         
-        {/* Background Video Layer */}
+        {/* Simple, Ultra-Clean Vector Tech Grid & Ambient Aura Canvas (Zero Video Lag) */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
-          <video
-            key="hero-bgvideo-v260"
-            autoPlay
-            loop
-            muted
-            playsInline
-            preload="auto"
-            className={`w-full h-full object-cover transition-all duration-700 ${
-              isDark
-                ? 'opacity-85 filter saturate-110 contrast-105 brightness-95'
-                : 'opacity-40 filter saturate-90 contrast-110 brightness-110'
+          {/* Dark Mode Ambient Canvas */}
+          <div
+            className={`absolute inset-0 transition-opacity duration-700 ${
+              isDark ? 'opacity-100' : 'opacity-0'
             }`}
           >
-            <source src="/bgvideo_v260.mp4?v=2.6.0" type="video/mp4" />
-            <source src="/bgvideo.mp4?v=2.6.0" type="video/mp4" />
-          </video>
+            {/* Precision 48px Esports Linear Grid with Smooth Radial Vignette Mask */}
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: `
+                  linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+                  linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px)
+                `,
+                backgroundSize: '48px 48px',
+                maskImage: 'radial-gradient(ellipse 75% 65% at 50% 30%, black 20%, transparent 85%)',
+                WebkitMaskImage: 'radial-gradient(ellipse 75% 65% at 50% 30%, black 20%, transparent 85%)'
+              }}
+            />
+            {/* Primary Golden Atmospheric Core Bloom */}
+            <div className="absolute top-[8%] left-1/2 -translate-x-1/2 w-[700px] lg:w-[1000px] h-[400px] lg:h-[550px] bg-gradient-to-b from-amber-500/12 via-amber-500/4 to-transparent rounded-full blur-[140px] pointer-events-none" />
+            {/* Secondary Cyan Broadcast Energy Bloom */}
+            <div className="absolute top-[25%] right-[5%] w-[450px] lg:w-[600px] h-[350px] bg-gradient-to-b from-cyan-500/6 to-transparent rounded-full blur-[120px] pointer-events-none" />
+          </div>
 
-          {/* Theme-Aware Contrast Scrim - Crisp Readability in Both Light & Dark */}
+          {/* Light Mode Radiant Canvas */}
           <div
-            className={`absolute inset-0 transition-colors duration-500 pointer-events-none ${
-              isDark
-                ? 'bg-gradient-to-b from-black/75 via-black/45 to-[var(--bg-base)]'
-                : 'bg-gradient-to-b from-white/92 via-slate-50/80 to-[var(--bg-base)] backdrop-blur-[3px]'
+            className={`absolute inset-0 transition-opacity duration-700 ${
+              !isDark ? 'opacity-100' : 'opacity-0'
             }`}
-          />
-
-          {/* Soft Horizon Edge Blend */}
-          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[var(--bg-base)] to-transparent pointer-events-none" />
+          >
+            {/* Crisp 32px Slate Dot Matrix with Smooth Radial Fade */}
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: 'radial-gradient(rgba(15, 23, 42, 0.08) 1.2px, transparent 1.2px)',
+                backgroundSize: '32px 32px',
+                maskImage: 'radial-gradient(ellipse 75% 65% at 50% 30%, black 25%, transparent 85%)',
+                WebkitMaskImage: 'radial-gradient(ellipse 75% 65% at 50% 30%, black 25%, transparent 85%)'
+              }}
+            />
+            {/* Soft Warm Sun-Aura Core Bloom */}
+            <div className="absolute top-[5%] left-1/2 -translate-x-1/2 w-[700px] lg:w-[1000px] h-[380px] lg:h-[500px] bg-gradient-to-b from-amber-400/10 via-amber-300/3 to-transparent rounded-full blur-[120px] pointer-events-none" />
+            {/* Subtle Horizon Mist */}
+            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[var(--bg-base)] to-transparent pointer-events-none" />
+          </div>
         </div>
-
-        {/* Ambient Radial Accent Glow */}
-        <div
-          className={`absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[550px] lg:w-[800px] h-[350px] lg:h-[450px] rounded-full blur-[140px] pointer-events-none z-0 transition-opacity duration-500 ${
-            isDark ? 'bg-amber-500/15 opacity-100' : 'bg-amber-400/10 opacity-70'
-          }`}
-        />
 
         {/* ========================================================================= */}
         {/* 2. PANORAMIC ASYMMETRICAL MISSION-CONTROL HERO ARCHITECTURE               */}
@@ -135,7 +146,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   className={`inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border text-xs font-mono backdrop-blur-xl shadow-sm transition-colors duration-300 ${
                     isDark
                       ? 'bg-black/60 border-white/15 text-zinc-300'
-                      : 'bg-white/80 border-slate-300 text-slate-800 shadow-sm'
+                      : 'bg-white/90 border-slate-300 text-slate-800 shadow-sm'
                   }`}
                 >
                   <span className="relative flex h-2 w-2">
@@ -198,11 +209,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     </span>
                   </h1>
 
-                  {/* Concise Supporting Description */}
+                  {/* Redesigned Description with Plus Jakarta Sans Font */}
                   <p
-                    className={`font-sans font-medium text-sm sm:text-base md:text-lg max-w-xl leading-relaxed ${
-                      isDark ? 'text-zinc-300' : 'text-slate-700'
+                    className={`font-normal text-sm sm:text-base md:text-lg max-w-xl leading-relaxed tracking-[-0.012em] ${
+                      isDark ? 'text-zinc-300/90' : 'text-slate-700'
                     }`}
+                    style={{
+                      fontFamily: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                    }}
                   >
                     Automate points tables in &lt;50ms, manage multi-team championship brackets with zero manual errors, and stream broadcast-grade 4K overlays directly to OBS Studio.
                   </p>
@@ -284,128 +298,213 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
 
             {/* ─────────────────────────────────────────────────────────────────── */}
-            {/* RIGHT COLUMN (Col 5): REAL-TIME ESPORTS MISSION CONTROL TELEMETRY   */}
+            {/* RIGHT COLUMN (Col 5): COMPLETELY REDESIGNED BROADCAST STREAM DECK   */}
             {/* ─────────────────────────────────────────────────────────────────── */}
             <div className="lg:col-span-5 w-full">
               <FadeIn delay={0.2}>
+                {/* Master Hardware-Grade Telemetry Console Frame */}
                 <div
-                  className={`w-full rounded-3xl p-5 sm:p-6 border backdrop-blur-2xl shadow-2xl transition-all duration-300 space-y-4 ${
+                  className={`relative w-full rounded-3xl p-5 sm:p-6 border backdrop-blur-2xl transition-all duration-300 space-y-4 overflow-hidden group ${
                     isDark
-                      ? 'bg-[#141822]/80 border-white/15 shadow-[0_24px_50px_rgba(0,0,0,0.6)]'
-                      : 'bg-white/90 border-slate-200 shadow-[0_20px_45px_rgba(0,0,0,0.08)]'
+                      ? 'bg-[#0c1017]/95 border-white/[0.12] shadow-[0_25px_65px_rgba(0,0,0,0.75)] hover:border-amber-400/40'
+                      : 'bg-white/95 border-slate-200/90 shadow-[0_20px_50px_rgba(15,23,42,0.08)] hover:border-amber-400/60'
                   }`}
                 >
-                  {/* Top Live Deck Header */}
-                  <div className="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-500 border border-amber-500/30">
-                        <Activity className="h-4 w-4" />
+                  {/* Subtle Laser Rim Highlight Line across Top Edge */}
+                  <div className="absolute top-0 left-6 right-6 h-[2px] bg-gradient-to-r from-transparent via-amber-400/90 to-transparent pointer-events-none" />
+
+                  {/* Corner Accent Screws / Hardware Crosshairs */}
+                  <div className="absolute top-3 left-4 text-[9px] font-mono text-zinc-400/40 select-none pointer-events-none">+</div>
+                  <div className="absolute top-3 right-4 text-[9px] font-mono text-zinc-400/40 select-none pointer-events-none">+</div>
+
+                  {/* 1. Console Header: Stream Controller & Live Signal */}
+                  <div className="flex items-center justify-between pb-3.5 border-b border-[var(--border-subtle)]">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-amber-400/20 to-amber-500/10 text-amber-500 border border-amber-500/30 flex items-center justify-center shadow-sm">
+                        <Activity className="h-4 w-4 animate-pulse" />
                       </div>
                       <div>
-                        <span className="text-xs font-mono font-bold tracking-wider uppercase block">
-                          BROADCAST STREAM DECK
-                        </span>
-                        <span className="text-[10px] text-zinc-500 font-mono">
-                          WebSocket Engine v2.6.0
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-mono font-bold tracking-wider uppercase text-[var(--text-primary)]">
+                            BROADCAST STREAM DECK
+                          </span>
+                          <span className="px-1.5 py-0.2 rounded bg-amber-500/15 text-[10px] font-mono font-bold text-amber-500 border border-amber-500/20">
+                            v2.6
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-[var(--text-secondary)] font-mono block">
+                          PointX Real-Time WebSocket Engine
                         </span>
                       </div>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-mono font-bold">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
-                      0MS LATENCY
-                    </span>
+
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 text-[10px] font-mono font-bold">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                        </span>
+                        0MS LATENCY
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Simulated Live Points Matrix Standings Entry */}
+                  {/* 2. Interactive Broadcast Tournament Scoreboard HUD (Redesigned) */}
                   <div
-                    className={`p-4 rounded-2xl border transition-all ${
+                    className={`relative rounded-2xl p-4 border transition-all overflow-hidden ${
                       isDark
-                        ? 'bg-black/40 border-amber-400/25 shadow-inner'
-                        : 'bg-slate-50 border-amber-400/30 shadow-sm'
+                        ? 'bg-gradient-to-br from-[#121722] via-[#0e121b] to-[#121722] border-amber-400/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]'
+                        : 'bg-gradient-to-br from-slate-50 via-white to-amber-50/30 border-amber-400/40 shadow-sm'
                     }`}
                   >
-                    <div className="flex items-center justify-between text-xs font-mono text-zinc-400 mb-2">
-                      <span className="flex items-center gap-1 text-amber-500 font-bold">
-                        <Trophy className="h-3.5 w-3.5" />
-                        <span>MATCH #3 SIMULATION</span>
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-bold">
+                    {/* Atmospheric Gold Beacon in Background */}
+                    <div className="absolute -top-10 -right-10 w-36 h-36 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+
+                    {/* HUD Header Bar */}
+                    <div className="flex items-center justify-between text-xs font-mono mb-3">
+                      <div className="flex items-center gap-1.5">
+                        <Trophy className="h-3.5 w-3.5 text-amber-500" />
+                        <span className="font-bold text-[var(--text-primary)] tracking-wide">
+                          GRAND FINALS • MATCH #3
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
                         AUTO-CALCULATED
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="h-8 w-8 rounded-xl bg-amber-400 text-black font-black text-sm flex items-center justify-center font-numbers shadow-sm">
-                          #1
-                        </div>
-                        <div>
-                          <div className="text-sm font-bold font-display flex items-center gap-1.5">
-                            <span>Total Gaming Esports</span>
-                            <span className="text-xs text-zinc-400 font-mono font-normal">[TG]</span>
+                    {/* Champion Rank #1 Showcase Row */}
+                    <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-black/5 dark:bg-black/40 border border-white/10 dark:border-white/5">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Metallic Gold Rank Badge */}
+                        <div className="relative shrink-0">
+                          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-yellow-500 text-black font-black text-base flex flex-col items-center justify-center font-numbers shadow-[0_4px_14px_rgba(245,158,11,0.4)] border border-amber-200">
+                            <span className="text-[9px] leading-none text-black/70">#</span>
+                            <span className="leading-none text-sm font-black">1</span>
                           </div>
-                          <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400">
-                            <span className="flex items-center gap-0.5 text-rose-500 font-semibold">
-                              <Flame className="h-3 w-3" />
-                              10 Kills (+10 PTS)
+                          <span className="absolute -top-1.5 -right-1.5 text-xs">👑</span>
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-black tracking-tight text-[var(--text-primary)] font-display truncate">
+                              Total Gaming Esports
                             </span>
-                            <span>•</span>
-                            <span className="text-zinc-400">Place (+12 PTS)</span>
+                            <span className="text-[11px] font-mono px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20">
+                              TG
+                            </span>
+                          </div>
+
+                          {/* Stat Chips */}
+                          <div className="flex items-center gap-2 mt-1 text-[11px] font-mono flex-wrap">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-600 dark:text-rose-400 font-bold border border-rose-500/20">
+                              <Flame className="h-3 w-3" />
+                              10 Kills (+10)
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/20">
+                              Rank 1 (+12)
+                            </span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="text-right">
-                        <div className="text-xl font-black text-amber-500 font-numbers">
-                          22 <span className="text-xs font-sans text-zinc-400">PTS</span>
+                      {/* Total Points Callout */}
+                      <div className="text-right shrink-0">
+                        <div className="text-2xl sm:text-3xl font-black font-numbers tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 drop-shadow-sm">
+                          22 <span className="text-xs font-mono font-bold text-[var(--text-secondary)]">PTS</span>
                         </div>
-                        <div className="text-[10px] font-mono text-emerald-500 font-bold">
-                          👑 BOOYAH
-                        </div>
+                        <span className="inline-block text-[10px] font-mono font-black tracking-wider uppercase text-emerald-600 dark:text-emerald-400">
+                          BOOYAH!
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Secondary Multi-Team Lobby Preview (Showing Live Point Distribution) */}
+                    <div className="mt-2.5 pt-2.5 border-t border-[var(--border-subtle)]/70 space-y-1.5">
+                      <div className="flex items-center justify-between text-[10px] font-mono text-[var(--text-secondary)]">
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-zinc-400 font-bold">#2</span>
+                          <span className="font-semibold text-[var(--text-primary)]">GodLike Esports</span>
+                          <span className="text-zinc-500">[GL]</span>
+                        </span>
+                        <span className="font-numbers font-bold text-zinc-700 dark:text-zinc-300">
+                          14 PTS <span className="text-zinc-400">(5K + 9P)</span>
+                        </span>
+                      </div>
+                      <div className="w-full h-1 rounded-full bg-zinc-200 dark:bg-white/10 overflow-hidden">
+                        <div className="h-full bg-amber-400 rounded-full w-[64%]" />
                       </div>
                     </div>
                   </div>
 
-                  {/* 3 Core Capability Metric Tiles */}
-                  <div className="grid grid-cols-3 gap-2 text-center font-mono">
+                  {/* 3. Three High-Tech Telemetry Performance Modules */}
+                  <div className="grid grid-cols-3 gap-2.5 text-center font-mono">
                     <div
-                      className={`p-2.5 rounded-xl border ${
-                        isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'
+                      className={`p-3 rounded-2xl border transition-all ${
+                        isDark
+                          ? 'bg-[#121620] border-white/10 hover:border-amber-400/40 shadow-sm'
+                          : 'bg-slate-50 border-slate-200 hover:border-amber-400/60 shadow-sm'
                       }`}
                     >
-                      <Cpu className="h-4 w-4 text-amber-500 mx-auto mb-1" />
-                      <div className="text-xs font-bold">&lt; 0.38ms</div>
-                      <div className="text-[9px] text-zinc-400 uppercase">Math Engine</div>
+                      <div className="flex items-center justify-center mb-1">
+                        <div className="p-1 rounded-lg bg-amber-500/15 text-amber-500">
+                          <Cpu className="h-3.5 w-3.5" />
+                        </div>
+                      </div>
+                      <div className="text-sm font-black font-numbers text-[var(--text-primary)]">&lt; 0.38ms</div>
+                      <div className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mt-0.5">
+                        Math Engine
+                      </div>
                     </div>
 
                     <div
-                      className={`p-2.5 rounded-xl border ${
-                        isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'
+                      className={`p-3 rounded-2xl border transition-all ${
+                        isDark
+                          ? 'bg-[#121620] border-white/10 hover:border-cyan-400/40 shadow-sm'
+                          : 'bg-slate-50 border-slate-200 hover:border-cyan-400/60 shadow-sm'
                       }`}
                     >
-                      <Monitor className="h-4 w-4 text-cyan-500 mx-auto mb-1" />
-                      <div className="text-xs font-bold">4K 60FPS</div>
-                      <div className="text-[9px] text-zinc-400 uppercase">OBS Source</div>
+                      <div className="flex items-center justify-center mb-1">
+                        <div className="p-1 rounded-lg bg-cyan-500/15 text-cyan-500">
+                          <Monitor className="h-3.5 w-3.5" />
+                        </div>
+                      </div>
+                      <div className="text-sm font-black font-numbers text-[var(--text-primary)]">4K 60FPS</div>
+                      <div className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mt-0.5">
+                        OBS Source
+                      </div>
                     </div>
 
                     <div
-                      className={`p-2.5 rounded-xl border ${
-                        isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'
+                      className={`p-3 rounded-2xl border transition-all ${
+                        isDark
+                          ? 'bg-[#121620] border-white/10 hover:border-emerald-400/40 shadow-sm'
+                          : 'bg-slate-50 border-slate-200 hover:border-emerald-400/60 shadow-sm'
                       }`}
                     >
-                      <ShieldCheck className="h-4 w-4 text-emerald-500 mx-auto mb-1" />
-                      <div className="text-xs font-bold">100%</div>
-                      <div className="text-[9px] text-zinc-400 uppercase">Zero Errors</div>
+                      <div className="flex items-center justify-center mb-1">
+                        <div className="p-1 rounded-lg bg-emerald-500/15 text-emerald-500">
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                        </div>
+                      </div>
+                      <div className="text-sm font-black font-numbers text-[var(--text-primary)]">100.0%</div>
+                      <div className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mt-0.5">
+                        Zero Errors
+                      </div>
                     </div>
                   </div>
 
-                  {/* Active Integration Status Footer */}
-                  <div className="pt-2 flex items-center justify-between text-[11px] font-mono text-zinc-400 border-t border-[var(--border-subtle)]">
-                    <span className="flex items-center gap-1.5">
-                      <Radio className="h-3.5 w-3.5 text-emerald-500 animate-pulse" />
-                      <span>OBS Browser Source URL</span>
+                  {/* 4. Stream Source URL & Live Stream Indicator Rail */}
+                  <div className="pt-2.5 flex items-center justify-between text-[11px] font-mono border-t border-[var(--border-subtle)]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Radio className="h-3.5 w-3.5 text-emerald-500 animate-pulse shrink-0" />
+                      <span className="truncate text-[var(--text-secondary)]">
+                        pointx.in/obs/live?key=arena-ffws
+                      </span>
+                    </div>
+                    <span className="shrink-0 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 font-bold text-[10px]">
+                      Ready to Stream
                     </span>
-                    <span className="text-amber-500 font-bold">Ready to Stream</span>
                   </div>
 
                 </div>
@@ -424,9 +523,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6 text-left">
             
             {/* Card 1: Sub-Second Calculation Matrix */}
-            <div className="p-6 rounded-3xl bg-[var(--bg-surface-raised)] border border-[var(--border-subtle)] backdrop-blur-xl shadow-md space-y-3 hover:border-[var(--accent-primary)]/50 hover:shadow-lg transition-all group">
+            <div className={`relative p-6 rounded-3xl border backdrop-blur-xl transition-all duration-300 space-y-3 group overflow-hidden ${
+              isDark
+                ? 'bg-[#0d111a]/85 border-white/[0.12] hover:border-amber-400/50 shadow-[0_16px_40px_rgba(0,0,0,0.4)]'
+                : 'bg-white/95 border-slate-200/90 hover:border-amber-400/60 shadow-[0_12px_32px_rgba(15,23,42,0.06)]'
+            }`}>
+              <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-amber-400/70 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="flex items-center justify-between">
-                <div className="p-2.5 rounded-xl bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border border-[var(--accent-primary)]/25">
+                <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-500 border border-amber-500/25">
                   <Cpu className="h-5 w-5" />
                 </div>
                 <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-bold">
@@ -437,7 +541,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 <h3 className="text-base font-bold text-[var(--text-primary)] font-display">
                   Sub-50ms Calculation Engine
                 </h3>
-                <p className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed">
+                <p
+                  className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed font-normal"
+                  style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                >
                   Automated competitive points matrix with instant tie-breakers, placement multipliers, and kill points.
                 </p>
               </div>
@@ -448,7 +555,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
 
             {/* Card 2: Live OBS Browser Source Overlay */}
-            <div className="p-6 rounded-3xl bg-[var(--bg-surface-raised)] border border-[var(--border-subtle)] backdrop-blur-xl shadow-md space-y-3 hover:border-cyan-500/50 hover:shadow-lg transition-all group">
+            <div className={`relative p-6 rounded-3xl border backdrop-blur-xl transition-all duration-300 space-y-3 group overflow-hidden ${
+              isDark
+                ? 'bg-[#0d111a]/85 border-white/[0.12] hover:border-cyan-400/50 shadow-[0_16px_40px_rgba(0,0,0,0.4)]'
+                : 'bg-white/95 border-slate-200/90 hover:border-cyan-400/60 shadow-[0_12px_32px_rgba(15,23,42,0.06)]'
+            }`}>
+              <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-cyan-400/70 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="flex items-center justify-between">
                 <div className="p-2.5 rounded-xl bg-cyan-500/15 text-cyan-500 dark:text-cyan-400 border border-cyan-500/25">
                   <Monitor className="h-5 w-5" />
@@ -461,7 +573,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 <h3 className="text-base font-bold text-[var(--text-primary)] font-display">
                   Live Stream Overlay Deck
                 </h3>
-                <p className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed">
+                <p
+                  className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed font-normal"
+                  style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                >
                   Zero-latency transparent browser source URL for OBS Studio, vMix, and YouTube/Twitch live broadcasts.
                 </p>
               </div>
@@ -472,7 +587,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
 
             {/* Card 3: 4K Production Banner Studio */}
-            <div className="p-6 rounded-3xl bg-[var(--bg-surface-raised)] border border-[var(--border-subtle)] backdrop-blur-xl shadow-md space-y-3 hover:border-emerald-500/50 hover:shadow-lg transition-all group">
+            <div className={`relative p-6 rounded-3xl border backdrop-blur-xl transition-all duration-300 space-y-3 group overflow-hidden ${
+              isDark
+                ? 'bg-[#0d111a]/85 border-white/[0.12] hover:border-emerald-400/50 shadow-[0_16px_40px_rgba(0,0,0,0.4)]'
+                : 'bg-white/95 border-slate-200/90 hover:border-emerald-400/60 shadow-[0_12px_32px_rgba(15,23,42,0.06)]'
+            }`}>
+              <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-emerald-400/70 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="flex items-center justify-between">
                 <div className="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 border border-emerald-500/25">
                   <Trophy className="h-5 w-5" />
@@ -485,7 +605,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 <h3 className="text-base font-bold text-[var(--text-primary)] font-display">
                   4K Social Poster Generator
                 </h3>
-                <p className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed">
+                <p
+                  className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed font-normal"
+                  style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                >
                   Export high-resolution overall standings, match winners, and MVP top-fragger posters in under 1 second.
                 </p>
               </div>
