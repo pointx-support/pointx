@@ -59,6 +59,7 @@ export const Sidebar: FC<SidebarProps> = ({
     setActiveTab,
     isSidebarCollapsed,
     toggleSidebar,
+    activeTournamentId,
     currentTournament,
     updateTournament,
     triggerDashboardHighlight,
@@ -91,7 +92,12 @@ export const Sidebar: FC<SidebarProps> = ({
 
   const isDark = theme === 'dark';
   const isCommandCenter = viewMode === 'command-center';
-  const hasActiveTournament = viewMode === 'workspace' && Boolean(currentTournament?.id);
+  const hasActiveTournament = Boolean(
+    activeTournamentId &&
+    currentTournament?.id &&
+    currentTournament.id !== '' &&
+    !currentTournament.id.startsWith('tour-empty-')
+  );
   const isTournamentLocked = !hasActiveTournament;
   const isExpanded = !isSidebarCollapsed;
 
@@ -304,7 +310,7 @@ export const Sidebar: FC<SidebarProps> = ({
                   <span className="font-display font-black text-sm tracking-wider uppercase truncate">
                     Point<span className="text-[var(--accent-primary)]">X</span> Arena
                   </span>
-                  {currentTournament && !isCommandCenter && (
+                  {hasActiveTournament && !isCommandCenter && (
                     <button
                       type="button"
                       onClick={() => setShowEditModal(true)}
@@ -316,7 +322,7 @@ export const Sidebar: FC<SidebarProps> = ({
                   )}
                 </div>
                 <span className="text-[10px] font-mono text-[var(--text-muted)] truncate">
-                  {currentTournament ? currentTournament.title : 'Esports Engine'}
+                  {hasActiveTournament ? currentTournament.title : 'Esports Engine'}
                 </span>
               </div>
             )}

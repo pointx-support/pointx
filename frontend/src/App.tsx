@@ -17,7 +17,7 @@ import { SuperAdminDashboard } from './components/admin/SuperAdminDashboard';
 import type { Tournament } from './types/tournament';
 
 export function App() {
-  const { currentTournament, setTournament, setActiveTab } = useTournamentStore();
+  const { currentTournament, setTournament, clearActiveTournament, setActiveTab } = useTournamentStore();
   const { user, isAuthenticated, theme } = useAuthStore();
   
   // Dynamic Route & View Mode Resolution
@@ -307,13 +307,18 @@ export function App() {
     navigateTo('workspace');
   };
 
+  const handleBackToDashboard = () => {
+    clearActiveTournament();
+    navigateTo('command-center');
+  };
+
   return (
     <ToastProvider>
       <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] flex flex-col selection:bg-[var(--accent-primary)]/30 selection:text-[var(--text-primary)] font-sans">
         {/* Top Bar */}
         <Navbar
           viewMode={viewMode}
-          onBackToDashboard={() => navigateTo('command-center')}
+          onBackToDashboard={handleBackToDashboard}
           onOpenAdminDashboard={() => navigateTo('admin-dashboard')}
           onNavigateHome={() => navigateTo('home')}
           onSelectWorkspaceTab={(targetTab) => {
@@ -327,7 +332,7 @@ export function App() {
           {/* Desktop Sidebar (Rendered on Dashboard, Workspace, and Admin Control Center) */}
           <Sidebar
             viewMode={viewMode}
-            onSelectDashboard={() => navigateTo('command-center')}
+            onSelectDashboard={handleBackToDashboard}
             onSelectWorkspaceTab={(targetTab) => {
               setActiveTab(targetTab);
               navigateTo('workspace');
@@ -343,7 +348,7 @@ export function App() {
               ) : viewMode === 'admin-dashboard' && user?.role === 'admin' ? (
                 <SuperAdminDashboard
                   isEmbedded={true}
-                  onExitAdmin={() => navigateTo('command-center')}
+                  onExitAdmin={handleBackToDashboard}
                   onOpenTemplateStudio={() => {
                     setActiveTab('template-studio');
                     navigateTo('workspace');
@@ -357,7 +362,7 @@ export function App() {
               ) : (
                 <TournamentWorkspace
                   tournament={currentTournament}
-                  onBackToDashboard={() => navigateTo('command-center')}
+                  onBackToDashboard={handleBackToDashboard}
                 />
               )}
             </div>

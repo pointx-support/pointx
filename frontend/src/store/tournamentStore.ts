@@ -56,6 +56,7 @@ export interface AppState {
   
   // Active Tournament Shortcuts
   setTournament: (tournament: Tournament) => void;
+  clearActiveTournament: () => void;
   updateScoringPreset: (preset: ScoringPreset) => void;
   addTeam: (team: Team) => void;
   updateTeam: (teamId: string, team: Partial<Team>) => void;
@@ -240,9 +241,9 @@ export const DEMO_TOURNAMENTS = [DEMO_TOURNAMENT_1, DEMO_TOURNAMENT_2, DEMO_TOUR
 
 export function createBlankTournament(): Tournament {
   return {
-    id: `tour-empty-${Date.now()}`,
-    title: 'New Tournament',
-    organizer: 'PointX Arena',
+    id: '',
+    title: '',
+    organizer: '',
     game: 'Free Fire',
     description: '',
     tournamentType: 'Battle Royale',
@@ -300,10 +301,11 @@ function loadStoredTournaments(): { tournaments: Tournament[]; activeTournamentI
             !t.id.startsWith('tour-demo-')
         );
         if (nonDemo.length > 0) {
+          // Do NOT auto-select a tournament before the user chooses one
           return {
             tournaments: nonDemo,
-            activeTournamentId: nonDemo[0].id,
-            currentTournament: nonDemo[0]
+            activeTournamentId: '',
+            currentTournament: blank
           };
         }
       }
@@ -387,26 +389,22 @@ export const useTournamentStore = create<AppState>((set, get) => ({
       const res = await tournamentsApi.getAll();
       if (res.success && Array.isArray(res.data)) {
         const loadedTournaments = res.data;
-        let active = get().currentTournament;
-        if (loadedTournaments.length > 0) {
-          const matching = loadedTournaments.find((t) => t.id === get().activeTournamentId);
-          active = matching || loadedTournaments[0];
-        } else {
-          active = createBlankTournament();
-        }
+        const currentActiveId = get().activeTournamentId;
+        const matching = currentActiveId ? loadedTournaments.find((t) => t.id === currentActiveId) : null;
+        const active = matching || (currentActiveId ? get().currentTournament : createBlankTournament());
 
         persistTournaments(loadedTournaments);
 
         set({
           tournaments: loadedTournaments,
-          activeTournamentId: loadedTournaments.length > 0 ? active.id : '',
+          activeTournamentId: matching ? matching.id : '',
           currentTournament: active,
           isLoadingTournaments: false,
           hasLoadedFromDatabase: true
         });
 
-        if (loadedTournaments.length > 0) {
-          broadcastTournamentUpdate(active);
+        if (matching) {
+          broadcastTournamentUpdate(matching);
         }
       } else {
         set({ isLoadingTournaments: false, hasLoadedFromDatabase: true });
@@ -647,11 +645,12 @@ export const useTournamentStore = create<AppState>((set, get) => ({
             t.id !== 'tour-ff-summer-finals' &&
             !t.id.startsWith('tour-demo-')
         );
-        const active = nonDemo.find((t) => t.id === state.activeTournamentId) || nonDemo[0] || createBlankTournament();
+        const matching = state.activeTournamentId ? nonDemo.find((t) => t.id === state.activeTournamentId) : null;
+        const active = matching || createBlankTournament();
         persistTournaments(nonDemo);
         return {
           tournaments: nonDemo,
-          activeTournamentId: nonDemo.length > 0 ? active.id : '',
+          activeTournamentId: matching ? matching.id : '',
           currentTournament: active
         };
       });
@@ -663,8 +662,8 @@ export const useTournamentStore = create<AppState>((set, get) => ({
           persistTournaments(merged);
           return {
             tournaments: merged,
-            activeTournamentId: state.activeTournamentId || DEMO_TOURNAMENTS[0].id,
-            currentTournament: state.currentTournament?.id ? state.currentTournament : DEMO_TOURNAMENTS[0]
+            activeTournamentId: state.activeTournamentId,
+            currentTournament: state.currentTournament
           };
         }
         return state;
@@ -704,8 +703,9 @@ export const useTournamentStore = create<AppState>((set, get) => ({
             t.id !== 'tour-ff-summer-finals' &&
             !t.id.startsWith('tour-demo-')
         );
-        const activeId = nonDemo.length > 0 ? nonDemo[0].id : '';
-        const current = nonDemo.length > 0 ? nonDemo[0] : createBlankTournament();
+        const matching = state.activeTournamentId ? nonDemo.find((t) => t.id === state.activeTournamentId) : null;
+        const activeId = matching ? matching.id : '';
+        const current = matching || createBlankTournament();
         persistTournaments(nonDemo);
         return {
           tournaments: nonDemo,
@@ -730,6 +730,13 @@ export const useTournamentStore = create<AppState>((set, get) => ({
         activeTournamentId: tournament.id,
         currentTournament: tournament
       };
+    });
+  },
+
+  clearActiveTournament: () => {
+    set({
+      activeTournamentId: '',
+      currentTournament: createBlankTournament()
     });
   },
 

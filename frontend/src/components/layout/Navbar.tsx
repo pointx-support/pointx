@@ -53,7 +53,13 @@ export const Navbar: FC<NavbarProps> = ({
   onNavigateHome,
   onSelectWorkspaceTab
 }) => {
-  const { currentTournament } = useTournamentStore();
+  const { currentTournament, activeTournamentId, activeTab } = useTournamentStore();
+  const hasActiveTournament = Boolean(
+    activeTournamentId &&
+    currentTournament?.id &&
+    currentTournament.id !== '' &&
+    !currentTournament.id.startsWith('tour-empty-')
+  );
   const {
     user,
     theme,
@@ -276,7 +282,7 @@ export const Navbar: FC<NavbarProps> = ({
               <PointXLogo className="h-7 sm:h-8 w-auto max-w-[105px] sm:max-w-[125px] object-contain group-hover:scale-105 transition-transform select-none" />
             </button>
 
-            {viewMode === 'workspace' ? (
+            {viewMode === 'workspace' && hasActiveTournament ? (
               <div className="flex items-center gap-2 sm:gap-3 min-w-0 border-l border-[var(--border-subtle)] pl-3.5">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <h1 className="text-sm sm:text-base font-bold text-[var(--text-primary)] truncate font-display" title={currentTournament?.title}>
@@ -302,6 +308,15 @@ export const Navbar: FC<NavbarProps> = ({
                     <span>•</span>
                     <span>{currentTournament?.matches?.length || 0} Matches</span>
                   </div>
+                </div>
+              </div>
+            ) : viewMode === 'workspace' && !hasActiveTournament ? (
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 border-l border-[var(--border-subtle)] pl-3.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <h1 className="text-sm sm:text-base font-bold text-[var(--text-primary)] truncate font-display">
+                    {activeTab === 'organization' ? 'My Organisation' : activeTab === 'account' ? 'Staff & Account' : 'PointX Arena'}
+                  </h1>
+                  <Badge variant="cyan" size="sm">ORGANIZER CONSOLE</Badge>
                 </div>
               </div>
             ) : viewMode === 'admin-dashboard' ? (
