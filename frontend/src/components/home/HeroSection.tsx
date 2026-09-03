@@ -70,23 +70,23 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
   const isDark = theme === 'dark';
 
-  // Rotating Championship Value Propositions (Fixed Height Container = 0 Layout Shift)
+  // Rotating Championship Value Propositions (Stable min-height = 0 Layout Shift, No Clipping)
   const ROTATING_HEADLINES = [
     {
       line1: 'THE REAL-TIME ENGINE',
       line2: 'FOR ESPORTS TOURNAMENTS',
     },
     {
-      line1: 'INSTANT LIVE LEADERBOARDS',
+      line1: 'INSTANT LEADERBOARDS',
       line2: '& AUTOMATED SCORING',
     },
     {
-      line1: 'BROADCAST-GRADE 4K',
-      line2: 'OVERLAYS FOR OBS STUDIO',
+      line1: 'BROADCAST 4K OVERLAYS',
+      line2: 'DIRECT TO OBS STUDIO',
     },
     {
       line1: 'ZERO MANUAL ERRORS',
-      line2: 'FOR CHAMPIONSHIP BRACKETS',
+      line2: 'FOR TOURNAMENT BRACKETS',
     },
   ];
 
@@ -227,16 +227,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {/* Bold Editorial Headline with Smooth Rotating Sentences & Zero Layout Shift */}
               <SlideIn direction="up" delay={0.15}>
                 <div className="space-y-3">
-                  {/* Fixed-Height Display Container (Guarantees zero UI jumping) */}
-                  <div className="h-[96px] sm:h-[120px] md:h-[142px] lg:h-[155px] flex flex-col justify-center overflow-hidden">
+                  {/* Generous Display Container with Zero Clipping and Zero UI Jumping */}
+                  <div className="min-h-[110px] sm:min-h-[135px] md:min-h-[150px] lg:min-h-[165px] flex flex-col justify-center py-1">
                     <AnimatePresence mode="wait">
                       <motion.h1
                         key={headlineIdx}
-                        initial={{ opacity: 0, y: 16 }}
+                        initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -16 }}
-                        transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-                        className="text-4xl sm:text-5xl md:text-6xl lg:text-[64px] font-black uppercase tracking-[-0.03em] leading-[1.02] drop-shadow-sm"
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                        className="text-3xl sm:text-4xl md:text-5xl lg:text-[56px] xl:text-[60px] font-black uppercase tracking-[-0.03em] leading-[1.14] drop-shadow-sm"
                         style={{ fontFamily: "'Outfit', sans-serif" }}
                       >
                         <span className={isDark ? 'text-white' : 'text-slate-900'}>
