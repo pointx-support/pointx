@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { Tournament, CalculatedStanding } from '../../types/tournament';
 import { subscribeToLiveSquadUpdates } from '../../services/broadcastSync';
-import { Flame } from 'lucide-react';
+import { Flame, Crosshair } from 'lucide-react';
 
 export interface BroadcastFreeFireLiveOverlayProps {
   tournament: Tournament;
@@ -76,6 +76,53 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
     return null;
   });
 
+  // Manual Remote Control Fire Animation IDs (Never activates automatically based on kills)
+  const [fireTeamIds, setFireTeamIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const stored =
+          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
+          window.localStorage.getItem('pointx_squads_default');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed?.fireTeamIds)) return parsed.fireTeamIds;
+        }
+      } catch {}
+    }
+    return [];
+  });
+
+  // Tactical Point Rush Scope Indicator IDs
+  const [pointRushTeamIds, setPointRushTeamIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const stored =
+          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
+          window.localStorage.getItem('pointx_squads_default');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed?.pointRushTeamIds)) return parsed.pointRushTeamIds;
+        }
+      } catch {}
+    }
+    return [];
+  });
+
+  const [isPointRushActive, setIsPointRushActive] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const stored =
+          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
+          window.localStorage.getItem('pointx_squads_default');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.isPointRushActive !== undefined) return Boolean(parsed.isPointRushActive);
+        }
+      } catch {}
+    }
+    return false;
+  });
+
   React.useEffect(() => {
     if (propIsOverlayVisible !== undefined) {
       setIsOverlayVisible(propIsOverlayVisible);
@@ -89,6 +136,15 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
       }
       if (data.highlightedTeamId !== undefined) {
         setHighlightedTeamId(data.highlightedTeamId);
+      }
+      if (data.fireTeamIds !== undefined) {
+        setFireTeamIds(data.fireTeamIds);
+      }
+      if (data.pointRushTeamIds !== undefined) {
+        setPointRushTeamIds(data.pointRushTeamIds);
+      }
+      if (data.isPointRushActive !== undefined) {
+        setIsPointRushActive(data.isPointRushActive);
       }
       if (data.isVisible !== undefined) {
         setIsOverlayVisible(data.isVisible);
@@ -113,14 +169,6 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
 
   const displayTeams = standings.slice(0, 12);
   const activeMatch = tournament.matches && tournament.matches.length > 0 ? tournament.matches[0] : null;
-
-  const maxKillsInTour = Math.max(
-    ...displayTeams.map((s) => {
-      const mr = activeMatch?.results?.find((r) => r.teamId === s.teamId);
-      return (mr?.kills !== undefined && mr.kills > 0) ? mr.kills : (s.totalKills || 0);
-    }),
-    0
-  );
 
   return (
     <div
@@ -195,10 +243,13 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
                 ? matchResult.totalPoints
                 : (teamStanding.totalPoints || 0);
 
-            // Pure Fire Burning Logic:
-            const isFireLeader = currentKills >= 4 && currentKills === maxKillsInTour && maxKillsInTour >= 4;
-            const isFireHotAlive = isFireLeader && !allDead;
-            const isFireHotEliminated = isFireLeader && allDead;
+            // Pure Fire Burning Logic: Strictly controlled manually via OBS Remote Controller (no automatic activation)
+            const isFireManual = fireTeamIds.includes(teamStanding.teamId);
+            const isFireHotAlive = isFireManual && !allDead;
+            const isFireHotEliminated = isFireManual && allDead;
+
+            // Tactical Point Rush Scope Indicator (Controlled via OBS Remote)
+            const isPointRush = isPointRushActive || pointRushTeamIds.includes(teamStanding.teamId);
 
             const tag = team?.tag || (team?.name ? team.name.slice(0, 4).toUpperCase() : `T${rank}`);
 
@@ -279,6 +330,17 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
                     >
                       {tag}
                     </span>
+
+                    {/* Tactical Scope Symbol for Point Rush */}
+                    {isPointRush && (
+                      <div
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/25 border border-amber-400/80 text-amber-300 font-mono text-[9px] font-black shrink-0 shadow-sm animate-pulse"
+                        title="Point Rush Active"
+                      >
+                        <Crosshair className="h-3 w-3 text-amber-300 shrink-0" />
+                        <span className="hidden sm:inline tracking-wider">RUSH</span>
+                      </div>
+                    )}
 
                     {isFireHotAlive && (
                       <Flame className="h-4 w-4 text-amber-200 fill-amber-300 animate-flame-wave shrink-0" />

@@ -29,6 +29,9 @@ export interface LiveSquadSyncState {
   revision?: number;
   squads: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]>;
   highlightedTeamId?: string | null;
+  fireTeamIds?: string[];
+  pointRushTeamIds?: string[];
+  isPointRushActive?: boolean;
   isVisible?: boolean;
   timestamp: number;
 }
@@ -39,6 +42,9 @@ export interface FullSyncPayload {
   tournament?: Tournament;
   squads?: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]>;
   highlightedTeamId?: string | null;
+  fireTeamIds?: string[];
+  pointRushTeamIds?: string[];
+  isPointRushActive?: boolean;
   isVisible?: boolean;
   timestamp?: number;
 }
@@ -342,7 +348,7 @@ class RealtimeSyncClient {
             timestamp: ts,
           });
         }
-        if (payload.squads || payload.isVisible !== undefined) {
+        if (payload.squads || payload.isVisible !== undefined || payload.fireTeamIds !== undefined || payload.pointRushTeamIds !== undefined || payload.isPointRushActive !== undefined) {
           broadcastChannel.postMessage({
             type: 'LIVE_SQUADS_UPDATED',
             tournamentId: tourId,
@@ -350,6 +356,9 @@ class RealtimeSyncClient {
               tournamentId: tourId,
               squads: payload.squads || {},
               highlightedTeamId: payload.highlightedTeamId,
+              fireTeamIds: payload.fireTeamIds || [],
+              pointRushTeamIds: payload.pointRushTeamIds || [],
+              isPointRushActive: payload.isPointRushActive || false,
               isVisible: payload.isVisible !== undefined ? payload.isVisible : true,
               timestamp: ts,
             },
@@ -362,11 +371,14 @@ class RealtimeSyncClient {
     if (payload.tournament) {
       this.cacheTournament(tourId, payload.tournament);
     }
-    if (payload.squads || payload.isVisible !== undefined) {
+    if (payload.squads || payload.isVisible !== undefined || payload.fireTeamIds !== undefined || payload.pointRushTeamIds !== undefined || payload.isPointRushActive !== undefined) {
       this.cacheSquads(tourId, {
         tournamentId: tourId,
         squads: payload.squads || {},
         highlightedTeamId: payload.highlightedTeamId,
+        fireTeamIds: payload.fireTeamIds || [],
+        pointRushTeamIds: payload.pointRushTeamIds || [],
+        isPointRushActive: payload.isPointRushActive || false,
         isVisible: payload.isVisible !== undefined ? payload.isVisible : true,
         timestamp: ts,
       });
@@ -514,6 +526,9 @@ export function broadcastLiveSquadUpdate(data: LiveSquadSyncState): void {
     tournamentId: data.tournamentId,
     squads: data.squads,
     highlightedTeamId: data.highlightedTeamId,
+    fireTeamIds: data.fireTeamIds || [],
+    pointRushTeamIds: data.pointRushTeamIds || [],
+    isPointRushActive: data.isPointRushActive || false,
     isVisible: data.isVisible !== undefined ? data.isVisible : true,
     timestamp: Date.now(),
   });

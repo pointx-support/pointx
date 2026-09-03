@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Tournament, TeamMatchResult, Match } from '../../types/tournament';
 import { useTournamentStore } from '../../store/tournamentStore';
-import { calculateTournamentStandings } from '../../engine/standingsEngine';
 import {
   broadcastFullSync,
   subscribeToLiveSquadUpdates,
@@ -32,7 +31,8 @@ import {
   HelpCircle,
   Lock,
   Ban,
-  Delete
+  Delete,
+  Crosshair
 } from 'lucide-react';
 
 export interface BroadcastRemoteControlProps {
@@ -236,6 +236,15 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       if (data.highlightedTeamId !== undefined) {
         setHighlightedTeamId(data.highlightedTeamId);
       }
+      if (data.fireTeamIds !== undefined) {
+        setFireTeamIds(data.fireTeamIds);
+      }
+      if (data.pointRushTeamIds !== undefined) {
+        setPointRushTeamIds(data.pointRushTeamIds);
+      }
+      if (data.isPointRushActive !== undefined) {
+        setIsPointRushActive(data.isPointRushActive);
+      }
       if (data.isVisible !== undefined) {
         setIsOverlayVisible(data.isVisible);
       }
@@ -332,6 +341,53 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
     return null;
   });
 
+  // Manual Remote Control Fire Animation IDs (Never activates automatically based on kills)
+  const [fireTeamIds, setFireTeamIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const stored =
+          window.localStorage.getItem(`pointx_squads_${targetTournamentId}`) ||
+          window.localStorage.getItem('pointx_squads_default');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed?.fireTeamIds)) return parsed.fireTeamIds;
+        }
+      } catch {}
+    }
+    return [];
+  });
+
+  // Tactical Point Rush Scope Indicator IDs
+  const [pointRushTeamIds, setPointRushTeamIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const stored =
+          window.localStorage.getItem(`pointx_squads_${targetTournamentId}`) ||
+          window.localStorage.getItem('pointx_squads_default');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed?.pointRushTeamIds)) return parsed.pointRushTeamIds;
+        }
+      } catch {}
+    }
+    return [];
+  });
+
+  const [isPointRushActive, setIsPointRushActive] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const stored =
+          window.localStorage.getItem(`pointx_squads_${targetTournamentId}`) ||
+          window.localStorage.getItem('pointx_squads_default');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.isPointRushActive !== undefined) return Boolean(parsed.isPointRushActive);
+        }
+      } catch {}
+    }
+    return false;
+  });
+
   const activeMatch: Match = React.useMemo(() => {
     if (tournament.matches && tournament.matches.length > 0) {
       return tournament.matches[0];
@@ -356,11 +412,6 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       }))
     };
   }, [tournament.matches, tournament.teams, tournament.id]);
-
-  const standings = calculateTournamentStandings(tournament);
-
-  // Calculate highest kills across all teams (min 4 for pure fire burn streak activation)
-  const maxKillsInTour = Math.max(...standings.map((s) => s.totalKills), 0);
 
   // Open & Initialize Editable Match Report
   const openMatchReportModal = () => {
@@ -387,12 +438,15 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
     setIsReportModalOpen(true);
   };
 
-  // Sync to OBS whenever squad states, highlighted team, visibility, or scores change
+  // Sync to OBS whenever squad states, highlighted team, visibility, fire, or point rush change
   const syncToBroadcast = (
     newSquads: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]>,
     newHighlighted: string | null = highlightedTeamId,
     visible: boolean = isOverlayVisible,
-    updatedTour?: Tournament
+    updatedTour?: Tournament,
+    activeFireTeamIds: string[] = fireTeamIds,
+    activePointRushTeamIds: string[] = pointRushTeamIds,
+    activePointRush: boolean = isPointRushActive
   ) => {
     const tourToSync = updatedTour || tournament;
     broadcastFullSync({
@@ -400,8 +454,52 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       tournament: tourToSync,
       squads: newSquads,
       highlightedTeamId: newHighlighted,
+      fireTeamIds: activeFireTeamIds,
+      pointRushTeamIds: activePointRushTeamIds,
+      isPointRushActive: activePointRush,
       isVisible: visible,
       timestamp: Date.now()
+    });
+  };
+
+  const handleToggleFireTeam = (teamId: string) => {
+    setFireTeamIds((prev) => {
+      const next = prev.includes(teamId)
+        ? prev.filter((id) => id !== teamId)
+        : [...prev, teamId];
+      syncToBroadcast(squadStates, highlightedTeamId, isOverlayVisible, undefined, next, pointRushTeamIds, isPointRushActive);
+      return next;
+    });
+  };
+
+  const handleTogglePointRushTeam = (teamId: string) => {
+    setPointRushTeamIds((prev) => {
+      const next = prev.includes(teamId)
+        ? prev.filter((id) => id !== teamId)
+        : [...prev, teamId];
+      syncToBroadcast(squadStates, highlightedTeamId, isOverlayVisible, undefined, fireTeamIds, next, isPointRushActive);
+      return next;
+    });
+  };
+
+  const handleToggleGlobalPointRush = () => {
+    const next = !isPointRushActive;
+    setIsPointRushActive(next);
+    syncToBroadcast(squadStates, highlightedTeamId, isOverlayVisible, undefined, fireTeamIds, pointRushTeamIds, next);
+    showToast({
+      type: next ? 'success' : 'info',
+      title: next ? 'Point Rush Activated 🎯' : 'Point Rush Deactivated',
+      message: next ? 'Tactical scope symbol and Point Rush active on stream overlay.' : 'Point Rush deactivated on stream.'
+    });
+  };
+
+  const handleClearAllFire = () => {
+    setFireTeamIds([]);
+    syncToBroadcast(squadStates, highlightedTeamId, isOverlayVisible, undefined, [], pointRushTeamIds, isPointRushActive);
+    showToast({
+      type: 'info',
+      title: 'Fire Animations Cleared',
+      message: 'Turned off fire animations across all teams.'
     });
   };
 
@@ -939,6 +1037,34 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
               {isOverlayVisible ? 'Hide Table (OBS)' : 'Show Table (OBS)'}
             </Button>
 
+            {/* Master Point Rush Toggle (Shows Scope Reticle on OBS) */}
+            <Button
+              variant={isPointRushActive ? 'primary' : 'outline'}
+              size="sm"
+              onClick={handleToggleGlobalPointRush}
+              leftIcon={<Crosshair className={`h-4 w-4 ${isPointRushActive ? 'text-black' : 'text-amber-500'}`} />}
+              className={`font-bold shadow-sm transition-all ${
+                isPointRushActive
+                  ? 'bg-amber-400 hover:bg-amber-300 text-black border-amber-400 animate-pulse'
+                  : 'border-amber-500/40 text-[var(--text-primary)] hover:bg-amber-500/10'
+              }`}
+            >
+              {isPointRushActive ? 'Point Rush ON 🎯' : 'Point Rush (Scope)'}
+            </Button>
+
+            {/* Clear Active Fire Animations */}
+            {fireTeamIds.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearAllFire}
+                leftIcon={<Flame className="h-4 w-4 text-orange-500" />}
+                className="font-bold border-orange-500/50 text-orange-600 dark:text-orange-400 hover:bg-orange-500/10 shadow-sm"
+              >
+                Clear Fire ({fireTeamIds.length})
+              </Button>
+            )}
+
             {/* End Match & Report Modal */}
             <Button
               variant="outline"
@@ -1269,10 +1395,13 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
     const placePts = PLACEMENT_POINTS_MAP[livePlacement] ?? 0;
     const liveTotalMatchPts = placePts + (kills * 1);
 
-    // Pure Fire Burning Logic
-    const isFireLeader = kills >= 4 && kills === maxKillsInTour && maxKillsInTour >= 4;
-    const isFireHotAlive = isFireLeader && !isAllDead;
-    const isFireHotEliminated = isFireLeader && isAllDead;
+    // Pure Fire Burning Logic: Strictly controlled manually via OBS Remote Controller (no automatic activation)
+    const isFireManual = fireTeamIds.includes(team.id);
+    const isFireHotAlive = isFireManual && !isAllDead;
+    const isFireHotEliminated = isFireManual && isAllDead;
+
+    // Tactical Point Rush Scope Status (Controlled via OBS Remote)
+    const isPointRush = isPointRushActive || pointRushTeamIds.includes(team.id);
 
     return (
       <div
@@ -1307,7 +1436,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
           <div className="absolute top-0 right-0 left-0 bg-gradient-to-r from-red-600 via-orange-500 to-amber-400 text-black text-[10px] font-black font-mono uppercase tracking-widest px-3 py-0.5 flex items-center justify-between shadow-md animate-flame-wave">
             <span className="flex items-center gap-1">
               <Flame className="h-3.5 w-3.5 fill-red-800 text-red-900" />
-              🔥 INFERNO STREAK • KILL LEADER 🔥
+              🔥 INFERNO STREAK • CONTROLLER ACTIVE 🔥
             </span>
             <span className="text-black font-black">{kills} FRAGS</span>
           </div>
@@ -1340,6 +1469,12 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
               <div className="font-bold text-sm text-[var(--text-primary)] truncate font-display flex items-center gap-1.5">
                 <span>{team.name}</span>
                 {isBooyahWinner && <Crown className="h-4 w-4 text-amber-500 fill-amber-500 shrink-0" />}
+                {isPointRush && (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-400/40 text-[9px] font-black font-mono shadow-xs animate-pulse" title="Point Rush Active">
+                    <Crosshair className="h-3 w-3 text-amber-500" />
+                    <span>RUSH</span>
+                  </span>
+                )}
                 {!isBooyahWinner && isFireHotAlive && (
                   <Flame className="h-4 w-4 text-orange-500 fill-orange-500 animate-pulse shrink-0" />
                 )}
@@ -1353,8 +1488,39 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            {/* Fire Animation Remote Toggle */}
             <button
+              type="button"
+              onClick={() => handleToggleFireTeam(team.id)}
+              title={isFireManual ? 'Turn OFF Fire Animation for this team' : 'Turn ON Fire Animation for this team'}
+              className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer flex items-center gap-1 ${
+                isFireManual
+                  ? 'bg-gradient-to-r from-red-600 to-orange-500 text-white font-black shadow-md border border-orange-400 animate-pulse'
+                  : 'bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-orange-500'
+              }`}
+            >
+              <Flame className={`h-3 w-3 ${isFireManual ? 'fill-white text-white' : ''}`} />
+              <span>{isFireManual ? 'Fire ON' : 'Fire'}</span>
+            </button>
+
+            {/* Tactical Point Rush Scope Toggle */}
+            <button
+              type="button"
+              onClick={() => handleTogglePointRushTeam(team.id)}
+              title={isPointRush ? 'Turn OFF Point Rush for this team' : 'Turn ON Point Rush for this team'}
+              className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer flex items-center gap-1 ${
+                isPointRush
+                  ? 'bg-amber-500 text-black font-black shadow-md border border-amber-400 animate-pulse'
+                  : 'bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-amber-500'
+              }`}
+            >
+              <Crosshair className={`h-3 w-3 ${isPointRush ? 'text-black' : ''}`} />
+              <span>{isPointRush ? 'Rush ON' : 'Rush'}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => handleHighlightOnStream(team.id)}
               className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer ${
                 isHighlighted || isBooyahWinner || isFireHotAlive
@@ -1367,7 +1533,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
             </button>
 
             {/* Auto Calculated Live Match Total Points */}
-            <div className="text-right font-mono">
+            <div className="text-right font-mono ml-1">
               <div className={`text-xs font-bold ${isBooyahWinner ? 'text-amber-500 font-black' : isFireHotAlive ? 'text-orange-500 font-black' : 'text-[var(--accent-primary)]'}`}>
                 {liveTotalMatchPts} PTS
               </div>

@@ -31,6 +31,9 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
   const prefersReducedMotion = useReducedMotion();
   const isDark = theme === 'dark';
 
+  const isClickScrollingRef = React.useRef(false);
+  const clickScrollTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
   const navLinks = [
     { id: 'live-matrix', label: 'Live Matrix', href: '#live-matrix' },
     { id: 'tournaments', label: 'Tournaments', href: '#tournaments' },
@@ -48,6 +51,12 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
         window.requestAnimationFrame(() => {
           const scrollY = window.scrollY;
           setIsScrolled(scrollY > 20);
+
+          // If scrolling was initiated by a click, don't interrupt the capsule target
+          if (isClickScrollingRef.current) {
+            ticking = false;
+            return;
+          }
 
           // Near top (Hero section), default to Live Matrix selected
           if (scrollY < 240) {
@@ -81,13 +90,24 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (clickScrollTimeoutRef.current) clearTimeout(clickScrollTimeoutRef.current);
+    };
   }, []);
 
   const handleScrollTo = (e: React.MouseEvent<HTMLAnchorElement>, href: string, id: string) => {
     e.preventDefault();
     setActiveSection(id);
     setIsMobileMenuOpen(false);
+
+    // Suppress scroll listener updates during programmatic smooth scroll
+    isClickScrollingRef.current = true;
+    if (clickScrollTimeoutRef.current) clearTimeout(clickScrollTimeoutRef.current);
+    clickScrollTimeoutRef.current = setTimeout(() => {
+      isClickScrollingRef.current = false;
+    }, 850);
+
     const target = document.querySelector(href);
     if (target) {
       const topOffset = 80;
@@ -200,80 +220,76 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
         {/* Center: Precision Navigation with Silky Active & Hover Gliders */}
         <nav
           onMouseLeave={() => setHoveredNav(null)}
-          className="hidden md:flex items-center gap-1 sm:gap-1.5 px-1 relative"
+          className="hidden md:flex items-center gap-1 sm:gap-1.5 px-1 relative whitespace-nowrap shrink-0"
         >
           {navLinks.map((link) => {
             const isCurrentActive = activeSection === link.id;
             const isHovered = hoveredNav === link.id;
 
             return (
-              <motion.a
+              <a
                 key={link.id}
-                variants={itemEntranceVariants}
                 href={link.href}
                 onClick={(e) => handleScrollTo(e, link.href, link.id)}
                 onMouseEnter={() => setHoveredNav(link.id)}
                 className={cn(
-                  'relative px-3.5 sm:px-4 py-1.5 rounded-full text-[13px] transition-colors duration-200 select-none cursor-pointer font-nav flex items-center gap-1.5',
+                  'relative z-10 px-3.5 sm:px-4 py-1.5 rounded-full text-[13px] font-medium whitespace-nowrap shrink-0 transition-colors duration-200 select-none cursor-pointer font-nav flex items-center justify-center gap-2 leading-none',
                   isCurrentActive
                     ? (isDark ? 'text-white font-semibold' : 'text-neutral-950 font-semibold')
                     : (isDark ? 'text-neutral-400 hover:text-white font-medium' : 'text-neutral-600 hover:text-neutral-950 font-medium')
                 )}
               >
-                {/* Active Sliding Pill Indicator with Spring Motion */}
+                {/* Active Sliding Pill Indicator with Single Smooth Spring Motion */}
                 {isCurrentActive && (
                   <motion.div
-                    layoutId="navbar-pill-active"
+                    layoutId="navbar-active-capsule"
                     className={cn(
                       'absolute inset-0 rounded-full -z-10 shadow-xs pointer-events-none',
                       isDark
-                        ? 'bg-white/[0.12] border border-white/[0.15] shadow-[0_2px_12px_rgba(0,0,0,0.4)]'
-                        : 'bg-neutral-900/[0.06] border border-neutral-900/[0.08] shadow-[0_1px_3px_rgba(0,0,0,0.03)]'
+                        ? 'bg-white/[0.14] border border-white/[0.18] shadow-[0_2px_14px_rgba(0,0,0,0.5)]'
+                        : 'bg-neutral-900/[0.07] border border-neutral-900/[0.09] shadow-[0_1px_4px_rgba(0,0,0,0.05)]'
                     )}
                     transition={{
                       type: 'spring',
-                      stiffness: 420,
-                      damping: 32,
-                      mass: 0.6
+                      stiffness: 380,
+                      damping: 30,
+                      mass: 0.75
                     }}
                   />
                 )}
 
-                {/* Hover Gliding Pill (Soft background on inactive hover) */}
+                {/* Hover Gliding Pill (Fade on inactive hover without competing layoutId) */}
                 {!isCurrentActive && isHovered && (
                   <motion.div
-                    layoutId="navbar-pill-hover"
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    transition={{ duration: 0.15 }}
                     className={cn(
                       'absolute inset-0 rounded-full -z-10 pointer-events-none',
                       isDark
                         ? 'bg-white/[0.06]'
                         : 'bg-neutral-900/[0.035]'
                     )}
-                    transition={{
-                      type: 'spring',
-                      stiffness: 450,
-                      damping: 34,
-                      mass: 0.5
-                    }}
                   />
                 )}
 
-                {/* Subtle Live Status Pulse Dot for Live Matrix */}
+                {/* Subtle Live Status Pulse Dot for Live Matrix (Strictly Single Line) */}
                 {link.id === 'live-matrix' && (
-                  <span className="relative flex h-1.5 w-1.5 shrink-0">
+                  <span className="relative flex h-2 w-2 shrink-0 items-center justify-center">
                     <span className={cn(
                       'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75',
                       isCurrentActive ? 'bg-emerald-400' : 'bg-neutral-400 dark:bg-neutral-500'
                     )} />
                     <span className={cn(
                       'relative inline-flex rounded-full h-1.5 w-1.5',
-                      isCurrentActive ? 'bg-emerald-500' : 'bg-neutral-400 dark:bg-neutral-500'
+                      isCurrentActive ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-neutral-400 dark:bg-neutral-500'
                     )} />
                   </span>
                 )}
 
-                <span>{link.label}</span>
-              </motion.a>
+                <span className="whitespace-nowrap select-none font-semibold tracking-[-0.01em]">{link.label}</span>
+              </a>
             );
           })}
         </nav>
@@ -381,17 +397,17 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
                         : (isCurrentActive ? 'bg-black/[0.07] text-neutral-950 font-bold' : 'text-neutral-600 hover:bg-black/[0.04] hover:text-neutral-950')
                     )}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5 whitespace-nowrap">
                       {link.id === 'live-matrix' && (
                         <span className="relative flex h-2 w-2 shrink-0">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                         </span>
                       )}
-                      <span>{link.label}</span>
+                      <span className="whitespace-nowrap">{link.label}</span>
                     </div>
                     {isCurrentActive && (
-                      <div className="h-1.5 w-1.5 rounded-full bg-[#ffd000] shadow-[0_0_8px_rgba(255,208,0,0.8)]" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-[#ffd000] shadow-[0_0_8px_rgba(255,208,0,0.8)] shrink-0" />
                     )}
                   </motion.a>
                 );
