@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
 import { BottomNav } from './components/layout/BottomNav';
@@ -24,6 +25,19 @@ export function App() {
   const [viewMode, setViewMode] = useState<'home' | 'command-center' | 'workspace' | 'admin-dashboard'>(() => {
     if (typeof window === 'undefined') return 'home';
     const path = window.location.pathname.toLowerCase();
+
+    // If user closed the browser and opens afresh, always start from the landing page ('home')
+    const isNewBrowserSession = !window.sessionStorage.getItem('pointx_tab_session_active');
+    if (isNewBrowserSession) {
+      window.sessionStorage.setItem('pointx_tab_session_active', 'true');
+      if (path === '/' || path === '' || path.startsWith('/dashboard') || path.startsWith('/workspace') || path.startsWith('/tournaments')) {
+        if (window.location.pathname !== '/') {
+          window.history.replaceState({}, '', '/');
+        }
+        return 'home';
+      }
+    }
+
     if (path.startsWith('/admin') || path.startsWith('/super-admin')) {
       return 'admin-dashboard';
     }
@@ -232,42 +246,64 @@ export function App() {
     );
   }
 
-  // 3. Unauthenticated Public Visitor Routing (Home vs Sign In vs Register)
+  // 3. Unauthenticated Public Visitor Routing (Home vs Sign In vs Register with Animated Page Transitions)
   if (!isAuthenticated) {
-    if (publicRoute === 'login') {
-      return (
-        <ToastProvider>
-          <LoginView
-            initialMode="signin"
-            onBackToHome={() => navigateTo('home')}
-            onModeChange={(mode) => navigateTo(mode === 'signup' ? 'signup' : 'login')}
-            onAuthSuccess={() => navigateTo('command-center', '/dashboard')}
-          />
-        </ToastProvider>
-      );
-    }
-
-    if (publicRoute === 'signup') {
-      return (
-        <ToastProvider>
-          <LoginView
-            initialMode="signup"
-            onBackToHome={() => navigateTo('home')}
-            onModeChange={(mode) => navigateTo(mode === 'signup' ? 'signup' : 'login')}
-            onAuthSuccess={() => navigateTo('command-center', '/dashboard')}
-          />
-        </ToastProvider>
-      );
-    }
-
-    // Default public landing page (Always takes user strictly to signin page)
     return (
       <ToastProvider>
-        <HomePage
-          onNavigateLogin={() => navigateTo('login')}
-          onNavigateSignup={() => navigateTo('login')}
-          onNavigateDashboard={() => navigateTo('command-center', '/dashboard')}
-        />
+        <AnimatePresence mode="wait">
+          {publicRoute === 'login' && (
+            <motion.div
+              key="login-view"
+              initial={{ opacity: 0, scale: 0.98, y: 14 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: -14 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="w-full min-h-screen"
+            >
+              <LoginView
+                initialMode="signin"
+                onBackToHome={() => navigateTo('home')}
+                onModeChange={(mode) => navigateTo(mode === 'signup' ? 'signup' : 'login')}
+                onAuthSuccess={() => navigateTo('command-center', '/dashboard')}
+              />
+            </motion.div>
+          )}
+
+          {publicRoute === 'signup' && (
+            <motion.div
+              key="signup-view"
+              initial={{ opacity: 0, scale: 0.98, y: 14 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: -14 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="w-full min-h-screen"
+            >
+              <LoginView
+                initialMode="signup"
+                onBackToHome={() => navigateTo('home')}
+                onModeChange={(mode) => navigateTo(mode === 'signup' ? 'signup' : 'login')}
+                onAuthSuccess={() => navigateTo('command-center', '/dashboard')}
+              />
+            </motion.div>
+          )}
+
+          {publicRoute === 'home' && (
+            <motion.div
+              key="home-view"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="w-full"
+            >
+              <HomePage
+                onNavigateLogin={() => navigateTo('login')}
+                onNavigateSignup={() => navigateTo('login')}
+                onNavigateDashboard={() => navigateTo('command-center', '/dashboard')}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </ToastProvider>
     );
   }

@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   Home,
   User,
-  Lock,
   Laptop,
   Trophy,
   HelpCircle,
@@ -19,7 +18,6 @@ import {
   ShieldCheck,
   Smartphone,
   Globe,
-  Users2,
   Copy,
   Check,
   Mail,
@@ -441,47 +439,6 @@ export const Navbar: FC<NavbarProps> = ({
                           </div>
                         </div>
                         <ExternalLink className="h-3 w-3 text-[var(--text-muted)] group-hover:text-[var(--text-primary)]" />
-                      </button>
-
-                      {/* Staff & Operator Delegation */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsDropdownOpen(false);
-                          if (onSelectWorkspaceTab) {
-                            onSelectWorkspaceTab('account');
-                          } else {
-                            setShowStaffModal(true);
-                          }
-                        }}
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors text-left cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <Users2 className="h-4 w-4 text-cyan-400 group-hover:scale-110 transition-transform" />
-                          <div>
-                            <div className="font-bold text-[var(--text-primary)]">Staff & Operator Access</div>
-                            <div className="text-[10px] text-[var(--text-muted)] font-mono">Delegate scoring & OBS overlays</div>
-                          </div>
-                        </div>
-                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 font-bold">STAFF</span>
-                      </button>
-
-                      {/* Security & Login */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsDropdownOpen(false);
-                          setShowSecurityModal(true);
-                        }}
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors text-left cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <Lock className="h-4 w-4 text-emerald-400 group-hover:scale-110 transition-transform" />
-                          <div>
-                            <div className="font-bold text-[var(--text-primary)]">Security & Login</div>
-                            <div className="text-[10px] text-[var(--text-muted)] font-mono">Password & 2FA protection</div>
-                          </div>
-                        </div>
                       </button>
 
                       {/* Active Sessions / Devices */}

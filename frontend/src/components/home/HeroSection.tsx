@@ -4,6 +4,7 @@ import { PointXLogo } from '../ui/PointXLogo';
 import { FadeIn, SlideIn } from '../animation/RevealAnimations';
 import { useAuthStore } from '../../store/authStore';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { triggerHaptic } from '../../lib/utils';
 import {
   Zap,
   ArrowRight,
@@ -270,7 +271,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   {/* Primary CTA: Enter the Arena / Enter Console */}
                   <button
                     type="button"
-                    onClick={isAuthenticated ? (onNavigateDashboard || onNavigateLogin) : onNavigateLogin}
+                    onClick={() => {
+                      triggerHaptic(14);
+                      if (isAuthenticated) {
+                        (onNavigateDashboard || onNavigateLogin)();
+                      } else {
+                        onNavigateLogin();
+                      }
+                    }}
                     className="relative w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 sm:px-10 py-4 rounded-2xl text-sm sm:text-base font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-[0_8px_30px_rgba(255,208,0,0.4)] hover:shadow-[0_0_40px_rgba(255,208,0,0.65)] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer uppercase tracking-wider group overflow-hidden border border-amber-300/80"
                     style={{ fontFamily: "'Outfit', sans-serif" }}
                   >
@@ -292,7 +300,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   {/* Secondary CTA: Organizer Sign In / Dashboard */}
                   <button
                     type="button"
-                    onClick={isAuthenticated ? (onNavigateDashboard || onNavigateLogin) : onNavigateLogin}
+                    onClick={() => {
+                      triggerHaptic(14);
+                      if (isAuthenticated) {
+                        (onNavigateDashboard || onNavigateLogin)();
+                      } else {
+                        onNavigateLogin();
+                      }
+                    }}
                     className={`relative w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 sm:px-8 py-4 rounded-2xl text-xs sm:text-sm font-bold border backdrop-blur-xl shadow-md hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer group ${
                       isDark
                         ? 'bg-black/60 hover:bg-black/80 border-white/20 hover:border-amber-400/60 text-white'

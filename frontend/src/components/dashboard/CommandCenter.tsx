@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'motion/react';
 import type { Tournament } from '../../types/tournament';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useAuthStore } from '../../store/authStore';
@@ -273,7 +274,12 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
   return (
     <div className="space-y-8 font-sans w-full max-w-[1680px] mx-auto animate-page-enter">
       {/* ================= 1. CLEAN POINTX ESPORTS COMMAND-CENTER HERO SECTION ================= */}
-      <section className="relative rounded-3xl border border-[var(--border-subtle)] bg-gradient-to-b from-[var(--bg-surface-raised)] via-[var(--bg-hero)] to-[var(--bg-surface)] overflow-hidden shadow-[var(--shadow-raised)] p-6 sm:p-10 lg:p-12 text-center transition-all duration-300">
+      <motion.section
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        className="relative rounded-3xl border border-[var(--border-subtle)] bg-gradient-to-b from-[var(--bg-surface-raised)] via-[var(--bg-hero)] to-[var(--bg-surface)] overflow-hidden shadow-[var(--shadow-raised)] p-6 sm:p-10 lg:p-12 text-center transition-all duration-300"
+      >
         
         {/* Subtle, soft ambient highlight behind logo */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] sm:w-[540px] h-[200px] sm:h-[260px] bg-[var(--accent-primary)]/10 rounded-full blur-[100px] pointer-events-none" />
@@ -352,10 +358,15 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
             />
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* ================= 2. ESPORTS METRICS & TELEMETRY ROW ================= */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 font-mono">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+        className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 font-mono"
+      >
         {/* TOTAL TOURNAMENTS */}
         <div className="relative rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:p-5 shadow-[var(--shadow-flat)] hover:border-[var(--accent-primary)]/50 hover:shadow-[var(--shadow-raised)] transition-all duration-200 group overflow-hidden">
           {/* Subtle Accent Strip */}
@@ -447,10 +458,15 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* ================= 3. TOURNAMENT WORKFLOW GUIDE (COLLAPSIBLE) ================= */}
-      <div className="rounded-2xl bg-[var(--bg-surface)] p-4 sm:p-5 border border-[var(--border-subtle)] shadow-[var(--shadow-flat)] transition-colors duration-200">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.16, ease: [0.22, 1, 0.36, 1] }}
+        className="rounded-2xl bg-[var(--bg-surface)] p-4 sm:p-5 border border-[var(--border-subtle)] shadow-[var(--shadow-flat)] transition-colors duration-200"
+      >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--accent-primary)]/12 text-[var(--accent-primary)]">
@@ -496,10 +512,15 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
             })}
           </div>
         )}
-      </div>
+      </motion.div>
 
       {/* ================= 4. PREVIOUS TOURNAMENTS WORKSPACE SECTION ================= */}
-      <section className="space-y-5 p-5 sm:p-6 lg:p-7 rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-[var(--shadow-raised)]">
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, delay: 0.24, ease: [0.22, 1, 0.36, 1] }}
+        className="space-y-5 p-5 sm:p-6 lg:p-7 rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-[var(--shadow-raised)]"
+      >
         {/* Section Header with Tabs & Filters */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-[var(--border-subtle)]">
           <div className="flex items-center gap-2.5">
@@ -634,7 +655,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
             </div>
           </div>
         )}
-      </section>
+      </motion.section>
 
       {/* Clone Modal */}
       {cloningTournament && (
