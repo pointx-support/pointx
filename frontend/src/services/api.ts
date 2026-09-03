@@ -332,6 +332,7 @@ export const adminApi = {
   },
   getUsers: () => request<AdminUserRecord[]>('/admin/users', { method: 'GET' }),
   getOrganizerDetails: (id: string) => request<AdminUserRecord>(`/admin/organizers/${id}`, { method: 'GET' }),
+  getOrganizerTournaments: (id: string) => request<Tournament[]>(`/admin/organizers/${id}/tournaments`, { method: 'GET' }),
   approveOrganizer: (id: string) => request(`/admin/organizers/${id}/approve`, { method: 'POST' }),
   rejectOrganizer: (id: string, reason?: string) =>
     request(`/admin/organizers/${id}/reject`, {

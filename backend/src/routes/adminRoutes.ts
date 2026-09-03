@@ -5,6 +5,7 @@ import {
   getOverviewStats,
   listOrganizers,
   getOrganizerDetails,
+  getOrganizerTournaments,
   handleApproveOrganizer,
   handleRejectOrganizer,
   handleSuspendUser,
@@ -42,6 +43,7 @@ router.get('/overview', getOverviewStats);
 router.get('/organizers', listOrganizers);
 router.get('/users', listOrganizers); // Legacy endpoint compatibility
 router.get('/organizers/:id', getOrganizerDetails);
+router.get('/organizers/:id/tournaments', getOrganizerTournaments);
 router.post('/organizers/:id/approve', handleApproveOrganizer);
 router.post('/organizers/:id/reject', handleRejectOrganizer);
 router.post('/organizers/:id/suspend', handleSuspendUser);

@@ -14,8 +14,12 @@ import {
   Edit3,
   Trophy,
   AlertTriangle,
+  ExternalLink,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import type { AdminUserRecord } from '../../types/admin';
+import { adminApi, tournamentsApi } from '../../services/api';
 
 export interface OrganizerDrawerProps {
   organizer: AdminUserRecord | null;
@@ -28,6 +32,7 @@ export interface OrganizerDrawerProps {
   onEdit: (organizer: AdminUserRecord) => void;
   onPromote?: (id: string) => void;
   onDemote?: (id: string) => void;
+  onControlTournament?: (tournament: any) => void;
 }
 
 export const OrganizerDrawer: React.FC<OrganizerDrawerProps> = ({
@@ -41,13 +46,17 @@ export const OrganizerDrawer: React.FC<OrganizerDrawerProps> = ({
   onEdit,
   onPromote,
   onDemote,
+  onControlTournament,
 }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'organization' | 'activity'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'organization' | 'activity' | 'tournaments'>('profile');
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [suspendReason, setSuspendReason] = useState('');
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [organizerTournaments, setOrganizerTournaments] = useState<any[]>([]);
+  const [isLoadingTournaments, setIsLoadingTournaments] = useState(false);
+  const [deletingTourId, setDeletingTourId] = useState<string | null>(null);
 
   if (!organizer) return null;
 
@@ -108,6 +117,44 @@ export const OrganizerDrawer: React.FC<OrganizerDrawerProps> = ({
       onDelete(organizer.id || (organizer as any)._id);
       setShowDeleteModal(false);
       onClose();
+    }
+  };
+
+  const fetchTournaments = async () => {
+    if (!organizer) return;
+    const orgId = organizer.id || (organizer as any)._id;
+    if (!orgId) return;
+    setIsLoadingTournaments(true);
+    try {
+      const res = await adminApi.getOrganizerTournaments(orgId);
+      if (res && res.data) {
+        setOrganizerTournaments(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load organizer tournaments:', err);
+    } finally {
+      setIsLoadingTournaments(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeTab === 'tournaments') {
+      fetchTournaments();
+    }
+  }, [activeTab, organizer?.id]);
+
+  const handleDeleteTournament = async (tournamentId: string) => {
+    if (!window.confirm('Are you sure you want to permanently delete this tournament? All associated match results will be removed.')) {
+      return;
+    }
+    setDeletingTourId(tournamentId);
+    try {
+      await tournamentsApi.delete(tournamentId);
+      setOrganizerTournaments((prev) => prev.filter((t) => (t.id || t.customId) !== tournamentId));
+    } catch (err) {
+      alert('Failed to delete tournament: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setDeletingTourId(null);
     }
   };
 
@@ -218,6 +265,20 @@ export const OrganizerDrawer: React.FC<OrganizerDrawerProps> = ({
           >
             Platform Telemetry
           </button>
+          <button
+            onClick={() => setActiveTab('tournaments')}
+            className={`flex-1 py-3 px-4 text-xs font-bold text-center border-b-2 transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              activeTab === 'tournaments'
+                ? 'border-cyan-500 text-cyan-400 bg-cyan-950/20'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Trophy className="h-3.5 w-3.5" />
+            <span>Tournaments</span>
+            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-500/30 text-[10px] font-mono text-cyan-400 font-bold">
+              {organizerTournaments.length || organizer.tournamentsCreatedCount || 0}
+            </span>
+          </button>
         </div>
 
         {/* Tab Content Area */}
@@ -325,6 +386,136 @@ export const OrganizerDrawer: React.FC<OrganizerDrawerProps> = ({
                   <div className="text-2xl font-black text-white">{organizer.loginCount || 1}</div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'tournaments' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-1 border-b border-slate-800/80">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Trophy className="h-4 w-4 text-cyan-400" />
+                    <span>Organizer's Tournaments</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    View, manage, or take direct control of tournaments created by {organizer.name}.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchTournaments}
+                  disabled={isLoadingTournaments}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer text-xs flex items-center gap-1 border border-slate-700 disabled:opacity-50"
+                  title="Refresh tournaments list"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${isLoadingTournaments ? 'animate-spin text-cyan-400' : ''}`} />
+                </button>
+              </div>
+
+              {isLoadingTournaments ? (
+                <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-3">
+                  <Loader2 className="h-7 w-7 animate-spin text-cyan-400" />
+                  <span className="text-xs font-mono">Loading tournaments...</span>
+                </div>
+              ) : organizerTournaments.length === 0 ? (
+                <div className="p-8 rounded-2xl bg-slate-900/40 border border-slate-800 text-center space-y-2">
+                  <Trophy className="h-8 w-8 text-slate-600 mx-auto" />
+                  <div className="text-sm font-bold text-slate-300">No Tournaments Found</div>
+                  <p className="text-xs text-slate-500 max-w-xs mx-auto">
+                    This organizer hasn't created any tournaments yet.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {organizerTournaments.map((t) => {
+                    const tourId = t.id || t.customId;
+                    const isDeleting = deletingTourId === tourId;
+                    const statusColor =
+                      t.status === 'Live' || t.status === 'Ongoing'
+                        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                        : t.status === 'Completed'
+                        ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-300'
+                        : 'bg-amber-500/15 border-amber-500/30 text-amber-300';
+
+                    return (
+                      <div
+                        key={tourId}
+                        className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 hover:border-slate-700 transition-all space-y-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="text-sm font-bold text-white truncate" title={t.title}>
+                                {t.title}
+                              </h4>
+                              <span
+                                className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border uppercase ${statusColor}`}
+                              >
+                                {t.status || 'Draft'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-400 font-mono mt-1 flex items-center gap-3">
+                              <span>Game: <strong className="text-slate-200">{t.game || 'Free Fire'}</strong></span>
+                              <span>•</span>
+                              <span>ID: <code className="text-cyan-400">{tourId}</code></span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Tournament Metrics Row */}
+                        <div className="grid grid-cols-3 gap-2 py-2 px-3 rounded-lg bg-slate-950/60 border border-slate-800/60 text-xs">
+                          <div>
+                            <div className="text-[10px] font-mono text-slate-500 uppercase">Teams</div>
+                            <div className="font-bold text-white">{t.teams?.length || 0}</div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-mono text-slate-500 uppercase">Matches</div>
+                            <div className="font-bold text-white">{t.matches?.length || 0}</div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-mono text-slate-500 uppercase">Created</div>
+                            <div className="font-bold text-slate-300 text-[11px]">
+                              {t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'N/A'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Control Actions Bar */}
+                        <div className="flex items-center justify-between pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onControlTournament) {
+                                onControlTournament(t);
+                                onClose();
+                              }
+                            }}
+                            className="px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                            title="Open in Tournament Workspace to control points, matches, and broadcast"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            <span>Manage / Control in Workspace</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTournament(tourId)}
+                            disabled={isDeleting}
+                            className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 transition-all cursor-pointer disabled:opacity-50"
+                            title="Delete this tournament"
+                          >
+                            {isDeleting ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>

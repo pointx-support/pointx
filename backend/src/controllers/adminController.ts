@@ -24,6 +24,7 @@ import {
 } from '../services/adminService';
 import { User } from '../models/User';
 import { AuditActivity } from '../models/AuditActivity';
+import { getTournamentsForOrganizer } from '../services/tournamentService';
 
 /**
  * 1. Super Admin Sign In Endpoint
@@ -208,6 +209,22 @@ export async function getOrganizerDetails(req: AuthenticatedRequest, res: Respon
         ...userJson,
         organizerId: `ORG-${user._id.toString().slice(-6).toUpperCase()}`,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+  * 5b. Get All Tournaments Created by an Organizer
+  */
+export async function getOrganizerTournaments(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const id = req.params.id as string;
+    const tournaments = await getTournamentsForOrganizer(id);
+    return res.status(200).json({
+      success: true,
+      data: tournaments.map((t) => t.toJSON()),
     });
   } catch (error) {
     next(error);

@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { PointXLogo } from '../ui/PointXLogo';
 import { useAuthStore } from '../../store/authStore';
+import { useAdminStore } from '../../store/adminStore';
 import { adminApi } from '../../services/api';
 import type { AdminTab, AdminUserRecord } from '../../types/admin';
 import { OrganizerDrawer } from './OrganizerDrawer';
@@ -39,21 +40,46 @@ import { SystemHealthPanel } from './SystemHealthPanel';
 import { AdminAuditLogsView } from './views/AdminAuditLogsView';
 import { AdminSettingsView } from './views/AdminSettingsView';
 import { AdminTemplatesView } from './views/AdminTemplatesView';
+import { AdminTemplateStudio } from '../graphics/AdminTemplateStudio';
 import { cn } from '../../lib/utils';
 
 export interface SuperAdminDashboardProps {
   onExitAdmin?: () => void;
   onOpenTemplateStudio?: () => void;
+  onControlTournament?: (tournament: any) => void;
   isEmbedded?: boolean;
 }
 
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   onExitAdmin,
-  onOpenTemplateStudio,
+  onOpenTemplateStudio: _onOpenTemplateStudio,
+  onControlTournament,
   isEmbedded = false,
 }) => {
   const { user, theme, toggleTheme, logout } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const { activeAdminTab, setActiveAdminTab } = useAdminStore();
+  const [activeTab, setActiveTabState] = useState<AdminTab>(activeAdminTab || 'overview');
+  const [advancedSubTab, setAdvancedSubTab] = useState<'general' | 'requests' | 'mongodb' | 'cloudinary' | 'brevo' | 'health'>('general');
+  const [isPrecisionStudioOpen, setIsPrecisionStudioOpen] = useState(false);
+
+  useEffect(() => {
+    if (activeAdminTab) {
+      if (activeAdminTab === 'requests' || activeAdminTab === 'mongodb' || activeAdminTab === 'cloudinary' || activeAdminTab === 'brevo' || activeAdminTab === 'health') {
+        setActiveTabState('settings');
+        setAdvancedSubTab(activeAdminTab as any);
+      } else if (activeAdminTab === 'template-studio') {
+        setActiveTabState('templates');
+        setIsPrecisionStudioOpen(true);
+      } else {
+        setActiveTabState(activeAdminTab);
+      }
+    }
+  }, [activeAdminTab]);
+
+  const setActiveTab = (tab: AdminTab) => {
+    setActiveTabState(tab);
+    setActiveAdminTab(tab);
+  };
   
   // Overview metrics state
   const [overviewData, setOverviewData] = useState<any>(null);
@@ -256,14 +282,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const NAV_ITEMS: { id: AdminTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'organizers', label: 'Organizers', icon: Users },
-    { id: 'templates', label: 'Templates', icon: Palette },
-    { id: 'requests', label: 'Verification Queue', icon: Clock },
-    { id: 'mongodb', label: 'MongoDB Atlas', icon: Database },
-    { id: 'cloudinary', label: 'Cloudinary CDN', icon: Cloud },
-    { id: 'brevo', label: 'Brevo Email', icon: Mail },
-    { id: 'health', label: 'System Health', icon: Cpu },
+    { id: 'templates', label: 'Template Studio', icon: Palette },
     { id: 'audit-logs', label: 'Activity', icon: FileText },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'settings', label: 'Advance Settings', icon: Settings },
   ];
 
   // Organizer breakdown numbers
@@ -1055,13 +1076,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           </div>
         )}
 
-        {/* 3. TAB: ORGANIZERS FULL WORKSPACE */}
-        {(activeTab === 'organizers' || activeTab === 'requests') && (
+        {/* 3. TAB: ORGANIZERS FULL WORKSPACE & ADVANCED VERIFICATION QUEUE */}
+        {(activeTab === 'organizers' || activeTab === 'requests' || (activeTab === 'settings' && advancedSubTab === 'requests')) && (
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-black/[0.06] dark:border-white/[0.08]">
               <div>
                 <h2 className="text-2xl font-black font-display text-neutral-900 dark:text-white uppercase tracking-tight">
-                  {activeTab === 'requests' ? 'Pending Organizer Verification Queue' : 'Organizer Ecosystem Directory'}
+                  {(activeTab === 'requests' || (activeTab === 'settings' && advancedSubTab === 'requests'))
+                    ? 'Pending Organizer Verification Queue'
+                    : 'Organizer Ecosystem Directory'}
                 </h2>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 font-mono mt-0.5">
                   Full control room to review identity, verify organizations, and manage workspace permissions
@@ -1276,22 +1299,76 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           </div>
         )}
 
-        {/* 4. SUB-PANELS: TEMPLATES, MONGODB, CLOUDINARY, BREVO, HEALTH, AUDIT LOGS, SETTINGS */}
+        {/* 4. SUB-PANELS: TEMPLATES, AUDIT LOGS, ADVANCE SETTINGS (WITH MERGED VERIFICATION QUEUE, MONGODB, CLOUDINARY, ETC.) */}
         {activeTab === 'templates' && (
-          <AdminTemplatesView
-            onOpenTemplateStudio={() => {
-              if (onOpenTemplateStudio) {
-                onOpenTemplateStudio();
-              }
-            }}
-          />
+          isPrecisionStudioOpen ? (
+            <AdminTemplateStudio onClose={() => setIsPrecisionStudioOpen(false)} />
+          ) : (
+            <AdminTemplatesView
+              onOpenTemplateStudio={() => setIsPrecisionStudioOpen(true)}
+            />
+          )
         )}
-        {activeTab === 'mongodb' && <MongoDbMonitorPanel />}
-        {activeTab === 'cloudinary' && <CloudinaryMonitorPanel />}
-        {activeTab === 'brevo' && <BrevoConfigPanel />}
-        {activeTab === 'health' && <SystemHealthPanel />}
+
         {activeTab === 'audit-logs' && <AdminAuditLogsView />}
-        {activeTab === 'settings' && <AdminSettingsView />}
+
+        {activeTab === 'settings' && (
+          <div className="space-y-6">
+            {/* Advance Settings Sub-Navigation Strip (Merged Verification Queue, MongoDB Atlas, Cloudinary CDN) */}
+            <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-white dark:bg-[#10131B] border border-black/[0.08] dark:border-white/[0.08] overflow-x-auto no-scrollbar shadow-xs">
+              {[
+                { id: 'general', label: 'Platform Rules', icon: Settings },
+                { id: 'requests', label: 'Verification Queue', icon: Clock, badge: pendingOrgs },
+                { id: 'mongodb', label: 'MongoDB Atlas', icon: Database },
+                { id: 'cloudinary', label: 'Cloudinary CDN', icon: Cloud },
+                { id: 'brevo', label: 'Brevo Email', icon: Mail },
+                { id: 'health', label: 'System Health', icon: Cpu },
+              ].map((sub) => {
+                const Icon = sub.icon;
+                const isCurrent = advancedSubTab === sub.id;
+                return (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => {
+                      setAdvancedSubTab(sub.id as any);
+                      if (sub.id === 'requests') {
+                        setStatusFilter('pending_verification');
+                        fetchOrganizers(1, 'pending_verification', searchQuery);
+                      }
+                    }}
+                    className={cn(
+                      'flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer',
+                      isCurrent
+                        ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] shadow-sm'
+                        : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    <span>{sub.label}</span>
+                    {typeof sub.badge === 'number' && sub.badge > 0 && (
+                      <span
+                        className={cn(
+                          'px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold',
+                          isCurrent ? 'bg-black/20 text-[var(--accent-primary-text)]' : 'bg-amber-500/20 text-amber-400'
+                        )}
+                      >
+                        {sub.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Sub-Panel Contents */}
+            {advancedSubTab === 'general' && <AdminSettingsView />}
+            {advancedSubTab === 'mongodb' && <MongoDbMonitorPanel />}
+            {advancedSubTab === 'cloudinary' && <CloudinaryMonitorPanel />}
+            {advancedSubTab === 'brevo' && <BrevoConfigPanel />}
+            {advancedSubTab === 'health' && <SystemHealthPanel />}
+          </div>
+        )}
 
       </div>
 
@@ -1307,6 +1384,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           onDelete={handleDelete}
           onPromote={handlePromoteToAdmin}
           onDemote={handleDemoteToOrganizer}
+          onControlTournament={onControlTournament}
           onEdit={(updated) => {
             setSelectedOrganizer(updated);
             fetchOrganizers();

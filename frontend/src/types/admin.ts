@@ -6,6 +6,7 @@ export type AdminTab =
   | 'requests'
   | 'users'
   | 'templates'
+  | 'template-studio'
   | 'analytics'
   | 'mongodb'
   | 'cloudinary'

@@ -19,16 +19,22 @@ import {
   Search,
   Shield,
   Palette,
-  Edit3
+  Edit3,
+  LayoutDashboard,
+  Users,
+  FileText,
+  Settings,
 } from 'lucide-react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useAuthStore } from '../../store/authStore';
+import { useAdminStore } from '../../store/adminStore';
 import { useToast } from '../ui/Toast';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { EditTournamentModal } from '../tournaments/EditTournamentModal';
 import { cn } from '../../lib/utils';
 import type { AppState } from '../../store/tournamentStore';
+import type { AdminTab } from '../../types/admin';
 
 export interface SidebarProps {
   viewMode?: 'command-center' | 'workspace' | 'admin-dashboard';
@@ -60,6 +66,8 @@ export const Sidebar: FC<SidebarProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [isMainTreeOpen, setIsMainTreeOpen] = useState(true);
   const [isGraphicsTreeOpen, setIsGraphicsTreeOpen] = useState(true);
+  const [isAdminTreeOpen, setIsAdminTreeOpen] = useState(true);
+  const { activeAdminTab, setActiveAdminTab } = useAdminStore();
   const [hoveredFlyout, setHoveredFlyout] = useState<string | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -95,6 +103,20 @@ export const Sidebar: FC<SidebarProps> = ({
     { id: 'settings', label: 'Scoring Rules', icon: Sliders },
     { id: 'account', label: 'Staff & Account', icon: UserIcon }
   ];
+
+  // Admin Center Sub-Items
+  const adminSubItems: { id: AdminTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'organizers', label: 'Organizers', icon: Users },
+    { id: 'templates', label: 'Template Studio', icon: Palette },
+    { id: 'audit-logs', label: 'Activity Logs', icon: FileText },
+    { id: 'settings', label: 'Advance Settings', icon: Settings },
+  ];
+
+  const handleAdminSubClick = (subId: AdminTab) => {
+    setActiveAdminTab(subId);
+    handleNavClick('admin-dashboard');
+  };
 
   const handleNavClick = (tabId: string) => {
     setHoveredFlyout(null);
@@ -595,35 +617,6 @@ export const Sidebar: FC<SidebarProps> = ({
                 </div>
               )}
             </div>
-
-            {/* 5. Template Studio (ADMIN ONLY) */}
-            {user?.role === 'admin' && (
-              <button
-                type="button"
-                onClick={() => handleNavClick('template-studio')}
-                className={cn(
-                  'w-full flex items-center rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer group',
-                  isExpanded ? 'justify-between px-3 py-2.5' : 'justify-center h-10 w-10 mx-auto p-0',
-                  activeTab === 'template-studio' && !isCommandCenter
-                    ? (isDark ? 'bg-white/12 text-white shadow-sm' : 'bg-black/8 text-black shadow-sm')
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 dark:hover:bg-white/5'
-                )}
-                title={!isExpanded ? 'Template Studio (Admin)' : undefined}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <Palette className={cn(
-                    'h-4 w-4 shrink-0 transition-transform group-hover:scale-110',
-                    activeTab === 'template-studio' && !isCommandCenter ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'
-                  )} />
-                  {isExpanded && <span className="truncate">Template Studio</span>}
-                </div>
-                {isExpanded && (
-                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400">
-                    ADMIN
-                  </span>
-                )}
-              </button>
-            )}
           </div>
 
           {/* SECTION 2: ORGANIZATION & STAFF */}
@@ -670,25 +663,91 @@ export const Sidebar: FC<SidebarProps> = ({
               );
             })}
 
-            {/* Super Admin Control Center Option */}
+            {/* Super Admin Control Center Option with Sub-Nav Bar */}
             {user?.role === 'admin' && (
-              <button
-                type="button"
-                onClick={() => handleNavClick('admin-dashboard')}
-                className={cn(
-                  'w-full flex items-center rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer group',
-                  isExpanded ? 'justify-between px-3 py-2.5' : 'justify-center h-10 w-10 mx-auto p-0',
-                  viewMode === 'admin-dashboard'
-                    ? 'bg-amber-500/20 text-[var(--accent-primary)] border border-amber-500/30'
-                    : 'text-[var(--text-secondary)] hover:text-amber-400 hover:bg-amber-500/10'
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isExpanded) {
+                      setIsAdminTreeOpen(!isAdminTreeOpen);
+                    }
+                    handleNavClick('admin-dashboard');
+                  }}
+                  className={cn(
+                    'w-full flex items-center rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer group',
+                    isExpanded ? 'justify-between px-3 py-2.5' : 'justify-center h-10 w-10 mx-auto p-0',
+                    viewMode === 'admin-dashboard'
+                      ? 'bg-amber-500/20 text-[var(--accent-primary)] border border-amber-500/30 shadow-xs'
+                      : 'text-[var(--text-secondary)] hover:text-amber-400 hover:bg-amber-500/10'
+                  )}
+                  title={!isExpanded ? 'Admin Control Center' : undefined}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Shield className="h-4 w-4 text-[var(--accent-primary)] shrink-0 transition-transform group-hover:scale-110" />
+                    {isExpanded && <span className="truncate text-[var(--accent-primary)] font-bold">Admin Center</span>}
+                  </div>
+                  {isExpanded && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400">
+                        ADMIN
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                          isAdminTreeOpen ? 'rotate-180' : 'rotate-0'
+                        )}
+                      />
+                    </div>
+                  )}
+                </button>
+
+                {/* Sub-Navigation Items Under Admin Center on Sidebar */}
+                {isExpanded && isAdminTreeOpen && (
+                  <div className="relative ml-4 pl-4.5 border-l-2 border-amber-500/20 mt-1.5 space-y-1">
+                    {adminSubItems.map((sub) => {
+                      const Icon = sub.icon;
+                      const isSubActive =
+                        viewMode === 'admin-dashboard' &&
+                        (activeAdminTab === sub.id ||
+                          (sub.id === 'templates' && activeAdminTab === 'template-studio') ||
+                          (sub.id === 'settings' &&
+                            (activeAdminTab === 'requests' ||
+                              activeAdminTab === 'mongodb' ||
+                              activeAdminTab === 'cloudinary' ||
+                              activeAdminTab === 'brevo' ||
+                              activeAdminTab === 'health')));
+
+                      return (
+                        <div key={sub.id} className="relative flex items-center">
+                          {/* Curved Connector Branch Stub */}
+                          <div className="absolute -left-[19px] top-1/2 -translate-y-1/2 w-3.5 h-[2px] bg-amber-500/30 rounded-full" />
+                          <button
+                            type="button"
+                            onClick={() => handleAdminSubClick(sub.id)}
+                            className={cn(
+                              'w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer group',
+                              isSubActive
+                                ? isDark
+                                  ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 shadow-xs'
+                                  : 'bg-amber-500/15 text-amber-900 font-bold border border-amber-500/30 shadow-xs'
+                                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
+                            )}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <Icon className={cn('h-3.5 w-3.5 shrink-0', isSubActive ? 'text-amber-400' : 'text-neutral-400')} />
+                              <span className="truncate">{sub.label}</span>
+                            </div>
+                            {isSubActive && (
+                              <div className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.8)] shrink-0" />
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
-                title={!isExpanded ? 'Admin Control Center' : undefined}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <Shield className="h-4 w-4 text-[var(--accent-primary)] shrink-0 transition-transform group-hover:scale-110" />
-                  {isExpanded && <span className="truncate text-[var(--accent-primary)] font-bold">Admin Center</span>}
-                </div>
-              </button>
+              </div>
             )}
           </div>
         </div>

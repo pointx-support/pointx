@@ -19,7 +19,7 @@ import {
 export async function getMyTournaments(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
-    const tournaments = await getTournamentsByUser(req.user._id.toString(), req.user.role);
+    const tournaments = await getTournamentsByUser(req.user._id.toString());
     return res.status(200).json({ success: true, data: tournaments.map((t) => t.toJSON()) });
   } catch (error) {
     next(error);

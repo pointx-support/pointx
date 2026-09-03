@@ -3,6 +3,8 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import { useTemplateStore } from '../../store/templateStore';
 import { useAuthStore } from '../../store/authStore';
 import { DynamicCustomTemplate } from './templates/DynamicCustomTemplate';
+import { GraphicCategoryCanvas } from './templates/GraphicCategoryCanvas';
+import { useAdminStore } from '../../store/adminStore';
 import { exportSvgToPng, downloadBlobFile } from '../../engine/exportEngine';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -20,7 +22,6 @@ import {
   Image as ImageIcon,
   ListOrdered,
   Award,
-  Clock,
   Sliders,
   Smartphone,
   Monitor,
@@ -67,6 +68,7 @@ export const GraphicsStudioView: React.FC = () => {
 
   const activeCategory = activeGraphicsCategory || 'standings';
   const setActiveCategory = setActiveGraphicsCategory;
+  const [selectedTeamId, setSelectedTeamId] = useState<string>(currentTournament.teams[0]?.id || '');
   const [selectedScope, setSelectedScope] = useState<'overall' | number>('overall');
   const [formatFilter, setFormatFilter] = useState<'all' | 'portrait' | 'landscape'>('all');
   const [customOrgName, setCustomOrgName] = useState(currentTournament.organizer || 'PointX Arena');
@@ -129,7 +131,7 @@ export const GraphicsStudioView: React.FC = () => {
     subtitle: graphicSubtitle
   };
 
-  const isPortrait = currentTemplate.aspectRatio === '4:5';
+  const isPortrait = activeCategory === 'standings' ? currentTemplate.aspectRatio === '4:5' : activeCategory !== 'certificate';
   const baseExportWidth = isPortrait ? 1080 : 1920;
   const baseExportHeight = isPortrait ? 1350 : 1080;
 
@@ -145,7 +147,10 @@ export const GraphicsStudioView: React.FC = () => {
 
       const blob = await exportSvgToPng(targetSvg, width, height);
 
-      const filename = `${customEventTitle.replace(/\s+/g, '_').toUpperCase()}_${scopeLabel.replace(/\s+/g, '_').toUpperCase()}_${currentTemplate.name.replace(/\s+/g, '_')}_${format.toUpperCase()}${hueRotate ? `_HUE${hueRotate}` : ''}.png`;
+      const categoryName = GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase() || 'GRAPHIC';
+      const filename = activeCategory === 'standings'
+        ? `${customEventTitle.replace(/\s+/g, '_').toUpperCase()}_${scopeLabel.replace(/\s+/g, '_').toUpperCase()}_${currentTemplate.name.replace(/\s+/g, '_')}_${format.toUpperCase()}${hueRotate ? `_HUE${hueRotate}` : ''}.png`
+        : `${customEventTitle.replace(/\s+/g, '_').toUpperCase()}_${categoryName}_${format.toUpperCase()}${hueRotate ? `_HUE${hueRotate}` : ''}.png`;
 
       downloadBlobFile(blob, filename);
 
@@ -166,28 +171,30 @@ export const GraphicsStudioView: React.FC = () => {
   };
 
   const handleExportAllZip = async () => {
-    if (!svgRef.current) return;
+    const targetSvg = isFullScreenOpen ? fullScreenSvgRef.current || svgRef.current : svgRef.current;
+    if (!targetSvg) return;
     setIsExporting(true);
 
     try {
+      const categoryName = GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase() || 'GRAPHIC';
       const zip = new JSZip();
-      const folder = zip.folder(`${customEventTitle.replace(/\s+/g, '_')}_Point_Tables`);
+      const folder = zip.folder(`${customEventTitle.replace(/\s+/g, '_')}_${categoryName}`);
 
-      // 1. Overall Table
-      const overallBlob = await exportSvgToPng(svgRef.current, baseExportWidth, baseExportHeight);
-      folder?.file(`00_OVERALL_POINT_TABLE.png`, overallBlob);
+      // 1. 1080p Export
+      const hdBlob = await exportSvgToPng(targetSvg, baseExportWidth, baseExportHeight);
+      folder?.file(`01_${categoryName}_1080p.png`, hdBlob);
 
-      // 2. Export 4K Overall
-      const overall4kBlob = await exportSvgToPng(svgRef.current, baseExportWidth * 2, baseExportHeight * 2);
-      folder?.file(`00_OVERALL_POINT_TABLE_4K.png`, overall4kBlob);
+      // 2. 4K Export
+      const fourKBlob = await exportSvgToPng(targetSvg, baseExportWidth * 2, baseExportHeight * 2);
+      folder?.file(`02_${categoryName}_4K.png`, fourKBlob);
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
-      downloadBlobFile(zipBlob, `${customEventTitle.replace(/\s+/g, '_')}_Graphics_Package.zip`);
+      downloadBlobFile(zipBlob, `${customEventTitle.replace(/\s+/g, '_')}_${categoryName}_Bundle.zip`);
 
       showToast({
         type: 'success',
         title: 'ZIP Generated',
-        message: 'Point Table graphics bundle downloaded successfully!'
+        message: `${categoryName} graphics bundle downloaded successfully!`
       });
     } catch (err) {
       showToast({
@@ -202,24 +209,25 @@ export const GraphicsStudioView: React.FC = () => {
 
   const handleCopyObsLink = () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
-    const obsUrl = `${origin}/?mode=broadcast&tournamentId=${currentTournament.id}&layout=graphic&templateId=${currentTemplate.id}&hue=${hueRotate}&scope=${selectedScope}&title=${encodeURIComponent(customEventTitle)}&org=${encodeURIComponent(customOrgName)}`;
+    const categoryName = GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label || 'Graphics';
+    const obsUrl = `${origin}/?mode=broadcast&tournamentId=${currentTournament.id}&layout=${activeCategory === 'standings' ? 'graphic' : activeCategory}&templateId=${currentTemplate.id}&hue=${hueRotate}&scope=${selectedScope}&title=${encodeURIComponent(customEventTitle)}&org=${encodeURIComponent(customOrgName)}`;
     navigator.clipboard.writeText(obsUrl);
     showToast({
       type: 'success',
-      title: 'OBS 4K Graphic Poster Link Copied!',
-      message: `Direct 4K Vector "${currentTemplate.name}" link copied! Paste into OBS Browser Source (${isPortrait ? '1080x1350' : '1920x1080'}) to stream live graphic standings.`
+      title: 'OBS Link Copied!',
+      message: `Direct 4K Vector link copied for ${categoryName}! Paste into OBS Browser Source (${isPortrait ? '1080x1350' : '1920x1080'}).`
     });
   };
 
   const sortedMatches = [...currentTournament.matches].sort((a, b) => a.matchNumber - b.matchNumber);
 
   const GRAPHIC_CATEGORIES = [
-    { id: 'standings', label: 'Point Tables', icon: Trophy, isAvailable: true },
-    { id: 'warheads', label: 'Warheads / Kill Leader', icon: Flame, isAvailable: false },
-    { id: 'fraggers', label: 'Top Fraggers / MVP', icon: UserCheck, isAvailable: false },
-    { id: 'team-poster', label: 'Team Poster', icon: ImageIcon, isAvailable: false },
-    { id: 'slots-list', label: 'Slots List', icon: ListOrdered, isAvailable: false },
-    { id: 'certificate', label: 'Victory Certificate', icon: Award, isAvailable: false }
+    { id: 'standings', label: 'Point Tables', icon: Trophy, isAvailable: true, isPro: false },
+    { id: 'warheads', label: 'Warheads / Kill Leader', icon: Flame, isAvailable: true, isPro: true },
+    { id: 'fraggers', label: 'Top Fraggers / MVP', icon: UserCheck, isAvailable: true, isPro: true },
+    { id: 'team-poster', label: 'Team Poster', icon: ImageIcon, isAvailable: true, isPro: true },
+    { id: 'slots-list', label: 'Slots List', icon: ListOrdered, isAvailable: true, isPro: true },
+    { id: 'certificate', label: 'Victory Certificate', icon: Award, isAvailable: true, isPro: true }
   ] as const;
 
   return (
@@ -247,72 +255,74 @@ export const GraphicsStudioView: React.FC = () => {
           </div>
         </div>
 
-        {/* Primary Export Actions (Active for Standings) */}
-        {activeCategory === 'standings' && (
-          <div className="flex flex-wrap items-center gap-2.5">
-            {isAdmin && (
-              <Button
-                variant="outline"
-                size="md"
-                onClick={() => setActiveTab('template-studio')}
-                leftIcon={<Sliders className="h-4 w-4 text-[var(--accent-primary)]" />}
-              >
-                Admin Template Studio
-              </Button>
-            )}
-
+        {/* Primary Export Actions Toolbar (Active Across All Categories) */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {isAdmin && activeCategory === 'standings' && (
             <Button
               variant="outline"
               size="md"
-              onClick={handleCopyObsLink}
-              leftIcon={<Tv className="h-4 w-4 text-[var(--accent-primary)]" />}
-              className="border-[var(--accent-primary)]/40 hover:border-[var(--accent-primary)] font-bold text-[var(--accent-primary)]"
-              title="Copy live browser source URL for OBS Studio"
+              onClick={() => {
+                useAdminStore.getState().setActiveAdminTab('templates');
+                setActiveTab('admin-dashboard' as any);
+              }}
+              leftIcon={<Sliders className="h-4 w-4 text-[var(--accent-primary)]" />}
             >
-              Copy OBS Link
+              Admin Template Studio
             </Button>
+          )}
 
-            <Button
-              variant="outline"
-              size="md"
-              onClick={() => setIsFullScreenOpen(true)}
-              leftIcon={<Maximize2 className="h-4 w-4 text-[var(--accent-primary)]" />}
-              title="View in full screen with zoom and admin edit"
-            >
-              Full Screen
-            </Button>
+          <Button
+            variant="outline"
+            size="md"
+            onClick={handleCopyObsLink}
+            leftIcon={<Tv className="h-4 w-4 text-[#E5A93C] dark:text-[#F3B344]" />}
+            className="border-[#E5A93C]/40 hover:border-[#E5A93C] font-bold text-[#E5A93C] dark:text-[#F3B344]"
+            title="Copy live browser source URL for OBS Studio"
+          >
+            Copy OBS Link
+          </Button>
 
-            <Button
-              variant="secondary"
-              size="md"
-              isLoading={isExporting}
-              onClick={() => handleExport('1080p')}
-              leftIcon={<Download className="h-4 w-4 text-[var(--text-secondary)]" />}
-            >
-              {isPortrait ? 'Export Poster HD' : 'Export 1080p FHD'}
-            </Button>
+          <Button
+            variant="outline"
+            size="md"
+            onClick={() => setIsFullScreenOpen(true)}
+            leftIcon={<Maximize2 className="h-4 w-4 text-[#E5A93C] dark:text-[#F3B344]" />}
+            className="border-white/15 hover:border-white/30 font-bold"
+            title="View in full screen with zoom and direct export"
+          >
+            Full Screen
+          </Button>
 
-            <Button
-              variant="primary"
-              size="md"
-              isLoading={isExporting}
-              onClick={() => handleExport('4k')}
-              leftIcon={<Download className="h-4 w-4" />}
-            >
-              {isPortrait ? 'Export Poster 4K' : 'Export 4K UHD'}
-            </Button>
+          <Button
+            variant="secondary"
+            size="md"
+            isLoading={isExporting}
+            onClick={() => handleExport('1080p')}
+            leftIcon={<Download className="h-4 w-4 text-[var(--text-secondary)]" />}
+          >
+            {isPortrait ? 'Export Poster HD' : 'Export 1080p FHD'}
+          </Button>
 
-            <Button
-              variant="booyah"
-              size="md"
-              isLoading={isExporting}
-              onClick={handleExportAllZip}
-              leftIcon={<Package className="h-4 w-4" />}
-            >
-              Download ZIP Pack
-            </Button>
-          </div>
-        )}
+          <Button
+            variant="primary"
+            size="md"
+            isLoading={isExporting}
+            onClick={() => handleExport('4k')}
+            leftIcon={<Download className="h-4 w-4" />}
+          >
+            {isPortrait ? 'Export Poster 4K' : 'Export 4K UHD'}
+          </Button>
+
+          <Button
+            variant="booyah"
+            size="md"
+            isLoading={isExporting}
+            onClick={handleExportAllZip}
+            leftIcon={<Package className="h-4 w-4" />}
+          >
+            Download ZIP Pack
+          </Button>
+        </div>
       </div>
 
       {/* GRAPHIC CATEGORY TABS BAR */}
@@ -628,31 +638,171 @@ export const GraphicsStudioView: React.FC = () => {
           </div>
         </>
       ) : (
-        /* COMING SOON PREVIEW CARDS */
-        <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-8 sm:p-14 text-center shadow-[var(--shadow-flat)] space-y-5 animate-fadeIn">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-[var(--bg-surface-inset)] text-[var(--accent-primary)] shadow-[var(--shadow-inset)] border border-[var(--border-subtle)]">
-            <Clock className="h-10 w-10 animate-pulse" />
-          </div>
+        /* PRO GRAPHICS WORKSPACE FOR WARHEADS, FRAGGERS, TEAM POSTER, SLOTS, CERTIFICATE */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-fadeIn">
+          {/* LEFT COLUMN: LIVE POSTER PREVIEW + HUE ADJUSTER (7 cols) */}
+          <div className="lg:col-span-7 xl:col-span-7 space-y-4">
+            {/* Quick Brand Customization Bar */}
+            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-flat)] space-y-3">
+              <div className="text-xs font-mono font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                Live Brand Headers
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="Tournament Title"
+                  value={customEventTitle}
+                  onChange={(e) => setCustomEventTitle(e.target.value)}
+                  placeholder="e.g. Free Fire Masters"
+                />
+                <Input
+                  label="Organizer Name"
+                  value={customOrgName}
+                  onChange={(e) => setCustomOrgName(e.target.value)}
+                  placeholder="e.g. PointX Arena"
+                />
+              </div>
 
-          <div className="space-y-2 max-w-md mx-auto">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] text-xs font-mono font-bold uppercase border border-[var(--accent-primary)]/30">
-              <Sparkles className="h-3.5 w-3.5" /> Coming Soon
+              {activeCategory === 'team-poster' && (
+                <div className="pt-2 border-t border-[var(--border-subtle)] space-y-1.5">
+                  <label className="text-xs font-mono font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                    Select Squad / Team
+                  </label>
+                  <select
+                    value={selectedTeamId}
+                    onChange={(e) => setSelectedTeamId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] cursor-pointer"
+                  >
+                    {currentTournament.teams.map((team, idx) => (
+                      <option key={team.id} value={team.id}>
+                        Slot {(idx + 1).toString().padStart(2, '0')}: {team.name} ({team.tag || 'TEAM'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Quick Hue Presets */}
+              <div className="space-y-1.5 pt-2 border-t border-[var(--border-subtle)]">
+                <div className="text-[11px] font-mono font-bold text-[var(--text-secondary)]">
+                  Color Accent & Hue
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {HUE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => setHueRotate(preset.value)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
+                        hueRotate === preset.value
+                          ? 'bg-[var(--bg-surface-raised)] border-[var(--accent-primary)] text-[var(--text-primary)] shadow-xs'
+                          : 'bg-[var(--bg-surface-inset)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      <span
+                        className="h-2.5 w-2.5 rounded-full shrink-0 shadow-xs"
+                        style={{ backgroundColor: preset.color }}
+                      />
+                      <span>{preset.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] font-display tracking-tight">
-              {GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label} Studio
-            </h2>
-            <p className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed font-sans">
-              High-resolution 4K poster generation for {GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label.toLowerCase()} is currently in final development.
-            </p>
+
+            {/* Vector Poster Display Box */}
+            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-flat)] space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                  {GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label} Canvas
+                </span>
+                <span className="text-xs font-mono text-[var(--accent-primary)] font-bold">
+                  {baseExportWidth} × {baseExportHeight} Vector
+                </span>
+              </div>
+
+              <div
+                className="relative overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[#0B0D14] flex items-center justify-center p-2"
+                style={{
+                  aspectRatio: isPortrait ? '4 / 5' : '16 / 9',
+                  maxHeight: '650px'
+                }}
+              >
+                <GraphicCategoryCanvas
+                  category={activeCategory}
+                  tournament={currentTournament}
+                  tournamentTitle={customEventTitle}
+                  organizerName={customOrgName}
+                  tournamentLogo={currentTournament.logoUrl}
+                  organizerLogo={currentTournament.organizerLogoUrl}
+                  selectedTeamId={selectedTeamId}
+                  hueRotate={hueRotate}
+                  svgRef={svgRef}
+                />
+              </div>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setActiveCategory('standings')}
-            className="px-6 py-2.5 rounded-xl bg-[var(--accent-primary)] text-[var(--accent-primary-text)] font-bold text-xs sm:text-sm shadow-md hover:bg-[var(--accent-primary-hover)] transition-all cursor-pointer font-display"
-          >
-            Back to Point Tables Studio
-          </button>
+          {/* RIGHT COLUMN: CATEGORY CONTROLS & STATS (5 cols) */}
+          <div className="lg:col-span-5 xl:col-span-5 space-y-4">
+            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-[var(--shadow-flat)] space-y-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-[var(--accent-primary)]" />
+                <h3 className="font-bold text-base text-[var(--text-primary)] font-display">
+                  {GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label} Pro Suite
+                </h3>
+              </div>
+
+              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                Generate broadcast-ready, high-resolution vector assets with dynamic tournament data. Directly streamable to OBS Studio or exportable in 4K UHD.
+              </p>
+
+              {/* Action Buttons Grid in Sidebar Card */}
+              <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
+                <Button
+                  variant="primary"
+                  size="md"
+                  className="w-full justify-center font-bold"
+                  isLoading={isExporting}
+                  onClick={() => handleExport('4k')}
+                  leftIcon={<Download className="h-4 w-4" />}
+                >
+                  {isPortrait ? 'Export Poster 4K' : 'Export 4K UHD'}
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  size="md"
+                  className="w-full justify-center"
+                  isLoading={isExporting}
+                  onClick={() => handleExport('1080p')}
+                  leftIcon={<Download className="h-4 w-4" />}
+                >
+                  {isPortrait ? 'Export Poster HD (1080p)' : 'Export 1080p FHD'}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="md"
+                  className="w-full justify-center"
+                  onClick={handleCopyObsLink}
+                  leftIcon={<Tv className="h-4 w-4 text-[var(--accent-primary)]" />}
+                >
+                  Copy OBS Browser Source URL
+                </Button>
+
+                <Button
+                  variant="booyah"
+                  size="md"
+                  className="w-full justify-center font-bold"
+                  isLoading={isExporting}
+                  onClick={handleExportAllZip}
+                  leftIcon={<Package className="h-4 w-4" />}
+                >
+                  Download ZIP Pack (HD + 4K)
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -781,12 +931,26 @@ export const GraphicsStudioView: React.FC = () => {
               }}
               className="relative shadow-2xl rounded-2xl overflow-hidden ring-1 ring-white/20"
             >
-              <DynamicCustomTemplate
-                template={currentTemplate}
-                data={renderData}
-                svgRef={fullScreenSvgRef}
-                hueRotate={hueRotate}
-              />
+              {activeCategory === 'standings' ? (
+                <DynamicCustomTemplate
+                  template={currentTemplate}
+                  data={renderData}
+                  svgRef={fullScreenSvgRef}
+                  hueRotate={hueRotate}
+                />
+              ) : (
+                <GraphicCategoryCanvas
+                  category={activeCategory}
+                  tournament={currentTournament}
+                  tournamentTitle={customEventTitle}
+                  organizerName={customOrgName}
+                  tournamentLogo={currentTournament.logoUrl}
+                  organizerLogo={currentTournament.organizerLogoUrl}
+                  selectedTeamId={selectedTeamId}
+                  hueRotate={hueRotate}
+                  svgRef={fullScreenSvgRef}
+                />
+              )}
             </div>
           </div>
         </div>

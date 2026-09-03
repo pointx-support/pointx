@@ -348,6 +348,11 @@ export function App() {
                     setActiveTab('template-studio');
                     navigateTo('workspace');
                   }}
+                  onControlTournament={(tournament) => {
+                    setTournament(tournament);
+                    setActiveTab('overview');
+                    navigateTo('workspace');
+                  }}
                 />
               ) : (
                 <TournamentWorkspace

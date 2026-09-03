@@ -2,15 +2,20 @@ import mongoose from 'mongoose';
 import { Tournament, ITournament } from '../models/Tournament';
 import { AuditActivity } from '../models/AuditActivity';
 
-export async function getTournamentsByUser(userId: string, role?: string): Promise<ITournament[]> {
-  if (role === 'admin') {
-    return Tournament.find({}).sort({ createdAt: -1 });
-  }
-
+export async function getTournamentsByUser(userId: string): Promise<ITournament[]> {
   const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
   const userCondition = userObjectId
     ? { $or: [{ userId: userObjectId }, { userId: userId }] }
     : { userId };
+
+  return Tournament.find(userCondition).sort({ createdAt: -1 });
+}
+
+export async function getTournamentsForOrganizer(organizerUserId: string): Promise<ITournament[]> {
+  const userObjectId = mongoose.Types.ObjectId.isValid(organizerUserId) ? new mongoose.Types.ObjectId(organizerUserId) : null;
+  const userCondition = userObjectId
+    ? { $or: [{ userId: userObjectId }, { userId: organizerUserId }] }
+    : { userId: organizerUserId };
 
   return Tournament.find(userCondition).sort({ createdAt: -1 });
 }
