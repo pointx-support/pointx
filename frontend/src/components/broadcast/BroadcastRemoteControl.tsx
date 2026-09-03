@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Tournament, TeamMatchResult, Match } from '../../types/tournament';
 import { useTournamentStore } from '../../store/tournamentStore';
+import { useAuthStore } from '../../store/authStore';
 import {
   broadcastFullSync,
   subscribeToLiveSquadUpdates,
@@ -268,27 +269,9 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
     Record<string, { placement: number; kills: number; bonus: number; penalty: number }>
   >({});
 
-  const [isDarkTheme, setIsDarkTheme] = useState<boolean>(() => {
-    if (typeof document !== 'undefined') {
-      return document.documentElement.getAttribute('data-theme') === 'dark';
-    }
-    return true;
-  });
-
-  const toggleTheme = () => {
-    const nextTheme = isDarkTheme ? 'light' : 'dark';
-    setIsDarkTheme(!isDarkTheme);
-    if (typeof document !== 'undefined') {
-      document.documentElement.setAttribute('data-theme', nextTheme);
-      if (nextTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-        document.documentElement.classList.remove('light');
-      } else {
-        document.documentElement.classList.add('light');
-        document.documentElement.classList.remove('dark');
-      }
-    }
-  };
+  const theme = useAuthStore((s) => s.theme);
+  const toggleTheme = useAuthStore((s) => s.toggleTheme);
+  const isDarkTheme = theme === 'dark';
 
   // Elimination sequence tracking
   const [eliminationOrder, setEliminationOrder] = useState<string[]>(() => {

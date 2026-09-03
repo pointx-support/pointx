@@ -27,16 +27,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   onNavigateLogin,
   onNavigateDashboard,
 }) => {
-  const { isAuthenticated, user, theme } = useAuthStore();
+  const theme = useAuthStore((s) => s.theme);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user = useAuthStore((s) => s.user);
   const prefersReducedMotion = useReducedMotion();
 
-  // Special PointX Logo Theme Transition States
-  const [effectiveLogoTheme, setEffectiveLogoTheme] = useState<'light' | 'dark'>(() => theme || 'dark');
-  const [logoPhase, setLogoPhase] = useState<'idle' | 'fading_out' | 'fading_in'>('idle');
+  // Smooth PointX Logo Theme Transition (GPU-optimized: zero layout shift, zero blur lag)
+  const [logoPhase, setLogoPhase] = useState<'idle' | 'transitioning'>('idle');
   const isInitialMount = useRef(true);
 
-  // Requirement 12: Smooth PointX Logo Theme Transition
-  // Theme toggle -> Logo smoothly fades/blurs out (0-240ms) -> Theme swaps at 250ms -> Logo smoothly reappears (250-650ms)
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
@@ -44,29 +43,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     }
 
     if (prefersReducedMotion) {
-      setEffectiveLogoTheme(theme);
       setLogoPhase('idle');
       return;
     }
 
-    // Step 1: Smoothly fade and scale down the logo
-    setLogoPhase('fading_out');
-
-    // Step 2: Swap the logo asset when completely transparent
-    const swapTimer = setTimeout(() => {
-      setEffectiveLogoTheme(theme);
-      setLogoPhase('fading_in');
-    }, 240);
-
-    // Step 3: Complete transition to full radiant state
-    const completeTimer = setTimeout(() => {
+    setLogoPhase('transitioning');
+    const timer = setTimeout(() => {
       setLogoPhase('idle');
-    }, 650);
+    }, 220);
 
-    return () => {
-      clearTimeout(swapTimer);
-      clearTimeout(completeTimer);
-    };
+    return () => clearTimeout(timer);
   }, [theme, prefersReducedMotion]);
 
   const isDark = theme === 'dark';
@@ -102,7 +88,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   }, [prefersReducedMotion]);
 
   return (
-    <div className="relative w-full overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)] transition-colors duration-500">
+    <div className="relative w-full overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)] transition-colors duration-200">
       
       {/* ========================================================================= */}
       {/* 1. CINEMATIC ESPORTS ARENA VOLUMETRIC STAGE LIGHTING (PRO BROADCAST AURA)  */}
@@ -113,9 +99,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
           {/* Dark Mode: Grand Finals Arena Stage Lighting */}
           <div
-            className={`absolute inset-0 transition-opacity duration-700 ${
+            className={`absolute inset-0 transition-opacity duration-300 ease-out ${
               isDark ? 'opacity-100' : 'opacity-0'
             }`}
+            style={{ willChange: 'opacity' }}
           >
             {/* Left Stage Volumetric Spotlight Beam (Sweeping Angled Beam) */}
             <div className="absolute -top-24 -left-16 w-[550px] lg:w-[750px] h-[950px] lg:h-[1300px] bg-gradient-to-b from-amber-400/[0.24] via-amber-500/[0.07] to-transparent rounded-full blur-[70px] animate-spotlight-left pointer-events-none" />
@@ -135,9 +122,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
           {/* Light Mode: Luxury Architectural Sunbeam & Stage Illumination */}
           <div
-            className={`absolute inset-0 transition-opacity duration-700 ${
+            className={`absolute inset-0 transition-opacity duration-300 ease-out ${
               !isDark ? 'opacity-100' : 'opacity-0'
             }`}
+            style={{ willChange: 'opacity' }}
           >
             {/* Left Warm Sunbeam Sweep */}
             <div className="absolute -top-24 -left-16 w-[550px] lg:w-[750px] h-[950px] lg:h-[1300px] bg-gradient-to-b from-amber-400/[0.18] via-amber-300/[0.05] to-transparent rounded-full blur-[65px] animate-spotlight-left pointer-events-none" />
@@ -207,19 +195,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
                 {/* Animated Logo Container with Zero Black Shade in Light Theme */}
                 <div
-                  className={`relative z-10 transition-all duration-300 ease-out select-none ${
-                    logoPhase === 'fading_out'
-                      ? 'opacity-0 scale-95 translate-y-2 blur-[8px]'
-                      : logoPhase === 'fading_in'
-                      ? 'opacity-100 scale-100 translate-y-0 blur-0'
-                      : 'opacity-100 scale-100 translate-y-0 blur-0'
+                  className={`relative z-10 transition-transform duration-200 ease-out select-none ${
+                    logoPhase === 'transitioning'
+                      ? 'scale-[0.98]'
+                      : 'scale-100'
                   }`}
-                  style={{ willChange: 'opacity, transform, filter' }}
+                  style={{ willChange: 'transform' }}
                 >
                   <PointXLogo
                     className="h-20 sm:h-28 md:h-36 lg:h-44 w-auto max-w-[280px] sm:max-w-[420px] md:max-w-[560px] object-contain hover:scale-[1.02] transition-transform duration-300 drop-shadow-none dark:drop-shadow-[0_20px_48px_rgba(0,0,0,0.85)]"
                     alt="PointX Esports Infrastructure Platform"
-                    forceTheme={effectiveLogoTheme}
+                    forceTheme={theme}
                     withShine={true}
                   />
                 </div>

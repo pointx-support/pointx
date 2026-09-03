@@ -7,11 +7,15 @@
     <link rel="apple-touch-icon" href="/brand/pointx-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#101319" />
+    <link rel="preload" as="image" href="/brand/pointx-logo.png" />
+    <link rel="preload" as="image" href="/brand/pointx-logo-light.png" />
     <script>
       (function() {
         try {
           var s = sessionStorage.getItem('pointx_theme_session');
-          var theme = (s === 'light') ? 'light' : 'dark';
+          var l2 = localStorage.getItem('pointx_theme_mode_v2');
+          var l1 = localStorage.getItem('pointx_theme_mode_v1');
+          var theme = (s === 'light' || (!s && (l2 === 'light' || l1 === 'light'))) ? 'light' : 'dark';
           document.documentElement.setAttribute('data-theme', theme);
           if (theme === 'dark') {
             document.documentElement.classList.add('dark');
@@ -19,6 +23,10 @@
           } else {
             document.documentElement.classList.add('light');
             document.documentElement.classList.remove('dark');
+          }
+          var metaThemeColor = document.querySelector('meta[name="theme-color"]');
+          if (metaThemeColor) {
+            metaThemeColor.setAttribute('content', theme === 'dark' ? '#101319' : '#EEF1F5');
           }
         } catch(e) {
           document.documentElement.setAttribute('data-theme', 'dark');

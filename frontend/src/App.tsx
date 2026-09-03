@@ -19,7 +19,8 @@ import type { Tournament } from './types/tournament';
 
 export function App() {
   const { currentTournament, setTournament, clearActiveTournament, setActiveTab } = useTournamentStore();
-  const { user, isAuthenticated, theme } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   
   // Dynamic Route & View Mode Resolution
   const [viewMode, setViewMode] = useState<'home' | 'command-center' | 'workspace' | 'admin-dashboard'>(() => {
@@ -197,19 +198,7 @@ export function App() {
     }
   }, [setActiveTab]);
 
-  // Theme Syncing Effect (Defaults to 'dark' mode)
-  const currentTheme = theme || 'dark';
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', currentTheme);
-    if (currentTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light');
-    } else {
-      document.documentElement.classList.add('light');
-      document.documentElement.classList.remove('dark');
-    }
-  }, [currentTheme]);
 
   // Check if running in dedicated OBS Broadcast mode (via query param ?mode=broadcast or /obs /live path)
   const isBroadcastMode = useMemo(() => {

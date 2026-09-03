@@ -49,14 +49,22 @@ const INITIAL_ACTIVITIES: AuditActivity[] = [];
 
 function applyThemeToDOM(theme: 'light' | 'dark') {
   if (typeof document === 'undefined') return;
-  document.documentElement.setAttribute('data-theme', theme);
+  const root = document.documentElement;
+  // Apply synchronously with zero lag
+  root.setAttribute('data-theme', theme);
   if (theme === 'dark') {
-    document.documentElement.classList.add('dark');
-    document.documentElement.classList.remove('light');
+    root.classList.add('dark');
+    root.classList.remove('light');
   } else {
-    document.documentElement.classList.add('light');
-    document.documentElement.classList.remove('dark');
+    root.classList.add('light');
+    root.classList.remove('dark');
   }
+  try {
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute('content', theme === 'dark' ? '#101319' : '#EEF1F5');
+    }
+  } catch {}
 }
 
 function getEffectiveTheme(): 'light' | 'dark' {
@@ -68,7 +76,9 @@ function getEffectiveTheme(): 'light' | 'dark' {
     const directTheme = window.localStorage?.getItem('pointx_theme_mode_v2');
     if (directTheme === 'light' || directTheme === 'dark') return directTheme;
 
-    // Explicit default: strictly DARK mode
+    const legacyTheme = window.localStorage?.getItem(THEME_STORAGE_KEY);
+    if (legacyTheme === 'light' || legacyTheme === 'dark') return legacyTheme;
+
     return 'dark';
   } catch {
     return 'dark';
@@ -188,26 +198,32 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   setTheme: (newTheme: 'light' | 'dark') => {
     applyThemeToDOM(newTheme);
     if (typeof window !== 'undefined') {
-      window.sessionStorage?.setItem('pointx_theme_session', newTheme);
-      window.localStorage?.setItem('pointx_theme_mode_v2', newTheme);
-      window.localStorage?.setItem(THEME_STORAGE_KEY, newTheme);
+      try {
+        window.sessionStorage?.setItem('pointx_theme_session', newTheme);
+        window.localStorage?.setItem('pointx_theme_mode_v2', newTheme);
+        window.localStorage?.setItem(THEME_STORAGE_KEY, newTheme);
+      } catch {}
     }
     const currentUser = get().user;
     if (currentUser) {
-      const updatedUser: User = {
-        ...currentUser,
-        preferences: {
-          ...currentUser.preferences,
-          theme: newTheme
+      if (currentUser.preferences?.theme !== newTheme) {
+        const updatedUser: User = {
+          ...currentUser,
+          preferences: {
+            ...currentUser.preferences,
+            theme: newTheme
+          }
+        };
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedUser));
+          } catch {}
         }
-      };
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedUser));
+        set({ theme: newTheme, user: updatedUser });
+        return;
       }
-      set({ theme: newTheme, user: updatedUser });
-    } else {
-      set({ theme: newTheme });
     }
+    set({ theme: newTheme });
   },
 
   toggleTheme: () => {

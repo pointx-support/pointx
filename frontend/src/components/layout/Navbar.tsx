@@ -35,6 +35,7 @@ import { useToast } from '../ui/Toast';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnimatedThemeToggle } from '../animation';
 import { dropdownVariants } from '../animation/motionTokens';
+import { haptics } from '../../lib/haptics';
 
 export interface NavbarProps {
   viewMode?: 'command-center' | 'workspace' | 'admin-dashboard';
@@ -512,7 +513,10 @@ export const Navbar: FC<NavbarProps> = ({
                       {/* Theme Toggle */}
                       <button
                         type="button"
-                        onClick={toggleTheme}
+                        onClick={() => {
+                          haptics.medium();
+                          toggleTheme();
+                        }}
                         className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors text-left cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5">
