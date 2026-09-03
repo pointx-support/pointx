@@ -10,11 +10,9 @@ import {
   LayoutDashboard,
   Cpu,
   Monitor,
-  Activity,
   Trophy,
-  Flame,
   Radio,
-  ShieldCheck
+  Flame
 } from 'lucide-react';
 
 export interface HeroSectionProps {
@@ -79,53 +77,32 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       {/* ========================================================================= */}
       <section className="relative w-full min-h-[92vh] lg:min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-12 pt-28 pb-16 overflow-hidden">
         
-        {/* Simple, Ultra-Clean Vector Tech Grid & Ambient Aura Canvas (Zero Video Lag) */}
+        {/* Silky-Smooth Organic Ambient Lighting Background (Zero Grids, Zero Dots) */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
-          {/* Dark Mode Ambient Canvas */}
+          {/* Dark Mode Organic Ambient Aura */}
           <div
             className={`absolute inset-0 transition-opacity duration-700 ${
               isDark ? 'opacity-100' : 'opacity-0'
             }`}
           >
-            {/* Precision 48px Esports Linear Grid with Smooth Radial Vignette Mask */}
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: `
-                  linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-                  linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px)
-                `,
-                backgroundSize: '48px 48px',
-                maskImage: 'radial-gradient(ellipse 75% 65% at 50% 30%, black 20%, transparent 85%)',
-                WebkitMaskImage: 'radial-gradient(ellipse 75% 65% at 50% 30%, black 20%, transparent 85%)'
-              }}
-            />
-            {/* Primary Golden Atmospheric Core Bloom */}
-            <div className="absolute top-[8%] left-1/2 -translate-x-1/2 w-[700px] lg:w-[1000px] h-[400px] lg:h-[550px] bg-gradient-to-b from-amber-500/12 via-amber-500/4 to-transparent rounded-full blur-[140px] pointer-events-none" />
-            {/* Secondary Cyan Broadcast Energy Bloom */}
-            <div className="absolute top-[25%] right-[5%] w-[450px] lg:w-[600px] h-[350px] bg-gradient-to-b from-cyan-500/6 to-transparent rounded-full blur-[120px] pointer-events-none" />
+            {/* Top Center Radiant Gold Atmosphere */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] lg:w-[1200px] h-[450px] lg:h-[600px] bg-gradient-to-b from-amber-500/[0.09] via-amber-500/[0.02] to-transparent rounded-full blur-[150px] pointer-events-none" />
+            {/* Soft Cyan Broadcast Haze on Upper Right */}
+            <div className="absolute top-[15%] right-[0%] w-[500px] lg:w-[750px] h-[400px] lg:h-[550px] bg-gradient-to-b from-sky-500/[0.04] to-transparent rounded-full blur-[140px] pointer-events-none" />
+            {/* Deep Horizon Grounding Vignette */}
+            <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[var(--bg-base)] to-transparent pointer-events-none" />
           </div>
 
-          {/* Light Mode Radiant Canvas */}
+          {/* Light Mode Pure Luminous Canvas */}
           <div
             className={`absolute inset-0 transition-opacity duration-700 ${
               !isDark ? 'opacity-100' : 'opacity-0'
             }`}
           >
-            {/* Crisp 32px Slate Dot Matrix with Smooth Radial Fade */}
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: 'radial-gradient(rgba(15, 23, 42, 0.08) 1.2px, transparent 1.2px)',
-                backgroundSize: '32px 32px',
-                maskImage: 'radial-gradient(ellipse 75% 65% at 50% 30%, black 25%, transparent 85%)',
-                WebkitMaskImage: 'radial-gradient(ellipse 75% 65% at 50% 30%, black 25%, transparent 85%)'
-              }}
-            />
-            {/* Soft Warm Sun-Aura Core Bloom */}
-            <div className="absolute top-[5%] left-1/2 -translate-x-1/2 w-[700px] lg:w-[1000px] h-[380px] lg:h-[500px] bg-gradient-to-b from-amber-400/10 via-amber-300/3 to-transparent rounded-full blur-[120px] pointer-events-none" />
-            {/* Subtle Horizon Mist */}
-            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[var(--bg-base)] to-transparent pointer-events-none" />
+            {/* Warm Sunrise Ambient Bloom */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] lg:w-[1200px] h-[450px] lg:h-[600px] bg-gradient-to-b from-amber-400/[0.07] via-amber-300/[0.02] to-transparent rounded-full blur-[140px] pointer-events-none" />
+            {/* Soft Mist Grounding */}
+            <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[var(--bg-base)] to-transparent pointer-events-none" />
           </div>
         </div>
 
@@ -298,212 +275,168 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
 
             {/* ─────────────────────────────────────────────────────────────────── */}
-            {/* RIGHT COLUMN (Col 5): COMPLETELY REDESIGNED BROADCAST STREAM DECK   */}
+            {/* RIGHT COLUMN (Col 5): PRO ESPORTS BROADCAST OVERLAY MONITOR         */}
             {/* ─────────────────────────────────────────────────────────────────── */}
             <div className="lg:col-span-5 w-full">
               <FadeIn delay={0.2}>
-                {/* Master Hardware-Grade Telemetry Console Frame */}
+                {/* Clean Floating OBS Broadcast Window Frame */}
                 <div
-                  className={`relative w-full rounded-3xl p-5 sm:p-6 border backdrop-blur-2xl transition-all duration-300 space-y-4 overflow-hidden group ${
+                  className={`relative w-full rounded-2xl border backdrop-blur-2xl transition-all duration-300 overflow-hidden shadow-2xl ${
                     isDark
-                      ? 'bg-[#0c1017]/95 border-white/[0.12] shadow-[0_25px_65px_rgba(0,0,0,0.75)] hover:border-amber-400/40'
-                      : 'bg-white/95 border-slate-200/90 shadow-[0_20px_50px_rgba(15,23,42,0.08)] hover:border-amber-400/60'
+                      ? 'bg-[#0e121b]/95 border-white/[0.12] shadow-[0_25px_60px_rgba(0,0,0,0.7)]'
+                      : 'bg-white/95 border-slate-200/90 shadow-[0_20px_50px_rgba(15,23,42,0.08)]'
                   }`}
                 >
-                  {/* Subtle Laser Rim Highlight Line across Top Edge */}
-                  <div className="absolute top-0 left-6 right-6 h-[2px] bg-gradient-to-r from-transparent via-amber-400/90 to-transparent pointer-events-none" />
-
-                  {/* Corner Accent Screws / Hardware Crosshairs */}
-                  <div className="absolute top-3 left-4 text-[9px] font-mono text-zinc-400/40 select-none pointer-events-none">+</div>
-                  <div className="absolute top-3 right-4 text-[9px] font-mono text-zinc-400/40 select-none pointer-events-none">+</div>
-
-                  {/* 1. Console Header: Stream Controller & Live Signal */}
-                  <div className="flex items-center justify-between pb-3.5 border-b border-[var(--border-subtle)]">
-                    <div className="flex items-center gap-2.5">
-                      <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-amber-400/20 to-amber-500/10 text-amber-500 border border-amber-500/30 flex items-center justify-center shadow-sm">
-                        <Activity className="h-4 w-4 animate-pulse" />
+                  {/* Top Window Bar: Minimalist Studio Chrome */}
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-black/[0.03] dark:bg-black/30">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full bg-rose-500/80" />
+                        <span className="h-2.5 w-2.5 rounded-full bg-amber-500/80" />
+                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/80" />
                       </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-mono font-bold tracking-wider uppercase text-[var(--text-primary)]">
-                            BROADCAST STREAM DECK
-                          </span>
-                          <span className="px-1.5 py-0.2 rounded bg-amber-500/15 text-[10px] font-mono font-bold text-amber-500 border border-amber-500/20">
-                            v2.6
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-[var(--text-secondary)] font-mono block">
-                          PointX Real-Time WebSocket Engine
-                        </span>
-                      </div>
+                      <span className="text-[11px] font-mono font-bold text-[var(--text-secondary)] ml-1">
+                        OBS Studio • Live Overlay
+                      </span>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 text-[10px] font-mono font-bold">
-                        <span className="relative flex h-1.5 w-1.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-                        </span>
-                        0MS LATENCY
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[10px] font-mono font-bold border border-rose-500/25">
+                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />
+                        LIVE ON AIR
+                      </span>
+                      <span className="text-[10px] font-mono text-[var(--text-muted)] hidden sm:inline">
+                        4K 60FPS
                       </span>
                     </div>
                   </div>
 
-                  {/* 2. Interactive Broadcast Tournament Scoreboard HUD (Redesigned) */}
-                  <div
-                    className={`relative rounded-2xl p-4 border transition-all overflow-hidden ${
-                      isDark
-                        ? 'bg-gradient-to-br from-[#121722] via-[#0e121b] to-[#121722] border-amber-400/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]'
-                        : 'bg-gradient-to-br from-slate-50 via-white to-amber-50/30 border-amber-400/40 shadow-sm'
-                    }`}
-                  >
-                    {/* Atmospheric Gold Beacon in Background */}
-                    <div className="absolute -top-10 -right-10 w-36 h-36 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
-
-                    {/* HUD Header Bar */}
-                    <div className="flex items-center justify-between text-xs font-mono mb-3">
-                      <div className="flex items-center gap-1.5">
-                        <Trophy className="h-3.5 w-3.5 text-amber-500" />
-                        <span className="font-bold text-[var(--text-primary)] tracking-wide">
-                          GRAND FINALS • MATCH #3
-                        </span>
+                  {/* Tournament Title Header */}
+                  <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-amber-500">
+                        FREE FIRE CHAMPIONSHIP 2026
                       </div>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
-                        AUTO-CALCULATED
-                      </span>
+                      <h2 className="text-sm sm:text-base font-black text-[var(--text-primary)] font-display tracking-tight mt-0.5">
+                        Match #3 Standings • Bermuda
+                      </h2>
                     </div>
+                    <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-mono font-bold">
+                      ⚡ 0.38ms Engine
+                    </span>
+                  </div>
 
-                    {/* Champion Rank #1 Showcase Row */}
-                    <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-black/5 dark:bg-black/40 border border-white/10 dark:border-white/5">
-                      <div className="flex items-center gap-3 min-w-0">
-                        {/* Metallic Gold Rank Badge */}
-                        <div className="relative shrink-0">
-                          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-yellow-500 text-black font-black text-base flex flex-col items-center justify-center font-numbers shadow-[0_4px_14px_rgba(245,158,11,0.4)] border border-amber-200">
-                            <span className="text-[9px] leading-none text-black/70">#</span>
-                            <span className="leading-none text-sm font-black">1</span>
-                          </div>
-                          <span className="absolute -top-1.5 -right-1.5 text-xs">👑</span>
+                  {/* Pro Standings Leaderboard Table */}
+                  <div className="px-4 py-2 space-y-2">
+                    {/* #1 Winner Row (Total Gaming) */}
+                    <div className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
+                      isDark
+                        ? 'bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border-amber-400/40 shadow-sm'
+                        : 'bg-gradient-to-r from-amber-100/60 via-amber-50/30 to-transparent border-amber-400/50 shadow-sm'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-400 to-yellow-500 text-black font-black text-sm flex items-center justify-center font-numbers shadow-sm">
+                          1
                         </div>
-
-                        <div className="min-w-0">
+                        <div>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-black tracking-tight text-[var(--text-primary)] font-display truncate">
+                            <span className="text-xs sm:text-sm font-bold text-[var(--text-primary)] font-display">
                               Total Gaming Esports
                             </span>
-                            <span className="text-[11px] font-mono px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20">
+                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-600 dark:text-amber-300 font-bold">
                               TG
                             </span>
                           </div>
-
-                          {/* Stat Chips */}
-                          <div className="flex items-center gap-2 mt-1 text-[11px] font-mono flex-wrap">
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-600 dark:text-rose-400 font-bold border border-rose-500/20">
+                          <div className="flex items-center gap-2 text-[10px] font-mono text-[var(--text-secondary)] mt-0.5">
+                            <span className="text-rose-500 font-bold inline-flex items-center gap-1">
                               <Flame className="h-3 w-3" />
-                              10 Kills (+10)
+                              10 Kills
                             </span>
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/20">
-                              Rank 1 (+12)
-                            </span>
+                            <span>•</span>
+                            <span>Rank 1 (+12)</span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Total Points Callout */}
-                      <div className="text-right shrink-0">
-                        <div className="text-2xl sm:text-3xl font-black font-numbers tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 drop-shadow-sm">
-                          22 <span className="text-xs font-mono font-bold text-[var(--text-secondary)]">PTS</span>
+                      <div className="text-right">
+                        <div className="text-base sm:text-lg font-black font-numbers text-amber-500">
+                          22 <span className="text-[10px] font-sans text-[var(--text-secondary)]">PTS</span>
                         </div>
-                        <span className="inline-block text-[10px] font-mono font-black tracking-wider uppercase text-emerald-600 dark:text-emerald-400">
-                          BOOYAH!
+                        <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          👑 BOOYAH!
                         </span>
                       </div>
                     </div>
 
-                    {/* Secondary Multi-Team Lobby Preview (Showing Live Point Distribution) */}
-                    <div className="mt-2.5 pt-2.5 border-t border-[var(--border-subtle)]/70 space-y-1.5">
-                      <div className="flex items-center justify-between text-[10px] font-mono text-[var(--text-secondary)]">
-                        <span className="flex items-center gap-1.5">
-                          <span className="text-zinc-400 font-bold">#2</span>
-                          <span className="font-semibold text-[var(--text-primary)]">GodLike Esports</span>
-                          <span className="text-zinc-500">[GL]</span>
+                    {/* #2 Row (GodLike) */}
+                    <div className={`px-3 py-2 rounded-xl border flex items-center justify-between ${
+                      isDark ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-slate-50/70 border-slate-200'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        <span className="h-6 w-6 rounded-md bg-zinc-200/50 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 font-bold text-xs flex items-center justify-center font-numbers">
+                          2
                         </span>
-                        <span className="font-numbers font-bold text-zinc-700 dark:text-zinc-300">
-                          14 PTS <span className="text-zinc-400">(5K + 9P)</span>
-                        </span>
+                        <div>
+                          <div className="text-xs font-bold text-[var(--text-primary)]">
+                            GodLike Esports <span className="text-[10px] text-zinc-400 font-mono">[GL]</span>
+                          </div>
+                          <span className="text-[10px] font-mono text-[var(--text-muted)]">5 Kills</span>
+                        </div>
                       </div>
-                      <div className="w-full h-1 rounded-full bg-zinc-200 dark:bg-white/10 overflow-hidden">
-                        <div className="h-full bg-amber-400 rounded-full w-[64%]" />
+                      <div className="text-right">
+                        <span className="text-sm font-bold font-numbers text-[var(--text-primary)]">14 PTS</span>
+                      </div>
+                    </div>
+
+                    {/* #3 Row (Team SouL) */}
+                    <div className={`px-3 py-2 rounded-xl border flex items-center justify-between ${
+                      isDark ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-slate-50/70 border-slate-200'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        <span className="h-6 w-6 rounded-md bg-zinc-200/50 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 font-bold text-xs flex items-center justify-center font-numbers">
+                          3
+                        </span>
+                        <div>
+                          <div className="text-xs font-bold text-[var(--text-primary)]">
+                            Team SouL <span className="text-[10px] text-zinc-400 font-mono">[SOUL]</span>
+                          </div>
+                          <span className="text-[10px] font-mono text-[var(--text-muted)]">3 Kills</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-bold font-numbers text-[var(--text-primary)]">11 PTS</span>
+                      </div>
+                    </div>
+
+                    {/* #4 Row (Blind eSports) */}
+                    <div className={`px-3 py-2 rounded-xl border flex items-center justify-between ${
+                      isDark ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-slate-50/70 border-slate-200'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        <span className="h-6 w-6 rounded-md bg-zinc-200/50 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 font-bold text-xs flex items-center justify-center font-numbers">
+                          4
+                        </span>
+                        <div>
+                          <div className="text-xs font-bold text-[var(--text-primary)]">
+                            Blind eSports <span className="text-[10px] text-zinc-400 font-mono">[BLIND]</span>
+                          </div>
+                          <span className="text-[10px] font-mono text-[var(--text-muted)]">2 Kills</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-bold font-numbers text-[var(--text-primary)]">9 PTS</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* 3. Three High-Tech Telemetry Performance Modules */}
-                  <div className="grid grid-cols-3 gap-2.5 text-center font-mono">
-                    <div
-                      className={`p-3 rounded-2xl border transition-all ${
-                        isDark
-                          ? 'bg-[#121620] border-white/10 hover:border-amber-400/40 shadow-sm'
-                          : 'bg-slate-50 border-slate-200 hover:border-amber-400/60 shadow-sm'
-                      }`}
-                    >
-                      <div className="flex items-center justify-center mb-1">
-                        <div className="p-1 rounded-lg bg-amber-500/15 text-amber-500">
-                          <Cpu className="h-3.5 w-3.5" />
-                        </div>
-                      </div>
-                      <div className="text-sm font-black font-numbers text-[var(--text-primary)]">&lt; 0.38ms</div>
-                      <div className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mt-0.5">
-                        Math Engine
-                      </div>
-                    </div>
-
-                    <div
-                      className={`p-3 rounded-2xl border transition-all ${
-                        isDark
-                          ? 'bg-[#121620] border-white/10 hover:border-cyan-400/40 shadow-sm'
-                          : 'bg-slate-50 border-slate-200 hover:border-cyan-400/60 shadow-sm'
-                      }`}
-                    >
-                      <div className="flex items-center justify-center mb-1">
-                        <div className="p-1 rounded-lg bg-cyan-500/15 text-cyan-500">
-                          <Monitor className="h-3.5 w-3.5" />
-                        </div>
-                      </div>
-                      <div className="text-sm font-black font-numbers text-[var(--text-primary)]">4K 60FPS</div>
-                      <div className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mt-0.5">
-                        OBS Source
-                      </div>
-                    </div>
-
-                    <div
-                      className={`p-3 rounded-2xl border transition-all ${
-                        isDark
-                          ? 'bg-[#121620] border-white/10 hover:border-emerald-400/40 shadow-sm'
-                          : 'bg-slate-50 border-slate-200 hover:border-emerald-400/60 shadow-sm'
-                      }`}
-                    >
-                      <div className="flex items-center justify-center mb-1">
-                        <div className="p-1 rounded-lg bg-emerald-500/15 text-emerald-500">
-                          <ShieldCheck className="h-3.5 w-3.5" />
-                        </div>
-                      </div>
-                      <div className="text-sm font-black font-numbers text-[var(--text-primary)]">100.0%</div>
-                      <div className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mt-0.5">
-                        Zero Errors
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 4. Stream Source URL & Live Stream Indicator Rail */}
-                  <div className="pt-2.5 flex items-center justify-between text-[11px] font-mono border-t border-[var(--border-subtle)]">
-                    <div className="flex items-center gap-2 min-w-0">
+                  {/* Sleek Stream Link Bar Footer */}
+                  <div className="p-3 mx-4 my-3 rounded-xl bg-black/5 dark:bg-black/40 border border-[var(--border-subtle)] flex items-center justify-between text-[11px] font-mono">
+                    <div className="flex items-center gap-2 truncate text-[var(--text-secondary)]">
                       <Radio className="h-3.5 w-3.5 text-emerald-500 animate-pulse shrink-0" />
-                      <span className="truncate text-[var(--text-secondary)]">
-                        pointx.in/obs/live?key=arena-ffws
-                      </span>
+                      <span className="truncate">pointx.in/obs/live?id=ffws-2026</span>
                     </div>
-                    <span className="shrink-0 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 font-bold text-[10px]">
-                      Ready to Stream
+                    <span className="shrink-0 px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold text-[10px] border border-amber-500/20">
+                      Copy OBS Link
                     </span>
                   </div>
 
