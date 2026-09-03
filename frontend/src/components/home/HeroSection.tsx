@@ -227,16 +227,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {/* Bold Editorial Headline with Smooth Rotating Sentences & Zero Layout Shift */}
               <SlideIn direction="up" delay={0.15}>
                 <div className="space-y-3">
-                  {/* Generous Display Container with Zero Clipping and Zero UI Jumping */}
-                  <div className="min-h-[110px] sm:min-h-[135px] md:min-h-[150px] lg:min-h-[165px] flex flex-col justify-center py-1">
+                  {/* Fixed-Height Display Container: Zero Shift & Zero Disturbance of Elements */}
+                  <div className="h-[105px] sm:h-[88px] md:h-[102px] lg:h-[118px] flex flex-col justify-center">
                     <AnimatePresence mode="wait">
                       <motion.h1
                         key={headlineIdx}
-                        initial={{ opacity: 0, y: 10 }}
+                        initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                        className="text-3xl sm:text-4xl md:text-5xl lg:text-[56px] xl:text-[60px] font-black uppercase tracking-[-0.03em] leading-[1.14] drop-shadow-sm"
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                        className="text-2xl sm:text-3xl md:text-4xl lg:text-[44px] xl:text-[48px] font-black uppercase tracking-[-0.03em] leading-[1.12] drop-shadow-sm"
                         style={{ fontFamily: "'Outfit', sans-serif" }}
                       >
                         <span className={isDark ? 'text-white' : 'text-slate-900'}>

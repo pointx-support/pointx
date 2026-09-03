@@ -163,7 +163,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
         initial="hidden"
         animate="visible"
         className={cn(
-          'pointer-events-auto w-full max-w-[960px] lg:max-w-[1080px] xl:max-w-[1140px] h-16 sm:h-[68px] lg:h-[72px] rounded-full px-3.5 sm:px-4.5 flex items-center justify-between transition-all duration-300 backdrop-blur-2xl',
+          'pointer-events-auto w-full max-w-[920px] lg:max-w-[1020px] xl:max-w-[1080px] h-[52px] sm:h-[56px] lg:h-[60px] rounded-full px-3 sm:px-4 flex items-center justify-between transition-all duration-300 backdrop-blur-2xl',
           isDark
             ? isScrolled
               ? 'bg-[#101319]/95 border border-white/[0.14] text-white shadow-[0_20px_50px_rgba(0,0,0,0.8)]'
@@ -183,7 +183,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
             setActiveSection('live-matrix');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className="flex items-center gap-2.5 sm:gap-3 group select-none cursor-pointer pl-1 shrink-0"
+          className="flex items-center gap-2 sm:gap-2.5 group select-none cursor-pointer pl-0.5 shrink-0"
           title="PointX Esports"
         >
           {/* PX Circular Emblem */}
@@ -192,19 +192,19 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
             whileTap={prefersReducedMotion ? {} : { scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 450, damping: 28 }}
             className={cn(
-              'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center font-black select-none shrink-0 transition-all duration-300',
+              'h-8.5 w-8.5 sm:h-9 sm:w-9 rounded-full flex items-center justify-center font-black select-none shrink-0 transition-all duration-300',
               isDark
                 ? 'bg-[#121622] text-white border border-white/15 shadow-[0_2px_10px_rgba(0,0,0,0.5)] group-hover:border-[#ffd000]/40 group-hover:shadow-[0_0_16px_rgba(255,208,0,0.2)]'
                 : 'bg-[#0B0D14] text-white border border-black/10 shadow-[0_2px_10px_rgba(0,0,0,0.18)] group-hover:shadow-[0_0_16px_rgba(255,208,0,0.3)]'
             )}
           >
-            <span className="font-nav font-black text-xs sm:text-[14px] tracking-tight select-none leading-none">
+            <span className="font-nav font-black text-xs sm:text-[13px] tracking-tight select-none leading-none">
               P<span className="text-[#ffd000] drop-shadow-[0_0_8px_rgba(255,208,0,0.4)]">X</span>
             </span>
           </motion.div>
 
           {/* POINTX Brand Wordmark (Unified Typography & Optical Spacing) */}
-          <div className="flex items-baseline tracking-[-0.035em] select-none font-nav font-black text-[15px] sm:text-[17px] leading-none">
+          <div className="flex items-baseline tracking-[-0.035em] select-none font-nav font-black text-[14px] sm:text-[15px] leading-none">
             <span className={cn(
               'transition-colors duration-300',
               isDark ? 'text-white' : 'text-neutral-950'
@@ -220,7 +220,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
         {/* Center: Precision Navigation with Silky Active & Hover Gliders */}
         <nav
           onMouseLeave={() => setHoveredNav(null)}
-          className="hidden md:flex items-center gap-1 sm:gap-1.5 px-1 relative whitespace-nowrap shrink-0"
+          className="hidden md:flex items-center gap-0.5 sm:gap-1 px-1 relative whitespace-nowrap shrink-0"
         >
           {navLinks.map((link) => {
             const isCurrentActive = activeSection === link.id;
@@ -233,21 +233,21 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
                 onClick={(e) => handleScrollTo(e, link.href, link.id)}
                 onMouseEnter={() => setHoveredNav(link.id)}
                 className={cn(
-                  'relative z-10 h-[46px] sm:h-[50px] px-4 sm:px-5 rounded-full text-[13px] sm:text-[14px] font-medium whitespace-nowrap shrink-0 transition-colors duration-200 select-none cursor-pointer font-nav flex items-center justify-center gap-2 leading-none',
+                  'relative z-10 h-[36px] sm:h-[39px] px-3 sm:px-3.5 rounded-full text-xs sm:text-[13px] font-medium whitespace-nowrap shrink-0 transition-colors duration-200 select-none cursor-pointer font-nav flex items-center justify-center gap-1.5 leading-none',
                   isCurrentActive
                     ? (isDark ? 'text-white font-bold' : 'text-neutral-950 font-bold')
                     : (isDark ? 'text-neutral-400 hover:text-white font-medium' : 'text-neutral-600 hover:text-neutral-950 font-medium')
                 )}
               >
-                {/* Active Sliding Pill Indicator with Generous Height & Single Smooth Spring Motion */}
+                {/* Active Sliding Pill Indicator with Single Smooth Spring Motion */}
                 {isCurrentActive && (
                   <motion.div
                     layoutId="navbar-active-capsule"
                     className={cn(
                       'absolute inset-0 rounded-full -z-10 shadow-xs pointer-events-none',
                       isDark
-                        ? 'bg-white/[0.18] border border-white/[0.25] shadow-[0_4px_18px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.2)]'
-                        : 'bg-neutral-900/[0.09] border border-neutral-900/[0.14] shadow-[0_2px_10px_rgba(0,0,0,0.08),inset_0_1px_1px_rgba(255,255,255,0.85)]'
+                        ? 'bg-white/[0.17] border border-white/[0.22] shadow-[0_4px_16px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.2)]'
+                        : 'bg-neutral-900/[0.08] border border-neutral-900/[0.12] shadow-[0_2px_8px_rgba(0,0,0,0.08),inset_0_1px_1px_rgba(255,255,255,0.85)]'
                     )}
                     transition={{
                       type: 'spring',
@@ -295,7 +295,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
         </nav>
 
         {/* Right: Theme Toggle & Signature Capsule Action Button (Safely Padded from Outer Lid) */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 pr-1 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 pr-0.5 shrink-0">
           
           {/* Smooth Animated Theme Toggle Button */}
           <motion.div variants={itemEntranceVariants}>
@@ -315,7 +315,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 450, damping: 28 }}
               className={cn(
-                'h-10 sm:h-11 inline-flex items-center gap-2 sm:gap-2.5 px-3.5 sm:px-4 rounded-full text-xs sm:text-[13px] font-bold transition-all duration-300 cursor-pointer shadow-sm group select-none shrink-0',
+                'h-[36px] sm:h-[39px] inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 rounded-full text-xs font-bold transition-all duration-300 cursor-pointer shadow-sm group select-none shrink-0',
                 isDark
                   ? 'bg-[#181B24] border border-white/15 text-white hover:border-white/30 hover:bg-[#202532] shadow-[0_2px_12px_rgba(0,0,0,0.4)]'
                   : 'bg-[#0B0D14] text-white hover:bg-neutral-900 shadow-[0_2px_10px_rgba(0,0,0,0.18)]'
@@ -323,10 +323,10 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               style={{ fontFamily: "'Outfit', sans-serif" }}
             >
               <LayoutGrid className="h-3.5 w-3.5 text-neutral-300 shrink-0 transition-transform duration-200 group-hover:rotate-6" />
-              <span className="truncate max-w-[95px] sm:max-w-[125px] md:max-w-[145px] font-bold text-white tracking-wide">
+              <span className="truncate max-w-[85px] sm:max-w-[115px] md:max-w-[135px] font-bold text-white tracking-wide">
                 {user?.email || 'admin@pointx.gg'}
               </span>
-              <ArrowRight className="h-3.5 w-3.5 text-neutral-400 group-hover:text-white group-hover:translate-x-1 transition-all duration-200 ease-out shrink-0" />
+              <ArrowRight className="h-3.5 w-3.5 text-neutral-400 group-hover:text-white group-hover:translate-x-0.5 transition-all duration-200 ease-out shrink-0" />
             </motion.button>
           ) : (
             <motion.button
@@ -337,14 +337,14 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 450, damping: 28 }}
               className={cn(
-                'h-10 sm:h-11 inline-flex items-center gap-2 sm:gap-2.5 px-4 sm:px-5 rounded-full text-xs sm:text-[13px] font-bold tracking-wide transition-all duration-300 cursor-pointer shadow-sm group select-none shrink-0',
+                'h-[36px] sm:h-[39px] inline-flex items-center gap-2 px-3.5 sm:px-4 rounded-full text-xs font-bold tracking-wide transition-all duration-300 cursor-pointer shadow-sm group select-none shrink-0',
                 isDark
                   ? 'bg-[#181B24] border border-white/15 text-white hover:border-white/30 hover:bg-[#202532] shadow-[0_2px_12px_rgba(0,0,0,0.4)]'
                   : 'bg-[#0B0D14] text-white hover:bg-neutral-900 shadow-[0_2px_10px_rgba(0,0,0,0.18)]'
               )}
               style={{ fontFamily: "'Outfit', sans-serif" }}
             >
-              <LogIn className="h-4 w-4 text-[#ffd000] shrink-0 group-hover:translate-x-0.5 transition-transform" />
+              <LogIn className="h-3.5 w-3.5 text-[#ffd000] shrink-0 group-hover:translate-x-0.5 transition-transform" />
               <span className="hidden sm:inline font-bold tracking-wide">Organizer Sign In</span>
               <span className="sm:hidden font-bold">Sign In</span>
             </motion.button>
