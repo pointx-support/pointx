@@ -40,7 +40,7 @@ import {
   X
 } from 'lucide-react';
 import type { GraphicsRenderData } from '../../types/graphics';
-import type { TemplateAlignmentConfig, TextElementStyle } from '../../types/customTemplate';
+import type { TemplateAlignmentConfig, TextElementStyle, GraphicTemplateCategory } from '../../types/customTemplate';
 
 export interface AdminTemplateStudioProps {
   onClose: () => void;
@@ -100,12 +100,14 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
 
   // Create Template form state
   const [createName, setCreateName] = useState('');
+  const [createCategory, setCreateCategory] = useState<GraphicTemplateCategory>('standings');
   const [createAspectRatio, setCreateAspectRatio] = useState<'16:9' | '4:5'>('16:9');
   const [createLayoutMode, setCreateLayoutMode] = useState<'dual-column' | 'single-column'>('dual-column');
   const [createImageUrl, setCreateImageUrl] = useState('');
 
   // Edit Template form state
   const [editName, setEditName] = useState('');
+  const [editCategory, setEditCategory] = useState<GraphicTemplateCategory>('standings');
   const [editDescription, setEditDescription] = useState('');
   const [editAspectRatio, setEditAspectRatio] = useState<'16:9' | '4:5'>('16:9');
 
@@ -581,7 +583,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       height: createAspectRatio === '4:5' ? 1350 : 1080
     };
 
-    createCustomTemplate(createName.trim(), createImageUrl, baseConfig);
+    createCustomTemplate(createName.trim(), createImageUrl, baseConfig, createCategory);
     setIsCreateModalOpen(false);
     setCreateName('');
     setCreateImageUrl('');
@@ -601,7 +603,8 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
     updateTemplateMetadata(activeTemplate.id, {
       name: editName.trim(),
       description: editDescription.trim(),
-      aspectRatio: editAspectRatio
+      aspectRatio: editAspectRatio,
+      category: editCategory
     });
 
     updateTemplateAlignment(activeTemplate.id, {
@@ -620,6 +623,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
 
   const handleOpenEditModal = () => {
     setEditName(activeTemplate.name);
+    setEditCategory(activeTemplate.category || 'standings');
     setEditDescription(activeTemplate.description || '');
     setEditAspectRatio(activeTemplate.aspectRatio === '4:5' ? '4:5' : '16:9');
     setIsEditModalOpen(true);
@@ -1482,6 +1486,24 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
           maxWidth="md"
         >
           <form onSubmit={handleCreateSubmit} className="space-y-4 font-sans text-xs sm:text-sm">
+            <div>
+              <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
+                Target Section Category *
+              </label>
+              <select
+                value={createCategory}
+                onChange={(e) => setCreateCategory(e.target.value as GraphicTemplateCategory)}
+                className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] font-bold text-xs text-[var(--text-primary)] cursor-pointer focus:border-[var(--accent-primary)] focus:outline-none"
+              >
+                <option value="standings">🏆 Point Tables (Tournament Standings)</option>
+                <option value="warheads">🔥 Warheads / Kill Leader</option>
+                <option value="fraggers">👑 Top Fraggers / MVP</option>
+                <option value="team-poster">🖼️ Team Poster (Squad Lineup)</option>
+                <option value="slots-list">📋 Slots List (12-Team Schedule)</option>
+                <option value="certificate">🎖️ Victory Certificate (Champion Diploma)</option>
+              </select>
+            </div>
+
             <Input
               label="Template Name *"
               value={createName}
@@ -1549,6 +1571,24 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
           maxWidth="md"
         >
           <form onSubmit={handleEditSubmit} className="space-y-4 font-sans text-xs sm:text-sm">
+            <div>
+              <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
+                Section Category *
+              </label>
+              <select
+                value={editCategory}
+                onChange={(e) => setEditCategory(e.target.value as GraphicTemplateCategory)}
+                className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] font-bold text-xs text-[var(--text-primary)] cursor-pointer focus:border-[var(--accent-primary)] focus:outline-none"
+              >
+                <option value="standings">🏆 Point Tables (Tournament Standings)</option>
+                <option value="warheads">🔥 Warheads / Kill Leader</option>
+                <option value="fraggers">👑 Top Fraggers / MVP</option>
+                <option value="team-poster">🖼️ Team Poster (Squad Lineup)</option>
+                <option value="slots-list">📋 Slots List (12-Team Schedule)</option>
+                <option value="certificate">🎖️ Victory Certificate (Champion Diploma)</option>
+              </select>
+            </div>
+
             <Input
               label="Template Name *"
               value={editName}

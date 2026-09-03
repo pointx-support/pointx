@@ -24,6 +24,7 @@ import {
   Users,
   FileText,
   Settings,
+  Lock,
 } from 'lucide-react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useAuthStore } from '../../store/authStore';
@@ -86,9 +87,12 @@ export const Sidebar: FC<SidebarProps> = ({
   const [hoveredFlyout, setHoveredFlyout] = useState<string | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showTournamentRequiredModal, setShowTournamentRequiredModal] = useState(false);
 
   const isDark = theme === 'dark';
   const isCommandCenter = viewMode === 'command-center';
+  const hasActiveTournament = viewMode === 'workspace' && Boolean(currentTournament?.id);
+  const isTournamentLocked = !hasActiveTournament;
   const isExpanded = !isSidebarCollapsed;
 
   // Best-in-class accordion expand / collapse motion variants
@@ -124,7 +128,7 @@ export const Sidebar: FC<SidebarProps> = ({
     }),
   };
 
-  // Sub-items inside the Main Tournament Tree
+  // Sub-items inside the Main Tournament Tree (Scoring Rules moved here per user directive)
   const tournamentSubItems = [
     { id: 'standings', label: 'Point Table', icon: Trophy },
     { id: 'matches', label: 'Calculate Points', icon: Swords },
@@ -132,6 +136,7 @@ export const Sidebar: FC<SidebarProps> = ({
     { id: 'players', label: 'Players Roster', icon: UserCheck },
     { id: 'global-teams', label: 'Squads DB', icon: Database },
     { id: 'statistics', label: 'Statistics & MVPs', icon: BarChart3 },
+    { id: 'settings', label: 'Scoring Rules', icon: Sliders },
     { id: 'edit-tournament', label: 'Edit Tournament Info', icon: Edit3, isAction: true }
   ];
 
@@ -145,10 +150,9 @@ export const Sidebar: FC<SidebarProps> = ({
     { id: 'certificate', label: 'Victory Certificate', isPro: true }
   ];
 
-  // Organization & Staff Delegation
+  // Organization & Staff Delegation (Accessible before tournament selection)
   const orgNavItems = [
     { id: 'organization', label: 'My Organisation', icon: Building2 },
-    { id: 'settings', label: 'Scoring Rules', icon: Sliders },
     { id: 'account', label: 'Staff & Account', icon: UserIcon }
   ];
 
@@ -168,6 +172,11 @@ export const Sidebar: FC<SidebarProps> = ({
   };
 
   const handleGraphicsSubClick = (categoryId: any) => {
+    if (isTournamentLocked) {
+      triggerDashboardHighlight();
+      setShowTournamentRequiredModal(true);
+      return;
+    }
     setActiveGraphicsCategory(categoryId);
     setExpandedSection('graphics');
     handleNavClick('graphics');
@@ -176,46 +185,34 @@ export const Sidebar: FC<SidebarProps> = ({
   const handleNavClick = (tabId: string) => {
     setHoveredFlyout(null);
 
-    if (tabId === 'graphics') {
-      setExpandedSection('graphics');
-    } else if (tabId === 'admin-dashboard') {
-      setExpandedSection('admin');
-    } else if (tabId === 'overview' || tournamentSubItems.some((s) => s.id === tabId)) {
-      setExpandedSection('tournament');
-    }
-
-    if (tabId === 'edit-tournament') {
-      if (isCommandCenter) {
-        triggerDashboardHighlight();
-        showToast({
-          type: 'info',
-          title: 'Tournament Required',
-          message: 'Select or open a tournament to edit its information.'
-        });
-        return;
-      }
-      setShowEditModal(true);
-      return;
-    }
-
-    if (tabId === 'admin-dashboard') {
-      if (onSelectAdminDashboard) onSelectAdminDashboard();
-      return;
-    }
-
-    if (tabId === 'account' || tabId === 'organization' || tabId === 'settings') {
+    // Organization and Account are ALWAYS accessible before choosing or creating a tournament
+    if (tabId === 'organization' || tabId === 'account') {
       if (onSelectWorkspaceTab) onSelectWorkspaceTab(tabId as any);
       else setActiveTab(tabId as any);
       return;
     }
 
-    if (isCommandCenter) {
+    if (tabId === 'admin-dashboard') {
+      setExpandedSection('admin');
+      if (onSelectAdminDashboard) onSelectAdminDashboard();
+      return;
+    }
+
+    // All tournament arena tabs, live broadcast, and graphics require an active tournament
+    if (isTournamentLocked) {
       triggerDashboardHighlight();
-      showToast({
-        type: 'info',
-        title: 'Tournament Required',
-        message: `Create or open a tournament to view this section.`
-      });
+      setShowTournamentRequiredModal(true);
+      return;
+    }
+
+    if (tabId === 'graphics') {
+      setExpandedSection('graphics');
+    } else if (tabId === 'overview' || tournamentSubItems.some((s) => s.id === tabId)) {
+      setExpandedSection('tournament');
+    }
+
+    if (tabId === 'edit-tournament') {
+      setShowEditModal(true);
       return;
     }
 
@@ -404,15 +401,23 @@ export const Sidebar: FC<SidebarProps> = ({
               )}
             </button>
 
-            {/* 2. Tournament Overview Parent Node */}
+            {/* 2. Main Tournament Navigation Tree */}
             <div
-              className="relative"
+              className={cn(
+                'relative transition-all',
+                isTournamentLocked && 'opacity-45 filter grayscale-[0.6] hover:opacity-75 cursor-pointer'
+              )}
               onMouseEnter={() => !isExpanded && setHoveredFlyout('main-tree')}
               onMouseLeave={() => !isExpanded && setHoveredFlyout(null)}
             >
               <button
                 type="button"
                 onClick={() => {
+                  if (isTournamentLocked) {
+                    triggerDashboardHighlight();
+                    setShowTournamentRequiredModal(true);
+                    return;
+                  }
                   if (isExpanded) {
                     toggleSection('tournament');
                     handleNavClick('overview');
@@ -437,7 +442,11 @@ export const Sidebar: FC<SidebarProps> = ({
                   {isExpanded && <span className="truncate">Tournament Arena</span>}
                 </div>
 
-                {isExpanded && (
+                {isExpanded && isTournamentLocked && (
+                  <Lock className="h-3 w-3 text-amber-500/80 shrink-0 ml-auto mr-1" />
+                )}
+
+                {isExpanded && !isTournamentLocked && (
                   <ChevronDown
                     className={cn(
                       'h-3.5 w-3.5 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
@@ -482,21 +491,24 @@ export const Sidebar: FC<SidebarProps> = ({
                 </div>
               )}
 
-              {/* Expanded Branch Tree Connectors with Accordion Animation */}
+              {/* Expanded Nested Sub-Tree with Physics Animation */}
               <AnimatePresence initial={false}>
                 {isExpanded && isMainTreeOpen && (
                   <motion.div
-                    key="tournament-tree-branch"
+                    key="tournament-tree-content"
                     variants={accordionVariants}
                     initial="collapsed"
                     animate="expanded"
                     exit="collapsed"
                     className="overflow-hidden"
                   >
-                    <div className="relative ml-4 pl-4.5 border-l-2 border-white/15 dark:border-white/15 light:border-black/15 mt-1.5 space-y-1">
+                    <div className="relative pl-5 ml-4 mt-1.5 space-y-0.5">
+                      {/* Vertical Tree Connector Spine Line */}
+                      <div className="absolute left-[3px] top-1 bottom-2.5 w-[2px] bg-white/20 dark:bg-white/20 light:bg-black/20 rounded-full" />
+
                       {filteredSubItems.map((sub, idx) => {
+                        const Icon = sub.icon;
                         const isActive = activeTab === sub.id && !isCommandCenter;
-                        const SubIcon = sub.icon;
 
                         return (
                           <motion.div
@@ -506,7 +518,7 @@ export const Sidebar: FC<SidebarProps> = ({
                             className="relative flex items-center"
                           >
                             {/* Curved Connector Branch Stub */}
-                            <div className="absolute -left-[19px] top-1/2 -translate-y-1/2 w-3.5 h-[2px] bg-white/20 dark:bg-white/20 light:bg-black/20 rounded-full" />
+                            <div className="absolute -left-[17px] top-1/2 -translate-y-1/2 w-3 h-[2px] bg-white/20 dark:bg-white/20 light:bg-black/20 rounded-full" />
 
                             <button
                               type="button"
@@ -520,9 +532,9 @@ export const Sidebar: FC<SidebarProps> = ({
                                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
                               )}
                             >
-                              <div className="flex items-center gap-2 truncate">
-                                <SubIcon className={cn(
-                                  'h-3.5 w-3.5 transition-transform group-hover:scale-110',
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <Icon className={cn(
+                                  'h-3.5 w-3.5 shrink-0 transition-transform group-hover:scale-110',
                                   isActive ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'
                                 )} />
                                 <span className="truncate">{sub.label}</span>
@@ -548,6 +560,7 @@ export const Sidebar: FC<SidebarProps> = ({
               className={cn(
                 'w-full flex items-center rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer group',
                 isExpanded ? 'justify-between px-3 py-2.5' : 'justify-center h-10 w-10 mx-auto p-0',
+                isTournamentLocked && 'opacity-45 filter grayscale-[0.6] hover:opacity-75',
                 activeTab === 'broadcast' && !isCommandCenter
                   ? (isDark ? 'bg-white/12 text-white shadow-sm' : 'bg-black/8 text-black shadow-sm')
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 dark:hover:bg-white/5'
@@ -562,21 +575,33 @@ export const Sidebar: FC<SidebarProps> = ({
                 {isExpanded && <span className="truncate">Live Overlays (OBS)</span>}
               </div>
 
-              <span className={cn(
-                'flex h-2 w-2 rounded-full shrink-0',
-                activeTab === 'broadcast' && !isCommandCenter ? 'bg-[var(--accent-primary)]' : 'bg-emerald-400 animate-pulse'
-              )} />
+              {isExpanded && isTournamentLocked ? (
+                <Lock className="h-3 w-3 text-amber-500/80 shrink-0" />
+              ) : (
+                <span className={cn(
+                  'flex h-2 w-2 rounded-full shrink-0',
+                  activeTab === 'broadcast' && !isCommandCenter ? 'bg-[var(--accent-primary)]' : 'bg-emerald-400 animate-pulse'
+                )} />
+              )}
             </button>
 
             {/* 4. Graphics Studio with Sub-types Branch Tree (Point Tables, Warheads, MVP, etc.) */}
             <div
-              className="relative"
+              className={cn(
+                'relative transition-all',
+                isTournamentLocked && 'opacity-45 filter grayscale-[0.6] hover:opacity-75 cursor-pointer'
+              )}
               onMouseEnter={() => !isExpanded && setHoveredFlyout('graphics-tree')}
               onMouseLeave={() => !isExpanded && setHoveredFlyout(null)}
             >
               <button
                 type="button"
                 onClick={() => {
+                  if (isTournamentLocked) {
+                    triggerDashboardHighlight();
+                    setShowTournamentRequiredModal(true);
+                    return;
+                  }
                   if (isExpanded) {
                     toggleSection('graphics');
                     handleNavClick('graphics');
@@ -601,7 +626,11 @@ export const Sidebar: FC<SidebarProps> = ({
                   {isExpanded && <span className="truncate">Graphics Studio</span>}
                 </div>
 
-                {isExpanded && (
+                {isExpanded && isTournamentLocked && (
+                  <Lock className="h-3 w-3 text-amber-500/80 shrink-0 ml-auto mr-1" />
+                )}
+
+                {isExpanded && !isTournamentLocked && (
                   <ChevronDown
                     className={cn(
                       'h-3.5 w-3.5 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
@@ -946,6 +975,82 @@ export const Sidebar: FC<SidebarProps> = ({
           }}
         />
       )}
+
+      {/* Premium Tournament Required Prompt Modal */}
+      <Modal
+        isOpen={showTournamentRequiredModal}
+        onClose={() => setShowTournamentRequiredModal(false)}
+        title="Tournament Required"
+        maxWidth="md"
+      >
+        <div className="space-y-6 text-center py-2 font-sans">
+          {/* Glowing Trophy Icon with Radiant Lock Badge */}
+          <div className="relative mx-auto w-16 h-16 rounded-3xl bg-[var(--accent-primary)]/15 border border-[var(--accent-primary)]/30 flex items-center justify-center shadow-[0_0_30px_rgba(255,208,0,0.2)]">
+            <Trophy className="h-8 w-8 text-[var(--accent-primary)] animate-pulse" />
+            <div className="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-[9px] font-mono font-black text-amber-400 uppercase tracking-widest">
+              LOCKED
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-xl font-black text-[var(--text-primary)] font-display tracking-tight">
+              Select or Create a Tournament
+            </h3>
+            <p className="text-xs sm:text-sm text-[var(--text-secondary)] max-w-md mx-auto leading-relaxed">
+              To access <strong className="text-[var(--text-primary)]">Tournament Arena</strong>, <strong className="text-[var(--text-primary)]">Live OBS Overlays</strong>, and the <strong className="text-[var(--text-primary)]">Graphics Studio</strong>, please select an existing tournament or create a new arena.
+            </p>
+          </div>
+
+          {/* Feature Highlights Grid */}
+          <div className="grid grid-cols-3 gap-2.5 p-3.5 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-left">
+            <div className="space-y-1">
+              <div className="text-[10px] font-mono font-bold text-[var(--accent-primary)]">01. ARENA</div>
+              <div className="text-xs font-bold text-[var(--text-primary)]">Point Tables</div>
+              <p className="text-[10px] text-[var(--text-secondary)]">Automated calculations & rules</p>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] font-mono font-bold text-[var(--accent-primary)]">02. OBS</div>
+              <div className="text-xs font-bold text-[var(--text-primary)]">Live Overlays</div>
+              <p className="text-[10px] text-[var(--text-secondary)]">Direct streaming sources</p>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] font-mono font-bold text-[var(--accent-primary)]">03. STUDIO</div>
+              <div className="text-xs font-bold text-[var(--text-primary)]">4K Post-Match</div>
+              <p className="text-[10px] text-[var(--text-secondary)]">Instagram & broadcast posters</p>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <Button
+              variant="outline"
+              size="md"
+              className="w-full sm:w-auto justify-center font-bold"
+              onClick={() => {
+                setShowTournamentRequiredModal(false);
+                if (onSelectDashboard) onSelectDashboard();
+                triggerDashboardHighlight();
+              }}
+            >
+              Select from Dashboard
+            </Button>
+
+            <Button
+              variant="primary"
+              size="md"
+              className="w-full sm:w-auto justify-center font-bold"
+              onClick={() => {
+                setShowTournamentRequiredModal(false);
+                if (onSelectDashboard) onSelectDashboard();
+                triggerDashboardHighlight();
+              }}
+              leftIcon={<Trophy className="h-4 w-4" />}
+            >
+              Create Tournament
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 };

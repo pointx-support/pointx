@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAdminStore } from '../../../store/adminStore';
+import { useTournamentStore } from '../../../store/tournamentStore';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
@@ -10,10 +11,14 @@ import {
   Plus,
   Trash2,
   Sliders,
-  Bell
+  Bell,
+  Sparkles,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export const AdminSettingsView: React.FC = () => {
+  const { adminDemoEnabled, setAdminDemoEnabled } = useTournamentStore();
   const {
     platformSettings,
     toggleMaintenanceMode,
@@ -102,6 +107,50 @@ export const AdminSettingsView: React.FC = () => {
                 Enable Platform Maintenance Lock
               </span>
             </label>
+          </div>
+        </div>
+
+        {/* 2. Demo Tournaments & Feature Testing Card (Admin Only) */}
+        <div className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-[var(--shadow-flat)] space-y-4">
+          <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-[var(--accent-primary)]" />
+              <h3 className="font-bold text-sm text-[var(--text-primary)] font-display">
+                Demo Tournaments & Test Data
+              </h3>
+            </div>
+            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase ${
+              adminDemoEnabled
+                ? 'bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30'
+                : 'bg-zinc-500/15 text-zinc-500 border border-zinc-500/30'
+            }`}>
+              {adminDemoEnabled ? 'Active' : 'Disabled'}
+            </span>
+          </div>
+
+          <p className="text-xs text-[var(--text-secondary)]">
+            Provides 3 official Free Fire sample tournaments for admin feature testing and OBS graphics calibration. Normal users never see demo info.
+          </p>
+
+          <div className="pt-2">
+            <Button
+              variant={adminDemoEnabled ? 'outline' : 'primary'}
+              size="sm"
+              onClick={() => {
+                const next = !adminDemoEnabled;
+                setAdminDemoEnabled(next);
+                showToast({
+                  type: next ? 'success' : 'info',
+                  title: next ? 'Demo Tournaments Enabled' : 'Demo Tournaments Disabled',
+                  message: next
+                    ? 'Sample tournaments are now available in your admin workspace for feature testing.'
+                    : 'Sample tournaments have been removed from your workspace.'
+                });
+              }}
+              leftIcon={adminDemoEnabled ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            >
+              {adminDemoEnabled ? 'Disable Demo Info (Admin Only)' : 'Enable Demo Info (Admin Only)'}
+            </Button>
           </div>
         </div>
 

@@ -48,6 +48,8 @@ export interface AppState {
   importTournaments: (incoming: Tournament[]) => Promise<number>;
   archiveTournament: (tournamentId: string) => Promise<void>;
   deleteTournament: (tournamentId: string) => Promise<void>;
+  adminDemoEnabled: boolean;
+  setAdminDemoEnabled: (enabled: boolean) => void;
   loadDemoTournaments: () => void;
   clearAllTournaments: () => void;
   sanitizeTournamentsForRole: (role?: string) => void;
@@ -333,6 +335,7 @@ export const useTournamentStore = create<AppState>((set, get) => ({
   currentTournament: initialSaved.currentTournament,
   isLoadingTournaments: false,
   hasLoadedFromDatabase: false,
+  adminDemoEnabled: typeof window !== 'undefined' ? window.localStorage.getItem('pointx_admin_demo_enabled') === 'true' : false,
   activeTab: 'overview',
   previousTab: null,
   activeGraphicsCategory: 'standings',
@@ -628,6 +631,45 @@ export const useTournamentStore = create<AppState>((set, get) => ({
     try {
       await tournamentsApi.delete(tournamentId);
     } catch {}
+  },
+
+  setAdminDemoEnabled: (enabled: boolean) => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('pointx_admin_demo_enabled', String(enabled));
+    }
+    set({ adminDemoEnabled: enabled });
+    if (!enabled) {
+      set((state) => {
+        const nonDemo = state.tournaments.filter(
+          (t) =>
+            t.id !== 'tour-ff-champ-2026' &&
+            t.id !== 'tour-ff-night-scrims' &&
+            t.id !== 'tour-ff-summer-finals' &&
+            !t.id.startsWith('tour-demo-')
+        );
+        const active = nonDemo.find((t) => t.id === state.activeTournamentId) || nonDemo[0] || createBlankTournament();
+        persistTournaments(nonDemo);
+        return {
+          tournaments: nonDemo,
+          activeTournamentId: nonDemo.length > 0 ? active.id : '',
+          currentTournament: active
+        };
+      });
+    } else {
+      set((state) => {
+        const hasDemos = state.tournaments.some((t) => t.id.startsWith('tour-demo-') || t.id === 'tour-ff-champ-2026');
+        if (!hasDemos) {
+          const merged = [...state.tournaments, ...DEMO_TOURNAMENTS];
+          persistTournaments(merged);
+          return {
+            tournaments: merged,
+            activeTournamentId: state.activeTournamentId || DEMO_TOURNAMENTS[0].id,
+            currentTournament: state.currentTournament?.id ? state.currentTournament : DEMO_TOURNAMENTS[0]
+          };
+        }
+        return state;
+      });
+    }
   },
 
   loadDemoTournaments: () => {

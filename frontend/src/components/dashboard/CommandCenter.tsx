@@ -25,8 +25,7 @@ import {
   Radio,
   Calendar,
   CheckCircle2,
-  ShieldCheck,
-  EyeOff
+  ShieldCheck
 } from 'lucide-react';
 import { downloadBlobFile } from '../../engine/exportEngine';
 
@@ -53,6 +52,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
     tournaments,
     isLoadingTournaments,
     hasLoadedFromDatabase,
+    adminDemoEnabled,
     fetchTournaments,
     createTournament,
     updateTournament,
@@ -60,8 +60,6 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
     importTournaments,
     archiveTournament,
     deleteTournament,
-    loadDemoTournaments,
-    clearAllTournaments,
     highlightDashboardAction
   } = useTournamentStore();
   const { user } = useAuthStore();
@@ -108,7 +106,19 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
   const [deletingTournament, setDeletingTournament] = useState<Tournament | null>(null);
 
-  const filteredTournaments = tournaments
+  const isDemo = (t: Tournament) =>
+    t.id === 'tour-ff-champ-2026' ||
+    t.id === 'tour-ff-night-scrims' ||
+    t.id === 'tour-ff-summer-finals' ||
+    t.id.startsWith('tour-demo-');
+
+  const visibleTournaments = tournaments.filter((t) => {
+    if (user?.role !== 'admin') return !isDemo(t);
+    if (!adminDemoEnabled) return !isDemo(t);
+    return true;
+  });
+
+  const filteredTournaments = visibleTournaments
     .filter((t) => {
       const matchesStatus =
         filterStatus === 'All'
@@ -130,10 +140,10 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
 
-  const liveCount = tournaments.filter((t) => t.status === 'Live' || t.status === 'Ongoing').length;
-  const upcomingCount = tournaments.filter((t) => t.status === 'Upcoming').length;
-  const completedCount = tournaments.filter((t) => t.status === 'Completed').length;
-  const totalTournamentsCount = tournaments.length;
+  const liveCount = visibleTournaments.filter((t) => t.status === 'Live' || t.status === 'Ongoing').length;
+  const upcomingCount = visibleTournaments.filter((t) => t.status === 'Upcoming').length;
+  const completedCount = visibleTournaments.filter((t) => t.status === 'Completed').length;
+  const totalTournamentsCount = visibleTournaments.length;
 
   const handleWizardComplete = (newTour: Tournament) => {
     createTournament(newTour);
@@ -547,24 +557,6 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
           </div>
 
           <div className="flex items-center gap-2">
-            {user?.role === 'admin' && tournaments.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  clearAllTournaments();
-                  showToast({
-                    type: 'info',
-                    title: 'Demo Tournaments Hidden',
-                    message: 'Removed all demo tournaments from workspace.'
-                  });
-                }}
-                className="px-3 py-2 rounded-xl bg-[var(--bg-surface-subtle)] hover:bg-rose-500/10 hover:border-rose-500/30 text-rose-500 border border-[var(--border-medium)] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
-                title="Hide all demo tournaments"
-              >
-                <EyeOff className="h-3.5 w-3.5" />
-                <span>Hide Demo Info</span>
-              </button>
-            )}
             <span className="text-xs font-mono text-[var(--text-secondary)] hidden sm:inline">Sort:</span>
             <select
               value={sortBy}
@@ -630,7 +622,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
                 ? 'No events match your search query. Try clearing the filter.'
                 : 'Your tournament workspace is empty. Create your first tournament to get started.'}
             </p>
-            <div className="flex items-center justify-center gap-2.5 pt-1">
+            <div className="flex items-center justify-center pt-1">
               <Button
                 variant="primary"
                 size="sm"
@@ -639,23 +631,6 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
               >
                 Create Tournament
               </Button>
-              {user?.role === 'admin' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    loadDemoTournaments();
-                    showToast({
-                      type: 'info',
-                      title: 'Demo Tournaments Loaded',
-                      message: 'Loaded 3 official sample tournaments for testing.'
-                    });
-                  }}
-                  leftIcon={<Sparkles className="h-4 w-4 text-[var(--accent-primary)]" />}
-                >
-                  Load Demo Tournaments
-                </Button>
-              )}
             </div>
           </div>
         )}

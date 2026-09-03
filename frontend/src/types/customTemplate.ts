@@ -117,10 +117,13 @@ export interface TemplateAlignmentConfig {
   };
 }
 
+export type GraphicTemplateCategory = 'standings' | 'warheads' | 'fraggers' | 'team-poster' | 'slots-list' | 'certificate';
+
 export interface CustomGraphicsTemplate {
   id: string;
   name: string;
   description: string;
+  category?: GraphicTemplateCategory;
   imageUrl: string;
   aspectRatio: '16:9' | '4:5' | '1:1' | '9:16';
   alignment: TemplateAlignmentConfig;

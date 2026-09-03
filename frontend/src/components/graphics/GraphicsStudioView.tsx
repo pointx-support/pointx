@@ -14,7 +14,6 @@ import {
   Sparkles,
   Download,
   CheckCircle2,
-  Package,
   ChevronDown,
   Trophy,
   Flame,
@@ -37,7 +36,6 @@ import {
   X,
   Tv
 } from 'lucide-react';
-import JSZip from 'jszip';
 import type { GraphicsRenderData } from '../../types/graphics';
 
 type GraphicCategoryTab = 'standings' | 'warheads' | 'fraggers' | 'team-poster' | 'slots-list' | 'certificate';
@@ -96,14 +94,25 @@ export const GraphicsStudioView: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFullScreenOpen]);
 
-  const publishedTemplates = templates.filter((t) => {
+  const categoryTemplates = templates.filter((t) => (t.category || 'standings') === activeCategory);
+  const currentCategoryTemplate = categoryTemplates.find((t) => t.id === activeTemplateId) || categoryTemplates[0] || getActiveTemplate();
+
+  const publishedTemplates = categoryTemplates.filter((t) => {
     if (!t.isPublished) return false;
     if (formatFilter === 'portrait') return t.aspectRatio === '4:5';
     if (formatFilter === 'landscape') return t.aspectRatio === '16:9';
     return true;
   });
 
-  const currentTemplate = getActiveTemplate();
+  // Keep activeTemplateId in sync when category switches
+  useEffect(() => {
+    const matching = templates.filter((t) => (t.category || 'standings') === activeCategory);
+    if (matching.length > 0 && !matching.some((t) => t.id === activeTemplateId)) {
+      setActiveTemplateId(matching[0].id);
+    }
+  }, [activeCategory, templates, activeTemplateId, setActiveTemplateId]);
+
+  const currentTemplate = currentCategoryTemplate;
 
   // Compute standings and subtitle dynamically based on selected scope
   const isOverall = selectedScope === 'overall';
@@ -131,7 +140,7 @@ export const GraphicsStudioView: React.FC = () => {
     subtitle: graphicSubtitle
   };
 
-  const isPortrait = activeCategory === 'standings' ? currentTemplate.aspectRatio === '4:5' : activeCategory !== 'certificate';
+  const isPortrait = currentCategoryTemplate.aspectRatio === '4:5';
   const baseExportWidth = isPortrait ? 1080 : 1920;
   const baseExportHeight = isPortrait ? 1350 : 1080;
 
@@ -149,7 +158,7 @@ export const GraphicsStudioView: React.FC = () => {
 
       const categoryName = GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase() || 'GRAPHIC';
       const filename = activeCategory === 'standings'
-        ? `${customEventTitle.replace(/\s+/g, '_').toUpperCase()}_${scopeLabel.replace(/\s+/g, '_').toUpperCase()}_${currentTemplate.name.replace(/\s+/g, '_')}_${format.toUpperCase()}${hueRotate ? `_HUE${hueRotate}` : ''}.png`
+        ? `${customEventTitle.replace(/\s+/g, '_').toUpperCase()}_${scopeLabel.replace(/\s+/g, '_').toUpperCase()}_${currentCategoryTemplate.name.replace(/\s+/g, '_')}_${format.toUpperCase()}${hueRotate ? `_HUE${hueRotate}` : ''}.png`
         : `${customEventTitle.replace(/\s+/g, '_').toUpperCase()}_${categoryName}_${format.toUpperCase()}${hueRotate ? `_HUE${hueRotate}` : ''}.png`;
 
       downloadBlobFile(blob, filename);
@@ -170,47 +179,10 @@ export const GraphicsStudioView: React.FC = () => {
     }
   };
 
-  const handleExportAllZip = async () => {
-    const targetSvg = isFullScreenOpen ? fullScreenSvgRef.current || svgRef.current : svgRef.current;
-    if (!targetSvg) return;
-    setIsExporting(true);
-
-    try {
-      const categoryName = GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase() || 'GRAPHIC';
-      const zip = new JSZip();
-      const folder = zip.folder(`${customEventTitle.replace(/\s+/g, '_')}_${categoryName}`);
-
-      // 1. 1080p Export
-      const hdBlob = await exportSvgToPng(targetSvg, baseExportWidth, baseExportHeight);
-      folder?.file(`01_${categoryName}_1080p.png`, hdBlob);
-
-      // 2. 4K Export
-      const fourKBlob = await exportSvgToPng(targetSvg, baseExportWidth * 2, baseExportHeight * 2);
-      folder?.file(`02_${categoryName}_4K.png`, fourKBlob);
-
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      downloadBlobFile(zipBlob, `${customEventTitle.replace(/\s+/g, '_')}_${categoryName}_Bundle.zip`);
-
-      showToast({
-        type: 'success',
-        title: 'ZIP Generated',
-        message: `${categoryName} graphics bundle downloaded successfully!`
-      });
-    } catch (err) {
-      showToast({
-        type: 'error',
-        title: 'ZIP Export Failed',
-        message: String(err)
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   const handleCopyObsLink = () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
     const categoryName = GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label || 'Graphics';
-    const obsUrl = `${origin}/?mode=broadcast&tournamentId=${currentTournament.id}&layout=${activeCategory === 'standings' ? 'graphic' : activeCategory}&templateId=${currentTemplate.id}&hue=${hueRotate}&scope=${selectedScope}&title=${encodeURIComponent(customEventTitle)}&org=${encodeURIComponent(customOrgName)}`;
+    const obsUrl = `${origin}/?mode=broadcast&tournamentId=${currentTournament.id}&layout=${activeCategory === 'standings' ? 'graphic' : activeCategory}&templateId=${currentCategoryTemplate.id}&hue=${hueRotate}&scope=${selectedScope}&title=${encodeURIComponent(customEventTitle)}&org=${encodeURIComponent(customOrgName)}`;
     navigator.clipboard.writeText(obsUrl);
     showToast({
       type: 'success',
@@ -257,7 +229,7 @@ export const GraphicsStudioView: React.FC = () => {
 
         {/* Primary Export Actions Toolbar (Active Across All Categories) */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {isAdmin && activeCategory === 'standings' && (
+          {isAdmin && (
             <Button
               variant="outline"
               size="md"
@@ -312,16 +284,6 @@ export const GraphicsStudioView: React.FC = () => {
           >
             {isPortrait ? 'Export Poster 4K' : 'Export 4K UHD'}
           </Button>
-
-          <Button
-            variant="booyah"
-            size="md"
-            isLoading={isExporting}
-            onClick={handleExportAllZip}
-            leftIcon={<Package className="h-4 w-4" />}
-          >
-            Download ZIP Pack
-          </Button>
         </div>
       </div>
 
@@ -356,455 +318,346 @@ export const GraphicsStudioView: React.FC = () => {
         })}
       </div>
 
-      {activeCategory === 'standings' ? (
-        <>
-          {/* 2-COLUMN MAIN WORKSPACE */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* LEFT COLUMN: LIVE POSTER PREVIEW + HUE ADJUSTER (7 cols) */}
-            <div className="lg:col-span-7 xl:col-span-7 space-y-4">
-              {/* Quick Brand Customization Bar */}
-              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-flat)] space-y-3">
-                <div className="text-xs font-mono font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-                  Live Brand Headers
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input
-                    label="Tournament / League Title"
-                    value={customEventTitle}
-                    onChange={(e) => setCustomEventTitle(e.target.value)}
-                    placeholder="Enter league title"
-                  />
-                  <Input
-                    label="Organizer / Host Name"
-                    value={customOrgName}
-                    onChange={(e) => setCustomOrgName(e.target.value)}
-                    placeholder="Enter host organization"
-                  />
-                </div>
-              </div>
+      {/* 2-COLUMN UNIFIED MAIN WORKSPACE ACROSS ALL 6 CATEGORIES */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* LEFT COLUMN: LIVE BRAND HEADERS + HUE CONTROLLER + CANVAS (7 cols) */}
+        <div className="lg:col-span-7 xl:col-span-7 space-y-4">
+          {/* Quick Brand Customization Bar */}
+          <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-flat)] space-y-3">
+            <div className="text-xs font-mono font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+              Live Brand Headers
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                label="Tournament / League Title"
+                value={customEventTitle}
+                onChange={(e) => setCustomEventTitle(e.target.value)}
+                placeholder="Enter league title"
+              />
+              <Input
+                label="Organizer / Host Name"
+                value={customOrgName}
+                onChange={(e) => setCustomOrgName(e.target.value)}
+                placeholder="Enter host organization"
+              />
+            </div>
 
-              {/* 🎨 HUE SHIFT & COLOR THEME CONTROLLER */}
-              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-flat)] space-y-3">
-                <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-2">
-                  <div className="flex items-center gap-2">
-                    <Palette className="h-4 w-4 text-[var(--accent-primary)]" />
-                    <span className="font-bold text-xs sm:text-sm text-[var(--text-primary)] font-display">
-                      Poster Hue & Color Tint
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-bold text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 px-2 py-0.5 rounded-md border border-[var(--accent-primary)]/20">
-                      {hueRotate}° Shift
-                    </span>
-                    {hueRotate !== 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setHueRotate(0)}
-                        className="text-[10px] font-mono text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1 cursor-pointer font-bold"
-                        title="Reset Hue"
-                      >
-                        <RotateCcw className="h-3 w-3" /> Reset
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Hue Slider with Full Spectrum Gradient Track */}
-                <div className="space-y-1.5">
-                  <div className="relative flex items-center">
-                    <input
-                      type="range"
-                      min="0"
-                      max="360"
-                      value={hueRotate}
-                      onChange={(e) => setHueRotate(Number(e.target.value))}
-                      className="w-full h-3 rounded-lg appearance-none cursor-pointer shadow-inner"
-                      style={{
-                        background: 'linear-gradient(to right, #ef4444 0%, #f97316 17%, #eab308 33%, #22c55e 50%, #06b6d4 67%, #6366f1 83%, #ec4899 92%, #ef4444 100%)'
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Quick Hue Presets */}
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {HUE_PRESETS.map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      onClick={() => setHueRotate(preset.value)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
-                        hueRotate === preset.value
-                          ? 'bg-[var(--bg-surface-raised)] border-[var(--accent-primary)] text-[var(--text-primary)] shadow-xs'
-                          : 'bg-[var(--bg-surface-inset)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                      }`}
-                    >
-                      <span
-                        className="h-2.5 w-2.5 rounded-full shrink-0 shadow-xs"
-                        style={{ backgroundColor: preset.color }}
-                      />
-                      <span>{preset.label}</span>
-                    </button>
+            {activeCategory === 'team-poster' && (
+              <div className="pt-2 border-t border-[var(--border-subtle)] space-y-1.5">
+                <label className="text-xs font-mono font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                  Select Squad / Team
+                </label>
+                <select
+                  value={selectedTeamId}
+                  onChange={(e) => setSelectedTeamId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] cursor-pointer"
+                >
+                  {currentTournament.teams.map((team, idx) => (
+                    <option key={team.id} value={team.id}>
+                      Slot {(idx + 1).toString().padStart(2, '0')}: {team.name} ({team.tag || 'TEAM'})
+                    </option>
                   ))}
-                </div>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* 🎨 HUE SHIFT & COLOR THEME CONTROLLER */}
+          <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-flat)] space-y-3">
+            <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-2">
+              <div className="flex items-center gap-2">
+                <Palette className="h-4 w-4 text-[var(--accent-primary)]" />
+                <span className="font-bold text-xs sm:text-sm text-[var(--text-primary)] font-display">
+                  Poster Hue & Color Tint
+                </span>
               </div>
 
-              {/* Vector Poster Display Box */}
-              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-flat)] space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  {/* Standings Scope Switcher */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-[var(--text-secondary)]">Scope:</span>
-                    <div className="relative">
-                      <select
-                        id="point-table-scope-select"
-                        value={selectedScope}
-                        onChange={(e) => setSelectedScope(e.target.value === 'overall' ? 'overall' : Number(e.target.value))}
-                        className="appearance-none pl-3 pr-8 py-1.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] cursor-pointer shadow-sm font-sans"
-                      >
-                        <option value="overall">🏆 Overall Point Table</option>
-                        {sortedMatches.map((m) => {
-                          const ordinal = getOrdinalSuffix(m.matchNumber);
-                          return (
-                            <option key={m.id} value={m.matchNumber}>
-                              ⚔️ {ordinal} Match ({m.status})
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)] pointer-events-none" />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-secondary)]">
-                    <button
-                      type="button"
-                      onClick={handleCopyObsLink}
-                      className="px-2.5 py-1 rounded-lg bg-[var(--accent-primary)]/10 hover:bg-[var(--accent-primary)]/20 border border-[var(--accent-primary)]/30 text-[var(--accent-primary)] font-bold flex items-center gap-1 cursor-pointer transition-all shadow-xs"
-                      title="Copy live browser source URL for OBS Studio"
-                    >
-                      <Tv className="h-3.5 w-3.5 text-[var(--accent-primary)]" />
-                      <span>Copy OBS Link</span>
-                    </button>
-                    <span>•</span>
-                    <button
-                      type="button"
-                      onClick={() => setIsFullScreenOpen(true)}
-                      className="px-2 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] text-[var(--text-primary)] font-bold flex items-center gap-1 cursor-pointer transition-all shadow-xs"
-                      title="Open full screen preview"
-                    >
-                      <Maximize2 className="h-3.5 w-3.5 text-[var(--accent-primary)]" />
-                      <span>Full Screen</span>
-                    </button>
-                    <span>•</span>
-                    <span className="text-[var(--accent-primary)] font-bold uppercase">
-                      {isPortrait ? '1080 × 1350' : '1920 × 1080'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Vector Canvas Preview */}
-                <div className="flex justify-center">
-                  <div className={`relative w-full ${isPortrait ? 'max-w-md aspect-[4/5]' : 'max-w-2xl aspect-video'} rounded-2xl overflow-hidden shadow-2xl bg-black border border-[var(--border-subtle)] transition-all`}>
-                    <DynamicCustomTemplate
-                      template={currentTemplate}
-                      data={renderData}
-                      svgRef={svgRef}
-                      hueRotate={hueRotate}
-                    />
-                  </div>
-                </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 px-2 py-0.5 rounded-md border border-[var(--accent-primary)]/20">
+                  {hueRotate}° Shift
+                </span>
+                {hueRotate !== 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setHueRotate(0)}
+                    className="text-[10px] font-mono text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1 cursor-pointer font-bold"
+                    title="Reset Hue"
+                  >
+                    <RotateCcw className="h-3 w-3" /> Reset
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* RIGHT COLUMN: TEMPLATES SELECTION PANEL */}
-            <div className="lg:col-span-5 xl:col-span-5 space-y-3">
-              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-flat)] space-y-3.5">
-                {/* Header & Format Filter Pills */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-[var(--border-subtle)]">
-                  <div>
-                    <h3 className="text-sm font-bold text-[var(--text-primary)] font-display flex items-center gap-1.5">
-                      <LayoutGrid className="h-4 w-4 text-[var(--accent-primary)]" />
-                      Templates
-                    </h3>
-                    <p className="text-[11px] text-[var(--text-secondary)]">
-                      Click any style to apply
-                    </p>
-                  </div>
-
-                  {/* Filter Pills */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setFormatFilter('all')}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                        formatFilter === 'all'
-                          ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] shadow-xs'
-                          : 'bg-[var(--bg-surface-inset)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
-                      }`}
-                    >
-                      All ({templates.filter((t) => t.isPublished).length})
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setFormatFilter('portrait')}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                        formatFilter === 'portrait'
-                          ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] shadow-xs'
-                          : 'bg-[var(--bg-surface-inset)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
-                      }`}
-                    >
-                      <Smartphone className="h-3 w-3" />
-                      <span>4:5</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setFormatFilter('landscape')}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                        formatFilter === 'landscape'
-                          ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] shadow-xs'
-                          : 'bg-[var(--bg-surface-inset)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
-                      }`}
-                    >
-                      <Monitor className="h-3 w-3" />
-                      <span>16:9</span>
-                    </button>
-
-                    {isAdmin && (
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('template-studio')}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-[var(--accent-primary)]/15 border border-[var(--accent-primary)]/30 text-[var(--accent-primary)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] transition-all cursor-pointer shadow-xs"
-                        title="Add or Edit Templates in Admin Studio"
-                      >
-                        <Plus className="h-3 w-3" />
-                        <span>Add</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* COMPACT TEMPLATE THEME CARDS */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2.5 max-h-[620px] overflow-y-auto pr-1 custom-scrollbar">
-                  {publishedTemplates.map((t) => {
-                    const isSelected = activeTemplateId === t.id;
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setActiveTemplateId(t.id)}
-                        className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1.5 group ${
-                          isSelected
-                            ? 'bg-[var(--bg-surface-raised)] border-[var(--accent-primary)] ring-2 ring-[var(--accent-primary)]/30 text-[var(--text-primary)] shadow-sm'
-                            : 'bg-[var(--bg-surface-inset)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-primary)]/50'
-                        }`}
-                      >
-                        <div className="space-y-1.5 w-full">
-                          <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden bg-black/40 border border-[var(--border-subtle)]">
-                            <img
-                              src={t.imageUrl}
-                              alt={t.name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              style={{
-                                filter: hueRotate ? `hue-rotate(${hueRotate}deg)` : undefined
-                              }}
-                            />
-                            <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[8px] font-mono font-bold text-white uppercase backdrop-blur-xs">
-                              {t.aspectRatio}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between gap-1">
-                            <div className="font-bold text-xs text-[var(--text-primary)] font-display truncate">
-                              {t.name}
-                            </div>
-                            {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-[var(--accent-primary)] shrink-0" />}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-1 border-t border-[var(--border-subtle)] text-[8px] font-mono text-[var(--accent-primary)] font-bold w-full">
-                          <span>{t.aspectRatio === '4:5' ? 'POSTER' : '16:9'}</span>
-                          <span className="truncate max-w-[65px]">{t.alignment.fontFamily}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+            {/* Hue Slider with Full Spectrum Gradient Track */}
+            <div className="space-y-1.5">
+              <div className="relative flex items-center">
+                <input
+                  type="range"
+                  min="0"
+                  max="360"
+                  value={hueRotate}
+                  onChange={(e) => setHueRotate(Number(e.target.value))}
+                  className="w-full h-3 rounded-lg appearance-none cursor-pointer shadow-inner"
+                  style={{
+                    background: 'linear-gradient(to right, #ef4444 0%, #f97316 17%, #eab308 33%, #22c55e 50%, #06b6d4 67%, #6366f1 83%, #ec4899 92%, #ef4444 100%)'
+                  }}
+                />
               </div>
+            </div>
+
+            {/* Quick Hue Presets */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {HUE_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => setHueRotate(preset.value)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
+                    hueRotate === preset.value
+                      ? 'bg-[var(--bg-surface-raised)] border-[var(--accent-primary)] text-[var(--text-primary)] shadow-xs'
+                      : 'bg-[var(--bg-surface-inset)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  <span
+                    className="h-2.5 w-2.5 rounded-full shrink-0 shadow-xs"
+                    style={{ backgroundColor: preset.color }}
+                  />
+                  <span>{preset.label}</span>
+                </button>
+              ))}
             </div>
           </div>
-        </>
-      ) : (
-        /* PRO GRAPHICS WORKSPACE FOR WARHEADS, FRAGGERS, TEAM POSTER, SLOTS, CERTIFICATE */
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-fadeIn">
-          {/* LEFT COLUMN: LIVE POSTER PREVIEW + HUE ADJUSTER (7 cols) */}
-          <div className="lg:col-span-7 xl:col-span-7 space-y-4">
-            {/* Quick Brand Customization Bar */}
-            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-flat)] space-y-3">
-              <div className="text-xs font-mono font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-                Live Brand Headers
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input
-                  label="Tournament Title"
-                  value={customEventTitle}
-                  onChange={(e) => setCustomEventTitle(e.target.value)}
-                  placeholder="e.g. Free Fire Masters"
-                />
-                <Input
-                  label="Organizer Name"
-                  value={customOrgName}
-                  onChange={(e) => setCustomOrgName(e.target.value)}
-                  placeholder="e.g. PointX Arena"
-                />
-              </div>
 
-              {activeCategory === 'team-poster' && (
-                <div className="pt-2 border-t border-[var(--border-subtle)] space-y-1.5">
-                  <label className="text-xs font-mono font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-                    Select Squad / Team
-                  </label>
-                  <select
-                    value={selectedTeamId}
-                    onChange={(e) => setSelectedTeamId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] cursor-pointer"
-                  >
-                    {currentTournament.teams.map((team, idx) => (
-                      <option key={team.id} value={team.id}>
-                        Slot {(idx + 1).toString().padStart(2, '0')}: {team.name} ({team.tag || 'TEAM'})
-                      </option>
-                    ))}
-                  </select>
+          {/* Vector Poster Display Box */}
+          <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-flat)] space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              {/* Scope Switcher for Standings */}
+              {activeCategory === 'standings' ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-[var(--text-secondary)]">Scope:</span>
+                  <div className="relative">
+                    <select
+                      id="point-table-scope-select"
+                      value={selectedScope}
+                      onChange={(e) => setSelectedScope(e.target.value === 'overall' ? 'overall' : Number(e.target.value))}
+                      className="appearance-none pl-3 pr-8 py-1.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] cursor-pointer shadow-sm font-sans"
+                    >
+                      <option value="overall">🏆 Overall Point Table</option>
+                      {sortedMatches.map((m) => {
+                        const ordinal = getOrdinalSuffix(m.matchNumber);
+                        return (
+                          <option key={m.id} value={m.matchNumber}>
+                            ⚔️ {ordinal} Match ({m.status})
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)] pointer-events-none" />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                    {GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label}
+                  </span>
                 </div>
               )}
 
-              {/* Quick Hue Presets */}
-              <div className="space-y-1.5 pt-2 border-t border-[var(--border-subtle)]">
-                <div className="text-[11px] font-mono font-bold text-[var(--text-secondary)]">
-                  Color Accent & Hue
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {HUE_PRESETS.map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      onClick={() => setHueRotate(preset.value)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
-                        hueRotate === preset.value
-                          ? 'bg-[var(--bg-surface-raised)] border-[var(--accent-primary)] text-[var(--text-primary)] shadow-xs'
-                          : 'bg-[var(--bg-surface-inset)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                      }`}
-                    >
-                      <span
-                        className="h-2.5 w-2.5 rounded-full shrink-0 shadow-xs"
-                        style={{ backgroundColor: preset.color }}
-                      />
-                      <span>{preset.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Vector Poster Display Box */}
-            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-flat)] space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
-                <span className="text-xs font-mono font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-                  {GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label} Canvas
-                </span>
-                <span className="text-xs font-mono text-[var(--accent-primary)] font-bold">
-                  {baseExportWidth} × {baseExportHeight} Vector
-                </span>
-              </div>
-
-              <div
-                className="relative overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[#0B0D14] flex items-center justify-center p-2"
-                style={{
-                  aspectRatio: isPortrait ? '4 / 5' : '16 / 9',
-                  maxHeight: '650px'
-                }}
-              >
-                <GraphicCategoryCanvas
-                  category={activeCategory}
-                  tournament={currentTournament}
-                  tournamentTitle={customEventTitle}
-                  organizerName={customOrgName}
-                  tournamentLogo={currentTournament.logoUrl}
-                  organizerLogo={currentTournament.organizerLogoUrl}
-                  selectedTeamId={selectedTeamId}
-                  hueRotate={hueRotate}
-                  svgRef={svgRef}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* RIGHT COLUMN: CATEGORY CONTROLS & STATS (5 cols) */}
-          <div className="lg:col-span-5 xl:col-span-5 space-y-4">
-            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-[var(--shadow-flat)] space-y-4">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-[var(--accent-primary)]" />
-                <h3 className="font-bold text-base text-[var(--text-primary)] font-display">
-                  {GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label} Pro Suite
-                </h3>
-              </div>
-
-              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                Generate broadcast-ready, high-resolution vector assets with dynamic tournament data. Directly streamable to OBS Studio or exportable in 4K UHD.
-              </p>
-
-              {/* Action Buttons Grid in Sidebar Card */}
-              <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
-                <Button
-                  variant="primary"
-                  size="md"
-                  className="w-full justify-center font-bold"
-                  isLoading={isExporting}
-                  onClick={() => handleExport('4k')}
-                  leftIcon={<Download className="h-4 w-4" />}
-                >
-                  {isPortrait ? 'Export Poster 4K' : 'Export 4K UHD'}
-                </Button>
-
-                <Button
-                  variant="secondary"
-                  size="md"
-                  className="w-full justify-center"
-                  isLoading={isExporting}
-                  onClick={() => handleExport('1080p')}
-                  leftIcon={<Download className="h-4 w-4" />}
-                >
-                  {isPortrait ? 'Export Poster HD (1080p)' : 'Export 1080p FHD'}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="md"
-                  className="w-full justify-center"
+              <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-secondary)]">
+                <button
+                  type="button"
                   onClick={handleCopyObsLink}
-                  leftIcon={<Tv className="h-4 w-4 text-[var(--accent-primary)]" />}
+                  className="px-2.5 py-1 rounded-lg bg-[var(--accent-primary)]/10 hover:bg-[var(--accent-primary)]/20 border border-[var(--accent-primary)]/30 text-[var(--accent-primary)] font-bold flex items-center gap-1 cursor-pointer transition-all shadow-xs"
+                  title="Copy live browser source URL for OBS Studio"
                 >
-                  Copy OBS Browser Source URL
-                </Button>
+                  <Tv className="h-3.5 w-3.5 text-[var(--accent-primary)]" />
+                  <span>Copy OBS Link</span>
+                </button>
+                <span>•</span>
+                <button
+                  type="button"
+                  onClick={() => setIsFullScreenOpen(true)}
+                  className="px-2 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] text-[var(--text-primary)] font-bold flex items-center gap-1 cursor-pointer transition-all shadow-xs"
+                  title="Open full screen preview"
+                >
+                  <Maximize2 className="h-3.5 w-3.5 text-[var(--accent-primary)]" />
+                  <span>Full Screen</span>
+                </button>
+                <span>•</span>
+                <span className="text-[var(--accent-primary)] font-bold uppercase">
+                  {isPortrait ? '1080 × 1350' : '1920 × 1080'}
+                </span>
+              </div>
+            </div>
 
-                <Button
-                  variant="booyah"
-                  size="md"
-                  className="w-full justify-center font-bold"
-                  isLoading={isExporting}
-                  onClick={handleExportAllZip}
-                  leftIcon={<Package className="h-4 w-4" />}
-                >
-                  Download ZIP Pack (HD + 4K)
-                </Button>
+            {/* Vector Canvas Preview */}
+            <div className="flex justify-center">
+              <div className={`relative w-full ${isPortrait ? 'max-w-md aspect-[4/5]' : 'max-w-2xl aspect-video'} rounded-2xl overflow-hidden shadow-2xl bg-black border border-[var(--border-subtle)] transition-all flex items-center justify-center`}>
+                {activeCategory === 'standings' ? (
+                  <DynamicCustomTemplate
+                    template={currentCategoryTemplate}
+                    data={renderData}
+                    svgRef={svgRef}
+                    hueRotate={hueRotate}
+                  />
+                ) : (
+                  <GraphicCategoryCanvas
+                    category={activeCategory}
+                    tournament={currentTournament}
+                    tournamentTitle={customEventTitle}
+                    organizerName={customOrgName}
+                    tournamentLogo={currentTournament.logoUrl}
+                    organizerLogo={currentTournament.organizerLogoUrl}
+                    selectedTeamId={selectedTeamId}
+                    hueRotate={hueRotate}
+                    svgRef={svgRef}
+                  />
+                )}
               </div>
             </div>
           </div>
         </div>
-      )}
+
+        {/* RIGHT COLUMN: TEMPLATES SELECTION PANEL */}
+        <div className="lg:col-span-5 xl:col-span-5 space-y-3">
+          <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-flat)] space-y-3.5">
+            {/* Header & Format Filter Pills */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-[var(--border-subtle)]">
+              <div>
+                <h3 className="text-sm font-bold text-[var(--text-primary)] font-display flex items-center gap-1.5">
+                  <LayoutGrid className="h-4 w-4 text-[var(--accent-primary)]" />
+                  Templates
+                </h3>
+                <p className="text-[11px] text-[var(--text-secondary)]">
+                  Click any style to apply
+                </p>
+              </div>
+
+              {/* Filter Pills */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setFormatFilter('all')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    formatFilter === 'all'
+                      ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] shadow-xs'
+                      : 'bg-[var(--bg-surface-inset)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
+                  }`}
+                >
+                  All ({categoryTemplates.filter((t) => t.isPublished).length})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFormatFilter('portrait')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    formatFilter === 'portrait'
+                      ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] shadow-xs'
+                      : 'bg-[var(--bg-surface-inset)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
+                  }`}
+                >
+                  <Smartphone className="h-3 w-3" />
+                  <span>4:5</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFormatFilter('landscape')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    formatFilter === 'landscape'
+                      ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] shadow-xs'
+                      : 'bg-[var(--bg-surface-inset)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
+                  }`}
+                >
+                  <Monitor className="h-3 w-3" />
+                  <span>16:9</span>
+                </button>
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      useAdminStore.getState().setActiveAdminTab('templates');
+                      setActiveTab('admin-dashboard' as any);
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-[var(--accent-primary)]/15 border border-[var(--accent-primary)]/30 text-[var(--accent-primary)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] transition-all cursor-pointer shadow-xs"
+                    title="Add or Edit Templates in Admin Studio"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span>Add</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* COMPACT TEMPLATE THEME CARDS */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2.5 max-h-[620px] overflow-y-auto pr-1 custom-scrollbar">
+              {publishedTemplates.map((t) => {
+                const isSelected = activeTemplateId === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setActiveTemplateId(t.id)}
+                    className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1.5 group ${
+                      isSelected
+                        ? 'bg-[var(--bg-surface-raised)] border-[var(--accent-primary)] ring-2 ring-[var(--accent-primary)]/30 text-[var(--text-primary)] shadow-sm'
+                        : 'bg-[var(--bg-surface-inset)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-primary)]/50'
+                    }`}
+                  >
+                    <div className="space-y-1.5 w-full">
+                      <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden bg-black/40 border border-[var(--border-subtle)]">
+                        <img
+                          src={t.imageUrl}
+                          alt={t.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          style={{
+                            filter: hueRotate ? `hue-rotate(${hueRotate}deg)` : undefined
+                          }}
+                        />
+                        <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[8px] font-mono font-bold text-white uppercase backdrop-blur-xs">
+                          {t.aspectRatio}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="font-bold text-xs text-[var(--text-primary)] font-display truncate">
+                          {t.name}
+                        </div>
+                        {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-[var(--accent-primary)] shrink-0" />}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-[var(--border-subtle)] text-[8px] font-mono text-[var(--accent-primary)] font-bold w-full">
+                      <span>{t.aspectRatio === '4:5' ? 'POSTER' : '16:9'}</span>
+                      <span className="truncate max-w-[65px]">{t.alignment.fontFamily}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Admin Precision Studio Shortcut Button */}
+            {isAdmin && (
+              <div className="pt-2 border-t border-[var(--border-subtle)]">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-center font-bold text-xs"
+                  onClick={() => {
+                    useAdminStore.getState().setActiveAdminTab('templates');
+                    setActiveTab('admin-dashboard' as any);
+                  }}
+                  leftIcon={<Sliders className="h-3.5 w-3.5 text-[var(--accent-primary)]" />}
+                >
+                  Admin Template Studio
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* ========================================================================= */}
       {/* FULL SCREEN TEMPLATE PREVIEW MODAL (WITH ADMIN-ONLY EDITING CONTROLS)     */}

@@ -180,7 +180,7 @@ export const MyAccountView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 font-sans">
+    <div className="w-full space-y-6 font-sans">
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--border-subtle)]">
         <div className="flex items-start sm:items-center gap-3">

@@ -72,7 +72,7 @@ export const MyOrganizationView: React.FC<MyOrganizationViewProps> = ({ onBackTo
   };
 
   return (
-    <div className="space-y-6 font-sans max-w-4xl mx-auto">
+    <div className="w-full space-y-6 font-sans">
       {/* Top Header Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--border-subtle)]">
         <div className="flex items-start sm:items-center gap-3">

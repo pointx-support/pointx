@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { CustomGraphicsTemplate, TemplateAlignmentConfig } from '../types/customTemplate';
+import type { CustomGraphicsTemplate, TemplateAlignmentConfig, GraphicTemplateCategory } from '../types/customTemplate';
 
 export const DEFAULT_LEGIT_ALIGNMENT: TemplateAlignmentConfig = {
   aspectRatio: '16:9',
@@ -537,11 +537,12 @@ export const DEFAULT_ROYAL_PURPLE_ALIGNMENT: TemplateAlignmentConfig = {
 };
 
 const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
-  // 16:9 Landscape Broadcast Templates
+  // 1. Point Tables (Standings)
   {
     id: 'legit-pro',
     name: 'Legit Showdown Pro (16:9)',
     description: 'Official Legit Showdown cyberpunk theme with neon cyan gradients (16:9 Full HD & 4K).',
+    category: 'standings',
     imageUrl: '/templates/legit_standings.jpg',
     aspectRatio: '16:9',
     alignment: DEFAULT_LEGIT_ALIGNMENT,
@@ -554,6 +555,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     id: 'strikz-scrims',
     name: 'PointX Scrims (Orange Gold 16:9)',
     description: 'Official PointX Scrims gold & orange theme with white team plates (16:9 Full HD & 4K).',
+    category: 'standings',
     imageUrl: '/templates/strikz_standings.jpg',
     aspectRatio: '16:9',
     alignment: DEFAULT_POINTX_ALIGNMENT,
@@ -562,12 +564,11 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     createdAt: '2026-08-18T10:00:00Z',
     updatedAt: '2026-08-18T10:00:00Z'
   },
-
-  // 4:5 Portrait Social Media Posters
   {
     id: 'emerald-crystal-poster',
     name: 'Emerald Crystal Dark Scrims (4:5 Poster)',
     description: 'Emerald green crystal battle royale layout with top 1 champion spotlight and 11 team standings.',
+    category: 'standings',
     imageUrl: '/templates/emerald_crystal_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_EMERALD_CRYSTAL_ALIGNMENT,
@@ -580,6 +581,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     id: 'royal-purple-poster',
     name: 'Royal Cyber Purple & Gold (4:5 Poster)',
     description: 'Deep royal purple esports poster with bold gold event typography and clean 12-row standings.',
+    category: 'standings',
     imageUrl: '/templates/royal_purple_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_ROYAL_PURPLE_ALIGNMENT,
@@ -592,6 +594,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     id: 'neon-purple-poster',
     name: 'Neon Cyber Purple Scrims (4:5 Poster)',
     description: 'Free Fire purple cyber glow poster format with top 3 podium & 12 squad standings.',
+    category: 'standings',
     imageUrl: '/templates/neon_purple_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_NEON_PURPLE_ALIGNMENT,
@@ -604,6 +607,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     id: 'dark-mint-poster',
     name: 'Dark Mint Tactical Scrims (4:5 Poster)',
     description: 'Dark obsidian & emerald tactical military scrims poster with top 3 champion cards.',
+    category: 'standings',
     imageUrl: '/templates/dark_mint_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_DARK_MINT_ALIGNMENT,
@@ -616,6 +620,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     id: 'glacier-frost-poster',
     name: 'Glacier Frost Scrims (4:5 Poster)',
     description: 'Ice blue winter battle royale poster layout with clean single-column standings.',
+    category: 'standings',
     imageUrl: '/templates/glacier_frost_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_GLACIER_FROST_ALIGNMENT,
@@ -628,6 +633,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     id: 'red-samurai-poster',
     name: 'Red Samurai Dual-Column (4:5 Poster)',
     description: 'Free Fire MAX crimson samurai theme with yellow rank tags and dual 6-row columns.',
+    category: 'standings',
     imageUrl: '/templates/red_samurai_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_RED_SAMURAI_ALIGNMENT,
@@ -640,6 +646,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     id: 'red-thunder-poster',
     name: 'Red Thunder Scrims (4:5 Poster)',
     description: 'Free Fire MAX thunder theme with central torn paper strips for all 12 teams.',
+    category: 'standings',
     imageUrl: '/templates/red_thunder_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_RED_THUNDER_ALIGNMENT,
@@ -647,6 +654,146 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     isPublished: true,
     createdAt: '2026-08-19T13:20:00Z',
     updatedAt: '2026-08-19T13:20:00Z'
+  },
+
+  // 2. Warheads / Kill Leader
+  {
+    id: 'warheads-cyber-predator',
+    name: 'Warheads Cyber Predator (4:5 Poster)',
+    description: 'Neon orange & crimson kill leader highlight with dynamic MVP portraits.',
+    category: 'warheads',
+    imageUrl: '/templates/emerald_crystal_poster.jpg',
+    aspectRatio: '4:5',
+    alignment: DEFAULT_EMERALD_CRYSTAL_ALIGNMENT,
+    isBuiltIn: true,
+    isPublished: true,
+    createdAt: '2026-08-20T10:00:00Z',
+    updatedAt: '2026-08-20T10:00:00Z'
+  },
+  {
+    id: 'warheads-broadcast-leader',
+    name: 'Warheads Stream Overlord (16:9 Broadcast)',
+    description: 'Widescreen broadcast kill leader banner with match telemetry and frag counts.',
+    category: 'warheads',
+    imageUrl: '/templates/legit_standings.jpg',
+    aspectRatio: '16:9',
+    alignment: DEFAULT_LEGIT_ALIGNMENT,
+    isBuiltIn: true,
+    isPublished: true,
+    createdAt: '2026-08-20T10:00:00Z',
+    updatedAt: '2026-08-20T10:00:00Z'
+  },
+
+  // 3. Top Fraggers / MVP
+  {
+    id: 'fraggers-gold-mvp',
+    name: 'Top Fraggers / MVP Elite (4:5 Poster)',
+    description: 'Gold champion spotlight featuring top 5 kill fraggers with K/D ratio.',
+    category: 'fraggers',
+    imageUrl: '/templates/royal_purple_poster.jpg',
+    aspectRatio: '4:5',
+    alignment: DEFAULT_ROYAL_PURPLE_ALIGNMENT,
+    isBuiltIn: true,
+    isPublished: true,
+    createdAt: '2026-08-20T10:00:00Z',
+    updatedAt: '2026-08-20T10:00:00Z'
+  },
+  {
+    id: 'fraggers-champion-showcase',
+    name: 'MVP Stage Champion (16:9 Broadcast)',
+    description: 'Broadcast stage MVP banner with high impact damage and survival time telemetry.',
+    category: 'fraggers',
+    imageUrl: '/templates/strikz_standings.jpg',
+    aspectRatio: '16:9',
+    alignment: DEFAULT_POINTX_ALIGNMENT,
+    isBuiltIn: true,
+    isPublished: true,
+    createdAt: '2026-08-20T10:00:00Z',
+    updatedAt: '2026-08-20T10:00:00Z'
+  },
+
+  // 4. Team Poster
+  {
+    id: 'team-poster-battle',
+    name: 'Team Battle Lineup (4:5 Poster)',
+    description: 'Full team 4-man roster poster with official team crest and jersey badges.',
+    category: 'team-poster',
+    imageUrl: '/templates/red_samurai_poster.jpg',
+    aspectRatio: '4:5',
+    alignment: DEFAULT_RED_SAMURAI_ALIGNMENT,
+    isBuiltIn: true,
+    isPublished: true,
+    createdAt: '2026-08-20T10:00:00Z',
+    updatedAt: '2026-08-20T10:00:00Z'
+  },
+  {
+    id: 'team-roster-banner',
+    name: 'Squad Roster Banner (16:9 Broadcast)',
+    description: 'Widescreen squad roster card with captain badge and player IDs.',
+    category: 'team-poster',
+    imageUrl: '/templates/strikz_standings.jpg',
+    aspectRatio: '16:9',
+    alignment: DEFAULT_POINTX_ALIGNMENT,
+    isBuiltIn: true,
+    isPublished: true,
+    createdAt: '2026-08-20T10:00:00Z',
+    updatedAt: '2026-08-20T10:00:00Z'
+  },
+
+  // 5. Slots List
+  {
+    id: 'slots-list-schedule',
+    name: 'Official 12-Slot Schedule (4:5 Poster)',
+    description: 'Complete 12-team slot allocation matrix with group tags and seed numbers.',
+    category: 'slots-list',
+    imageUrl: '/templates/glacier_frost_poster.jpg',
+    aspectRatio: '4:5',
+    alignment: DEFAULT_GLACIER_FROST_ALIGNMENT,
+    isBuiltIn: true,
+    isPublished: true,
+    createdAt: '2026-08-20T10:00:00Z',
+    updatedAt: '2026-08-20T10:00:00Z'
+  },
+  {
+    id: 'slots-broadcast-grid',
+    name: 'Broadcast Slots Grid (16:9 Broadcast)',
+    description: 'Clean widescreen broadcast table displaying 12 slot teams and lobby passwords.',
+    category: 'slots-list',
+    imageUrl: '/templates/legit_standings.jpg',
+    aspectRatio: '16:9',
+    alignment: DEFAULT_LEGIT_ALIGNMENT,
+    isBuiltIn: true,
+    isPublished: true,
+    createdAt: '2026-08-20T10:00:00Z',
+    updatedAt: '2026-08-20T10:00:00Z'
+  },
+
+  // 6. Victory Certificate
+  {
+    id: 'certificate-gold-booyah',
+    name: 'Champion Victory Certificate (16:9 Landscape)',
+    description: 'Official tournament champion diploma with gold seal, signatures, and Booyah insignia.',
+    category: 'certificate',
+    imageUrl: '/templates/legit_standings.jpg',
+    aspectRatio: '16:9',
+    alignment: DEFAULT_LEGIT_ALIGNMENT,
+    isBuiltIn: true,
+    isPublished: true,
+    createdAt: '2026-08-20T10:00:00Z',
+    updatedAt: '2026-08-20T10:00:00Z'
+  },
+  {
+    id: 'certificate-master-award',
+    name: 'Booyah Master Certificate (4:5 Portrait)',
+    description: 'Vertical presentation certificate with high-res gold borders and custom MVP title.',
+    category: 'certificate',
+    imageUrl: '/templates/royal_purple_poster.jpg',
+    aspectRatio: '4:5',
+    alignment: DEFAULT_ROYAL_PURPLE_ALIGNMENT,
+    isBuiltIn: true,
+    isPublished: true,
+    createdAt: '2026-08-20T10:00:00Z',
+    updatedAt: '2026-08-20T10:00:00Z'
   }
 ];
 
@@ -656,9 +803,9 @@ export interface TemplateStoreState {
 
   // Actions
   setActiveTemplateId: (id: string) => void;
-  createCustomTemplate: (name: string, imageUrl: string, baseAlignment?: TemplateAlignmentConfig) => string;
+  createCustomTemplate: (name: string, imageUrl: string, baseAlignment?: TemplateAlignmentConfig, category?: GraphicTemplateCategory) => string;
   updateTemplateAlignment: (id: string, alignment: Partial<TemplateAlignmentConfig>) => void;
-  updateTemplateMetadata: (id: string, metadata: { name?: string; description?: string; imageUrl?: string; aspectRatio?: '16:9' | '4:5' | '1:1' | '9:16' }) => void;
+  updateTemplateMetadata: (id: string, metadata: { name?: string; description?: string; imageUrl?: string; aspectRatio?: '16:9' | '4:5' | '1:1' | '9:16'; category?: GraphicTemplateCategory }) => void;
   publishTemplate: (id: string) => void;
   unpublishTemplate: (id: string) => void;
   deleteTemplate: (id: string) => void;
@@ -677,12 +824,13 @@ export const useTemplateStore = create<TemplateStoreState>()(
 
       setActiveTemplateId: (id: string) => set({ activeTemplateId: id }),
 
-      createCustomTemplate: (name: string, imageUrl: string, baseAlignment) => {
+      createCustomTemplate: (name: string, imageUrl: string, baseAlignment, category = 'standings') => {
         const id = `custom-tmpl-${Date.now()}`;
         const newTemplate: CustomGraphicsTemplate = {
           id,
           name: name.trim() || 'Custom Tournament Template',
           description: 'Custom tournament background calibrated by Admin.',
+          category,
           imageUrl,
           aspectRatio: baseAlignment?.aspectRatio || '16:9',
           alignment: baseAlignment || { ...DEFAULT_LEGIT_ALIGNMENT },
@@ -820,7 +968,7 @@ export const useTemplateStore = create<TemplateStoreState>()(
       }
     }),
     {
-      name: 'pointx_custom_templates_v4'
+      name: 'pointx_custom_templates_v5'
     }
   )
 );
