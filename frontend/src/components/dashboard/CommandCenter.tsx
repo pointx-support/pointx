@@ -322,7 +322,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
             <div className="absolute inset-0 bg-[var(--accent-primary)]/15 rounded-3xl blur-2xl group-hover:bg-[var(--accent-primary)]/25 transition-all duration-500" />
             <div className="relative z-10">
               <PointXLogo
-                className="w-full h-full object-contain select-none drop-shadow-[0_6px_24px_rgba(0,0,0,0.35)] dark:drop-shadow-[0_6px_24px_rgba(0,0,0,0.65)]"
+                className="w-full h-full object-contain select-none drop-shadow-none dark:drop-shadow-[0_6px_24px_rgba(0,0,0,0.65)]"
                 withShine={true}
               />
             </div>
