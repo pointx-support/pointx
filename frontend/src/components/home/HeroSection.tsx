@@ -75,7 +75,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       {/* ========================================================================= */}
       {/* 1. CINEMATIC ESPORTS ARENA VOLUMETRIC STAGE LIGHTING (PRO BROADCAST AURA)  */}
       {/* ========================================================================= */}
-      <section className="relative w-full min-h-[92vh] lg:min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-12 pt-28 pb-16 overflow-hidden">
+      <section className="relative w-full min-h-[92vh] lg:min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-12 pt-32 sm:pt-36 pb-16 overflow-hidden">
         
         {/* Dynamic Volumetric Arena Lighting Rig (Zero Childish Particles, 100% Pro Arena Drama) */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
