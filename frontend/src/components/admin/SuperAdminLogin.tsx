@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, User, ArrowRight, AlertCircle, Key, Cpu, Sun, Moon } from 'lucide-react';
+import { ShieldCheck, Lock, User, ArrowRight, AlertCircle, Key, Cpu } from 'lucide-react';
 import { PointXLogo } from '../ui/PointXLogo';
+import { AnimatedThemeToggle } from '../animation';
 import { adminApi, setStoredToken } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 
@@ -108,14 +109,11 @@ export const SuperAdminLogin: React.FC<SuperAdminLoginProps> = ({ onLoginSuccess
         </a>
 
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="p-2.5 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer shadow-xs"
-            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-neutral-700" />}
-          </button>
+          <AnimatedThemeToggle
+            isDark={theme === 'dark'}
+            onToggle={toggleTheme}
+            size="sm"
+          />
 
           <div className="hidden sm:inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[var(--bg-surface-raised)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-xs font-mono shadow-xs">
             <Cpu className="h-3.5 w-3.5 text-emerald-500 animate-pulse" />

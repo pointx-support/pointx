@@ -13,6 +13,7 @@ import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import { haptics } from '../../lib/haptics';
+import { AnimatedThemeToggle } from '../animation';
 import {
   Smartphone,
   RotateCcw,
@@ -27,8 +28,6 @@ import {
   EyeOff,
   CheckCircle2,
   FileCheck2,
-  Sun,
-  Moon,
   AlertTriangle,
   HelpCircle,
   Lock,
@@ -1010,13 +1009,11 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
           {/* Master Control Toolbar */}
           <div className="flex flex-wrap items-center gap-2">
             {/* Light / Dark Mode Toggle */}
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-xl bg-[var(--bg-surface-raised)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer shadow-sm"
-              title="Toggle Theme"
-            >
-              {isDarkTheme ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-slate-700" />}
-            </button>
+            <AnimatedThemeToggle
+              isDark={isDarkTheme}
+              onToggle={toggleTheme}
+              size="sm"
+            />
 
             {/* Show / Hide Live Overlay on Stream */}
             <Button

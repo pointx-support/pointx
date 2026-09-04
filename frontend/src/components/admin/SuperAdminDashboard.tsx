@@ -17,8 +17,6 @@ import {
   ChevronRight,
   AlertTriangle,
   RefreshCw,
-  Sun,
-  Moon,
   ArrowUpRight,
   ShieldCheck,
   Activity,
@@ -28,6 +26,7 @@ import {
   User,
 } from 'lucide-react';
 import { PointXLogo } from '../ui/PointXLogo';
+import { AnimatedThemeToggle } from '../animation';
 import { useAuthStore } from '../../store/authStore';
 import { useAdminStore } from '../../store/adminStore';
 import { adminApi } from '../../services/api';
@@ -347,13 +346,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
               {/* Mobile Actions */}
               <div className="flex lg:hidden items-center gap-2">
-                <button
-                  type="button"
-                  onClick={toggleTheme}
-                  className="p-2.5 rounded-full border border-black/[0.08] dark:border-white/[0.1] bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
-                >
-                  {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                </button>
+                <AnimatedThemeToggle
+                  isDark={theme === 'dark'}
+                  onToggle={toggleTheme}
+                  size="sm"
+                />
                 <button
                   type="button"
                   onClick={handleLogout}
@@ -429,15 +426,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               <RefreshCw className={cn('h-4 w-4', isOverviewLoading ? 'animate-spin' : '')} />
             </button>
 
-            {/* Theme Toggle Button */}
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="p-2.5 rounded-full border border-black/[0.08] dark:border-white/[0.1] bg-neutral-50 hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer shadow-xs"
-              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
-            >
-              {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-neutral-700" />}
-            </button>
+            {/* Theme Toggle Switch */}
+            <AnimatedThemeToggle
+              isDark={theme === 'dark'}
+              onToggle={toggleTheme}
+              size="md"
+            />
 
             {/* Admin Profile Circle */}
             <div className="flex items-center gap-2 pl-1">

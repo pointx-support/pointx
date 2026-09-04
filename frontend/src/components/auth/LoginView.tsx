@@ -4,8 +4,6 @@ import {
   Mail,
   Lock,
   User,
-  Sun,
-  Moon,
   Zap,
   Swords,
   CheckCircle2,
@@ -15,6 +13,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { PointXLogo } from '../ui/PointXLogo';
+import { AnimatedThemeToggle } from '../animation';
 import { cn } from '../../lib/utils';
 import { haptics } from '../../lib/haptics';
 import './LoginView.css';
@@ -238,15 +237,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             className={cn('flex items-center shrink-0', onBackToHome ? 'cursor-pointer group' : '')}
             title={onBackToHome ? 'Return to Home' : undefined}
           >
-            <PointXLogo className="h-8 sm:h-9 w-auto max-w-[110px] object-contain select-none group-hover:scale-105 transition-transform" />
-          </div>
-          <div className="flex flex-col border-l border-[var(--border-subtle)] pl-3">
-            <span className="font-bold text-xs font-mono text-[var(--accent-primary)] uppercase tracking-wider">
-              PointX Esports
-            </span>
-            <span className="text-[10px] font-mono font-bold tracking-widest text-[var(--text-muted)] uppercase -mt-0.5">
-              Tournament Operating System
-            </span>
+            <PointXLogo className="h-8 sm:h-9 w-auto max-w-[125px] object-contain select-none group-hover:scale-105 transition-transform" />
           </div>
         </div>
 
@@ -262,25 +253,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
             </button>
           )}
 
-          {/* Theme Mode Toggle Button */}
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="glass-nav-item flex items-center gap-2 p-2.5 px-3.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs sm:text-sm font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] shadow-sm cursor-pointer"
-            title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
-          >
-            {isDark ? (
-              <>
-                <Sun className="h-4 w-4 text-[var(--accent-primary)]" />
-                <span className="hidden sm:inline">Light Mode</span>
-              </>
-            ) : (
-              <>
-                <Moon className="h-4 w-4 text-[var(--accent-primary)]" />
-                <span className="hidden sm:inline">Dark Mode</span>
-              </>
-            )}
-          </button>
+          {/* Premium Theme Mode Toggle Switch */}
+          <AnimatedThemeToggle
+            isDark={isDark}
+            onToggle={toggleTheme}
+            size="md"
+          />
         </div>
       </div>
 

@@ -35,7 +35,6 @@ import { useToast } from '../ui/Toast';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnimatedThemeToggle } from '../animation';
 import { dropdownVariants } from '../animation/motionTokens';
-import { haptics } from '../../lib/haptics';
 
 export interface NavbarProps {
   viewMode?: 'command-center' | 'workspace' | 'admin-dashboard';
@@ -511,20 +510,17 @@ export const Navbar: FC<NavbarProps> = ({
                       <div className="px-2 pb-1 text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)]">Support & Controls</div>
                       
                       {/* Theme Toggle */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          haptics.medium();
-                          toggleTheme();
-                        }}
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors text-left cursor-pointer"
-                      >
+                      <div className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)]">
                         <div className="flex items-center gap-2.5">
                           {isDark ? <Sun className="h-4 w-4 text-[var(--accent-primary)]" /> : <Moon className="h-4 w-4 text-[var(--accent-primary)]" />}
                           <span className="font-bold text-[var(--text-primary)]">Theme Mode</span>
                         </div>
-                        <span className="text-[10px] font-mono uppercase font-black px-2 py-0.5 rounded bg-white/[0.06] text-[var(--accent-primary)]">{theme}</span>
-                      </button>
+                        <AnimatedThemeToggle
+                          isDark={isDark}
+                          onToggle={toggleTheme}
+                          size="sm"
+                        />
+                      </div>
 
                       {/* Contact Us & Support */}
                       <button
