@@ -138,6 +138,17 @@ export function App() {
     }
   }, [hasInitialCheck, maintenanceMode]);
 
+  // When maintenance mode is active, synchronize URL to /maintenance for non-admins
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const path = window.location.pathname.toLowerCase();
+    const isAdmin = userRole === 'admin';
+    const isAdminRoute = path.startsWith('/admin') || path.startsWith('/super-admin');
+    if ((maintenanceMode || path === '/maintenance') && !isAdmin && !isAdminRoute && path !== '/maintenance') {
+      window.history.replaceState({}, '', '/maintenance');
+    }
+  }, [maintenanceMode, userRole]);
+
   // Preload and cache all font binary Base64 streams in the background
   useEffect(() => {
     preloadAndCacheFonts();
@@ -291,11 +302,6 @@ export function App() {
           </div>
         </ToastProvider>
       );
-    }
-
-    // Synchronize URL to /maintenance without reload/flash
-    if (typeof window !== 'undefined' && window.location.pathname !== '/maintenance') {
-      window.history.replaceState({}, '', '/maintenance');
     }
 
     return (

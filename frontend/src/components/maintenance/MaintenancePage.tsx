@@ -65,9 +65,25 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({ onAdminLoginCl
   };
 
   const handleCopyEmail = () => {
-    navigator.clipboard.writeText('support@pointx.gg');
-    setCopiedEmail(true);
-    setTimeout(() => setCopiedEmail(false), 2500);
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText('support@pointx.gg');
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = 'support@pointx.gg';
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      setCopiedEmail(true);
+      setTimeout(() => setCopiedEmail(false), 2500);
+    } catch {
+      setCopiedEmail(true);
+      setTimeout(() => setCopiedEmail(false), 2500);
+    }
   };
 
   const handleContactSubmit = (e: React.FormEvent) => {

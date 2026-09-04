@@ -135,6 +135,28 @@ export interface SilkProps {
   style?: React.CSSProperties;
 }
 
+class WebGLErrorBoundary extends React.Component<
+  { fallback?: React.ReactNode; children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: any) {
+    console.warn('[Silk WebGL fallback activated]:', error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || null;
+    }
+    return this.props.children;
+  }
+}
+
 export const SilkComponent: React.FC<SilkProps> = ({
   speed = 5,
   scale = 1,
@@ -183,13 +205,19 @@ export const SilkComponent: React.FC<SilkProps> = ({
         ...style
       }}
     >
-      <Canvas
-        dpr={[1, 1.5]}
-        frameloop="always"
-        gl={{ antialias: false, powerPreference: 'high-performance' }}
+      <WebGLErrorBoundary
+        fallback={
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 via-orange-600/5 to-transparent pointer-events-none" />
+        }
       >
-        <SilkPlane ref={meshRef} uniforms={uniforms} />
-      </Canvas>
+        <Canvas
+          dpr={[1, 1.5]}
+          frameloop="always"
+          gl={{ antialias: false, powerPreference: 'high-performance' }}
+        >
+          <SilkPlane ref={meshRef} uniforms={uniforms} />
+        </Canvas>
+      </WebGLErrorBoundary>
     </div>
   );
 };

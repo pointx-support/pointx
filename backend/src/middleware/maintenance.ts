@@ -51,20 +51,20 @@ export function resetMaintenanceCacheForTesting() {
 export async function enforceMaintenanceMode(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const path = (req.originalUrl || req.path || '').toLowerCase();
 
+  // 0. Non-API traffic (frontend HTML shell, JS bundles, CSS, logos, favicons, fonts)
+  // must NEVER be blocked by the API guard. The browser needs these assets to render the maintenance UI!
+  if (!path.startsWith('/api')) {
+    return next();
+  }
+
   // 1. Unconditionally allow vital infrastructure, status, and administrative operations
   if (
-    path.startsWith('/health') ||
     path.startsWith('/api/health') ||
     path.startsWith('/api/platform/status') ||
-    path.startsWith('/platform/status') ||
     path.startsWith('/api/admin') ||
-    path.startsWith('/admin') ||
     path.startsWith('/api/auth/login') ||
-    path.startsWith('/auth/login') ||
     path.startsWith('/api/auth/me') ||
-    path.startsWith('/auth/me') ||
-    path.startsWith('/api/auth/logout') ||
-    path.startsWith('/auth/logout')
+    path.startsWith('/api/auth/logout')
   ) {
     return next();
   }

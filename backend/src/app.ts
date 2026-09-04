@@ -109,8 +109,8 @@ export function createApp(): Application {
   // 7. Platform Status Route (public & whitelisted)
   app.use('/api/platform', platformRoutes);
 
-  // 8. Global Maintenance Mode Guard (blocks non-admin access to protected routes when active)
-  app.use(enforceMaintenanceMode);
+  // 8. Global Maintenance Mode Guard (blocks non-admin access to protected API routes when active)
+  app.use('/api', enforceMaintenanceMode);
 
   // 9. Route Mounting
   app.use('/api/auth', authRoutes);
