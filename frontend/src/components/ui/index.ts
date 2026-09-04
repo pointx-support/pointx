@@ -18,3 +18,4 @@ export * from './Skeleton';
 export * from './Sonner';
 export * from './EmptyState';
 export * from './Modal';
+export * from './Silk';

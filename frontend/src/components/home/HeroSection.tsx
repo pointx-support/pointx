@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PointXLogo } from '../ui/PointXLogo';
+import { Silk } from '../ui/Silk';
 import { FadeIn, SlideIn } from '../animation/RevealAnimations';
 import { useAuthStore } from '../../store/authStore';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -72,8 +73,21 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       {/* ========================================================================= */}
       <section className="relative w-full min-h-[92vh] lg:min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-12 pt-32 sm:pt-36 pb-16 overflow-hidden">
         
-        {/* Dynamic Volumetric Arena Lighting Rig (Zero Childish Particles, 100% Pro Arena Drama) */}
+        {/* Dynamic Volumetric Arena Lighting Rig with Silk Wave Shader Background */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
+          {/* Animated Silk Waves Shader */}
+          <div className="absolute inset-0">
+            <Silk
+              speed={5}
+              scale={1}
+              color="#ffdede"
+              noiseIntensity={1.5}
+              rotation={0}
+              lightMode={!isDark}
+              className="w-full h-full opacity-45 dark:opacity-20"
+            />
+          </div>
+
           {/* Dark Mode: Grand Finals Arena Stage Lighting */}
           <div
             className={`absolute inset-0 transition-opacity duration-300 ease-out ${

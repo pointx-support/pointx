@@ -13,6 +13,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { PointXLogo } from '../ui/PointXLogo';
+import { Silk } from '../ui/Silk';
 import { AnimatedThemeToggle } from '../animation';
 import { cn } from '../../lib/utils';
 import { haptics } from '../../lib/haptics';
@@ -228,9 +229,23 @@ export const LoginView: React.FC<LoginViewProps> = ({
   };
 
   return (
-    <div className="auth-page font-sans transition-colors duration-200">
+    <div className="auth-page font-sans transition-colors duration-200 relative overflow-hidden">
+      {/* Background Animated Silk Waves */}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
+        <Silk
+          speed={5}
+          scale={1}
+          color="#ffdede"
+          noiseIntensity={1.5}
+          rotation={0}
+          lightMode={!isDark}
+          className="w-full h-full opacity-45 dark:opacity-20"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[var(--bg-base)]/70" />
+      </div>
+
       {/* Top Header Row with Clean Brand Badge and Theme Toggle */}
-      <div className="w-full max-w-[860px] flex items-center justify-between mb-6">
+      <div className="w-full max-w-[860px] flex items-center justify-between mb-6 relative z-10">
         <div className="flex items-center gap-3">
           <div
             onClick={onBackToHome}
