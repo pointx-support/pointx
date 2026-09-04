@@ -57,7 +57,7 @@ export interface AdminStoreState {
   suspendUser: (userId: string, reason?: string) => void;
   restoreUser: (userId: string) => void;
   deleteUser: (userId: string) => void;
-  toggleMaintenanceMode: (enabled: boolean, reason?: string, returnTime?: string | null, customMessage?: string | null) => Promise<void>;
+  toggleMaintenanceMode: (enabled: boolean, reason?: string, returnTime?: string | null, customMessage?: string | null, securityCode?: string) => Promise<void>;
   updatePlatformSettings: (settings: Partial<PlatformSettings>) => void;
   fetchSettings: () => Promise<void>;
   addAnnouncement: (announcement: Omit<SystemAnnouncement, 'id' | 'createdAt'>) => void;
@@ -112,7 +112,7 @@ export const useAdminStore = create<AdminStoreState>()(
         );
       },
 
-      toggleMaintenanceMode: async (enabled, reason, returnTime, customMessage) => {
+      toggleMaintenanceMode: async (enabled, reason, returnTime, customMessage, securityCode) => {
         const current = get().platformSettings;
         const updated: PlatformSettings = {
           ...current,
@@ -121,22 +121,23 @@ export const useAdminStore = create<AdminStoreState>()(
           customMessage: customMessage !== undefined ? customMessage : current.customMessage,
           estimatedReturnTime: returnTime !== undefined ? returnTime : current.estimatedReturnTime
         };
-        set({ platformSettings: updated });
-
-        // Immediately sync with platform store for instant UI response
-        usePlatformStore.getState().setMaintenanceState(
-          enabled,
-          updated.maintenanceReason,
-          updated.estimatedReturnTime,
-          updated.customMessage
-        );
 
         try {
-          const res = await adminApi.saveSettings(updated);
+          const res = await adminApi.saveSettings({ ...updated, securityCode } as any);
           if (res.success && res.data) {
             set({ platformSettings: res.data });
+            usePlatformStore.getState().setMaintenanceState(
+              enabled,
+              res.data.maintenanceReason || updated.maintenanceReason,
+              res.data.estimatedReturnTime || updated.estimatedReturnTime,
+              (res.data as any).customMessage || updated.customMessage
+            );
+          } else if (res.error) {
+            throw new Error(res.error);
           }
-        } catch {}
+        } catch (err) {
+          throw err;
+        }
 
         get().recordAdminEvent(
           enabled ? 'Maintenance Mode Enabled' : 'Maintenance Mode Disabled',

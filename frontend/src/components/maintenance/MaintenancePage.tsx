@@ -478,16 +478,19 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({ onAdminLoginCl
 
               <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-mono text-slate-400 mb-1">Admin Email</label>
+                  <label className="block text-xs font-mono text-slate-400 mb-1">Admin Email or Username</label>
                   <input
-                    type="email"
+                    type="text"
                     value={adminEmail}
                     onChange={(e) => setAdminEmail(e.target.value)}
-                    placeholder="admin@pointx.gg"
+                    placeholder="admin or your registered admin email"
                     required
                     autoFocus
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 font-sans"
                   />
+                  <span className="text-[10px] text-slate-500 font-mono mt-1 block">
+                    Sign in using your administrator email or root username &ldquo;admin&rdquo;
+                  </span>
                 </div>
 
                 <div>

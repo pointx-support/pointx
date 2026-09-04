@@ -16,8 +16,118 @@ import {
   Eye,
   EyeOff,
   Clock,
-  ShieldAlert
+  ShieldAlert,
+  KeyRound,
+  AlertCircle
 } from 'lucide-react';
+
+export interface MaintenancePreset {
+  id: string;
+  category: string;
+  badge: string;
+  reason: string;
+  message: string;
+  returnTime: string;
+}
+
+export const MAINTENANCE_PRESETS: MaintenancePreset[] = [
+  {
+    id: 'db-upgrade',
+    category: 'Database & Storage',
+    badge: 'Database',
+    reason: 'Core Database Migration & Cluster Optimization',
+    message: 'PointX is performing scheduled database indexing and cluster scaling to enhance real-time query throughput. All tournament brackets and statistics will resume shortly.',
+    returnTime: 'Approx. 30 Minutes',
+  },
+  {
+    id: 'scoring-engine',
+    category: 'Tournament Engine',
+    badge: 'Scoring',
+    reason: 'Tournament Scoring Engine Architecture Upgrade',
+    message: 'We are rolling out version upgrades to our automated Free Fire point calculation engine. Match telemetry feeds will be back online with enhanced sub-millisecond precision.',
+    returnTime: 'Approx. 45 Minutes',
+  },
+  {
+    id: 'obs-stream',
+    category: 'Broadcasting & OBS',
+    badge: 'OBS Overlays',
+    reason: 'OBS Live Stream Overlays & Graphics Core Update',
+    message: 'Upgrading graphics rendering pipeline and dynamic scoreboard stream overlays for official tournament broadcasts. Live streaming overlays will resume shortly.',
+    returnTime: 'Approx. 20 Minutes',
+  },
+  {
+    id: 'emergency-hotfix',
+    category: 'Emergency & Stability',
+    badge: 'Emergency',
+    reason: 'Emergency Infrastructure & Server Calibration',
+    message: 'Our engineering team is conducting urgent server node calibrations and network route optimizations. Platform operations will be restored as soon as possible.',
+    returnTime: 'Approx. 15 Minutes',
+  },
+  {
+    id: 'security-hardening',
+    category: 'Security & Compliance',
+    badge: 'Security',
+    reason: 'Scheduled Security Hardening & Zero-Trust Protocol Update',
+    message: 'PointX is applying critical security patches and enterprise firewall fortifications. No tournament data is impacted during this routine update.',
+    returnTime: 'Approx. 40 Minutes',
+  },
+  {
+    id: 'season-rollover',
+    category: 'Championship Operations',
+    badge: 'Season Roll',
+    reason: 'New Championship Season & Leaderboard Rollover',
+    message: 'Transitioning leaderboards and archiving seasonal tournament brackets in preparation for the upcoming championship series. Get your squads ready!',
+    returnTime: 'Approx. 1 Hour',
+  },
+  {
+    id: 'cdn-assets',
+    category: 'Media & CDN Delivery',
+    badge: 'CDN Sync',
+    reason: 'Media Asset Delivery Network Synchronization',
+    message: 'Synchronizing 4K team logos, tournament badges, and broadcast templates across global CDN edge nodes for lightning-fast asset loading.',
+    returnTime: 'Approx. 25 Minutes',
+  },
+  {
+    id: 'websocket-sync',
+    category: 'Real-Time Sync',
+    badge: 'WebSockets',
+    reason: 'WebSocket Mesh Network & Sync Infrastructure Upgrade',
+    message: 'Upgrading real-time synchronization brokers to ensure zero-lag remote control room and multi-screen score operator synchronization.',
+    returnTime: 'Approx. 35 Minutes',
+  },
+  {
+    id: 'auth-gateway',
+    category: 'Authentication & Accounts',
+    badge: 'Auth & OTP',
+    reason: 'Authentication Gateway & Communication Service Update',
+    message: 'Conducting routine maintenance on our transactional messaging gateways. New registrations and password reset services are temporarily paused.',
+    returnTime: 'Approx. 20 Minutes',
+  },
+  {
+    id: 'datacenter-hardware',
+    category: 'Hardware & Network',
+    badge: 'Hardware',
+    reason: 'Data Center Node Hardware & Power Grid Maintenance',
+    message: 'Our cloud hosting partner is performing scheduled hardware maintenance on primary server racks. Full connectivity will resume within the hour.',
+    returnTime: 'Approx. 50 Minutes',
+  },
+  {
+    id: 'anticheat-roster',
+    category: 'Competitive Integrity',
+    badge: 'Fair Play',
+    reason: 'Anti-Tamper & Player Registry Calibration',
+    message: 'Calibrating player verification and tournament roster anti-tamper validation services to ensure fair play across all competitive brackets.',
+    returnTime: 'Approx. 30 Minutes',
+  },
+  {
+    id: 'major-v3',
+    category: 'Platform Release',
+    badge: 'Major Release',
+    reason: 'PointX Enterprise Major Feature Deployment',
+    message: 'Deploying exciting new features to the Tournament Workspace, Squads Registry, and Template Studio! We are putting the final touches on this release.',
+    returnTime: 'Approx. 1.5 Hours',
+  },
+];
 
 export const AdminSettingsView: React.FC = () => {
   const { adminDemoEnabled, setAdminDemoEnabled, fetchAdminDemoSetting } = useTournamentStore();
@@ -49,7 +159,20 @@ export const AdminSettingsView: React.FC = () => {
   const [maintReasonInput, setMaintReasonInput] = useState('');
   const [maintCustomMessageInput, setMaintCustomMessageInput] = useState('');
   const [maintReturnTimeInput, setMaintReturnTimeInput] = useState('');
+  const [securityCodeInput, setSecurityCodeInput] = useState('');
+  const [securityCodeError, setSecurityCodeError] = useState<string | null>(null);
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('');
   const [isUpdatingMaint, setIsUpdatingMaint] = useState(false);
+
+  const handleSelectPreset = (presetId: string) => {
+    setSelectedPresetId(presetId);
+    const found = MAINTENANCE_PRESETS.find((p) => p.id === presetId);
+    if (found) {
+      setMaintReasonInput(found.reason);
+      setMaintCustomMessageInput(found.message);
+      setMaintReturnTimeInput(found.returnTime);
+    }
+  };
 
   const handleToggleMaintenanceClick = () => {
     if (platformSettings.maintenanceMode) {
@@ -72,28 +195,41 @@ export const AdminSettingsView: React.FC = () => {
         })
         .finally(() => setIsUpdatingMaint(false));
     } else {
-      // Activating Maintenance Mode: prompt confirmation modal with configurable reason, custom message and return time
+      // Activating Maintenance Mode: prompt confirmation modal with configurable reason, custom message, presets, and security code
+      const defaultPreset = MAINTENANCE_PRESETS[0];
       setMaintReasonInput(
         platformSettings.maintenanceReason ||
-        "Scheduled Platform & Arena Upgrade"
+        defaultPreset.reason
       );
       setMaintCustomMessageInput(
         platformSettings.customMessage ||
-        "PointX is temporarily offline while we upgrade our tournament arena and live scoring engine. We will be back online shortly!"
+        defaultPreset.message
       );
-      setMaintReturnTimeInput(platformSettings.estimatedReturnTime || '');
+      setMaintReturnTimeInput(platformSettings.estimatedReturnTime || defaultPreset.returnTime);
+      setSelectedPresetId(defaultPreset.id);
+      setSecurityCodeInput('');
+      setSecurityCodeError(null);
       setIsMaintModalOpen(true);
     }
   };
 
   const handleConfirmActivateMaintenance = async (andPreview: boolean = false) => {
+    if (!platformSettings.maintenanceMode) {
+      if (securityCodeInput.trim() !== '8260452263') {
+        setSecurityCodeError('Security confirmation failed. You must enter the authorization code: 8260452263');
+        return;
+      }
+    }
+
+    setSecurityCodeError(null);
     setIsUpdatingMaint(true);
     try {
       await toggleMaintenanceMode(
         true,
         maintReasonInput.trim(),
         maintReturnTimeInput.trim() || null,
-        maintCustomMessageInput.trim() || null
+        maintCustomMessageInput.trim() || null,
+        securityCodeInput.trim()
       );
       setIsMaintModalOpen(false);
       showToast({
@@ -104,11 +240,15 @@ export const AdminSettingsView: React.FC = () => {
       if (andPreview) {
         setPreviewMaintenance(true);
       }
-    } catch {
+    } catch (err: any) {
+      const msg = err?.message || 'Could not activate maintenance mode.';
+      if (msg.toLowerCase().includes('security code')) {
+        setSecurityCodeError(msg);
+      }
       showToast({
         type: 'error',
         title: 'Update Failed',
-        message: 'Could not activate maintenance mode.'
+        message: msg
       });
     } finally {
       setIsUpdatingMaint(false);
@@ -473,6 +613,51 @@ export const AdminSettingsView: React.FC = () => {
               </div>
             </div>
 
+            {/* Pre-written Scenarios (More than 10 presets) */}
+            <div className="p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-[var(--text-secondary)] font-mono flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  Pre-written Scenarios ({MAINTENANCE_PRESETS.length} Presets Available)
+                </label>
+                <span className="text-[10px] text-amber-500 font-semibold uppercase tracking-wider">
+                  1-Click Auto-Fill
+                </span>
+              </div>
+              <select
+                value={selectedPresetId}
+                onChange={(e) => handleSelectPreset(e.target.value)}
+                className="w-full p-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs font-medium text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-amber-500"
+              >
+                {MAINTENANCE_PRESETS.map((preset, index) => (
+                  <option key={preset.id} value={preset.id}>
+                    #{index + 1} [{preset.badge}] — {preset.reason}
+                  </option>
+                ))}
+              </select>
+
+              {/* Quick Select Chips */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {MAINTENANCE_PRESETS.map((p) => {
+                  const isActive = selectedPresetId === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleSelectPreset(p.id)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                        isActive
+                          ? 'bg-amber-500 text-black shadow-sm'
+                          : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
+                      }`}
+                    >
+                      {p.badge}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
                 Maintenance Heading / Reason *
@@ -518,6 +703,40 @@ export const AdminSettingsView: React.FC = () => {
                 <Clock className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
+
+            {/* Security Authorization Code (Required when activating) */}
+            {!platformSettings.maintenanceMode && (
+              <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 space-y-2">
+                <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
+                  <KeyRound className="w-4 h-4 shrink-0" />
+                  <span className="text-xs font-bold font-mono uppercase tracking-wider">
+                    Admin Security Confirmation Code
+                  </span>
+                </div>
+                <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                  Enter the 10-digit master authorization code to confirm this action: <span className="font-mono font-bold text-rose-500 select-all">8260452263</span>
+                </p>
+                <div className="relative">
+                  <Input
+                    type="text"
+                    value={securityCodeInput}
+                    onChange={(e) => {
+                      setSecurityCodeInput(e.target.value);
+                      if (securityCodeError) setSecurityCodeError(null);
+                    }}
+                    placeholder="Enter security code: 8260452263"
+                    className="font-mono font-bold tracking-widest text-center"
+                    required
+                  />
+                </div>
+                {securityCodeError && (
+                  <div className="flex items-center gap-1.5 text-xs text-rose-500 font-medium">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{securityCodeError}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="pt-3 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-end gap-2">
               <Button

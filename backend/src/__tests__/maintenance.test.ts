@@ -213,4 +213,70 @@ describe('PointX Global Maintenance Mode Tests', () => {
     expect(res.status).toBe(503);
     expect(res.body.maintenanceMode).toBe(true);
   });
+
+  it('11. Activating maintenance mode requires valid security code 8260452263', async () => {
+    const salt = await bcrypt.genSalt(10);
+    const hash = await bcrypt.hash('adminPass123', salt);
+    const adminUser = await User.create({
+      name: 'Super Admin User',
+      email: 'admin_gate@pointx.gg',
+      passwordHash: hash,
+      role: 'admin',
+      status: 'active',
+      isOnboarded: true,
+    });
+    const adminToken = jwt.sign({ id: adminUser._id.toString() }, env.JWT_SECRET);
+
+    // Attempt without security code -> 403
+    const resNoCode = await request(app)
+      .put('/api/admin/settings')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ maintenanceMode: true, maintenanceReason: 'Cluster upgrade' });
+    expect(resNoCode.status).toBe(403);
+    expect(resNoCode.body.error).toContain('Security authorization failed');
+
+    // Attempt with incorrect security code -> 403
+    const resWrongCode = await request(app)
+      .put('/api/admin/settings')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ maintenanceMode: true, maintenanceReason: 'Cluster upgrade', securityCode: '1234567890' });
+    expect(resWrongCode.status).toBe(403);
+    expect(resWrongCode.body.error).toContain('Security authorization failed');
+
+    // Attempt with correct code 8260452263 -> 200 OK
+    const resValid = await request(app)
+      .put('/api/admin/settings')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ maintenanceMode: true, maintenanceReason: 'Cluster upgrade', securityCode: '8260452263' });
+    expect(resValid.status).toBe(200);
+    expect(resValid.body.data.maintenanceMode).toBe(true);
+  });
+
+  it('12. Admin can log in using username "admin" as well as email', async () => {
+    const salt = await bcrypt.genSalt(10);
+    const hash = await bcrypt.hash('adminPass123', salt);
+    await User.create({
+      name: 'admin',
+      email: 'admin@pointx.gg',
+      passwordHash: hash,
+      role: 'admin',
+      status: 'active',
+      isOnboarded: true,
+    });
+
+    // Login using username "admin"
+    const resUsername = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'admin', password: 'adminPass123' });
+    expect(resUsername.status).toBe(200);
+    expect(resUsername.body.success).toBe(true);
+    expect(resUsername.body.user.email).toBe('admin@pointx.gg');
+
+    // Login using registered email
+    const resEmail = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'admin@pointx.gg', password: 'adminPass123' });
+    expect(resEmail.status).toBe(200);
+    expect(resEmail.body.success).toBe(true);
+  });
 });

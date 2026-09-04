@@ -421,6 +421,18 @@ export async function fetchPlatformSettings(_req: AuthenticatedRequest, res: Res
 
 export async function savePlatformSettings(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
+    const { securityCode, maintenanceMode } = req.body;
+
+    // Security Gate: When turning ON maintenance mode, verify required security code: 8260452263
+    if (maintenanceMode === true) {
+      if (!securityCode || String(securityCode).trim() !== '8260452263') {
+        return res.status(403).json({
+          success: false,
+          error: 'Security authorization failed: Please enter the authorized 10-digit maintenance code (8260452263) to activate maintenance mode.',
+        });
+      }
+    }
+
     const settings = await updatePlatformSettings(req.body, req.user?._id?.toString());
     return res.status(200).json({ success: true, data: settings });
   } catch (error) {

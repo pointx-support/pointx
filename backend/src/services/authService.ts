@@ -410,8 +410,16 @@ export async function loginUser(data: {
   ipAddress?: string;
   userAgent?: string;
 }): Promise<{ success: boolean; user?: any; token?: string; error?: string; requiresVerification?: boolean; notRegistered?: boolean }> {
-  const email = data.email.toLowerCase().trim();
-  const user = await User.findOne({ email });
+  const rawIdentifier = (data.email || '').trim();
+  const lowerIdentifier = rawIdentifier.toLowerCase();
+
+  // Support logging in via email or administrator username (e.g. 'admin')
+  const user = await User.findOne({
+    $or: [
+      { email: lowerIdentifier },
+      { name: new RegExp(`^${rawIdentifier}$`, 'i') },
+    ],
+  });
   if (!user) {
     // Perform dummy comparison to equalize timing against timing attacks
     await bcrypt.compare(data.password || 'dummy', '$2a$10$e8460p/L5/dD6f62v3H1z.DkUqRzV3bU49fX.bKqS6P57Z9zXpTmu');
