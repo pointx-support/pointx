@@ -102,7 +102,7 @@ export const LiveStandingsPreview: React.FC = () => {
               type="button"
               onClick={() => setActiveTab('matrix')}
               className={cn(
-                'flex items-center gap-2 px-5 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer select-none',
+                'flex items-center gap-2 px-5 py-3 rounded-xl text-xs sm:text-sm font-bold transition-colors duration-200 cursor-pointer select-none',
                 activeTab === 'matrix'
                   ? 'bg-[var(--accent-primary)] text-black font-black shadow-md'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/[0.05]'
@@ -116,7 +116,7 @@ export const LiveStandingsPreview: React.FC = () => {
               type="button"
               onClick={() => setActiveTab('obs')}
               className={cn(
-                'flex items-center gap-2 px-5 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer select-none',
+                'flex items-center gap-2 px-5 py-3 rounded-xl text-xs sm:text-sm font-bold transition-colors duration-200 cursor-pointer select-none',
                 activeTab === 'obs'
                   ? 'bg-cyan-500 text-black font-black shadow-md'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/[0.05]'
@@ -130,7 +130,7 @@ export const LiveStandingsPreview: React.FC = () => {
               type="button"
               onClick={() => setActiveTab('poster')}
               className={cn(
-                'flex items-center gap-2 px-5 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer select-none',
+                'flex items-center gap-2 px-5 py-3 rounded-xl text-xs sm:text-sm font-bold transition-colors duration-200 cursor-pointer select-none',
                 activeTab === 'poster'
                   ? 'bg-amber-400 text-black font-black shadow-md'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/[0.05]'
@@ -262,7 +262,7 @@ export const LiveStandingsPreview: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleAddKills(idx)}
-                              className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-[var(--accent-primary)] hover:text-black border border-white/[0.08] text-xs font-mono font-bold transition-all cursor-pointer"
+                              className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-[var(--accent-primary)] hover:text-black border border-white/[0.08] text-xs font-mono font-bold transition-colors duration-200 cursor-pointer"
                               title="Add 2 Kills"
                             >
                               +2 Kills
@@ -270,7 +270,7 @@ export const LiveStandingsPreview: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleAddBooyah(idx)}
-                              className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-amber-400 hover:text-black border border-white/[0.08] text-xs font-mono font-bold transition-all cursor-pointer"
+                              className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-amber-400 hover:text-black border border-white/[0.08] text-xs font-mono font-bold transition-colors duration-200 cursor-pointer"
                               title="Add Booyah (+12 pts)"
                             >
                               +Booyah

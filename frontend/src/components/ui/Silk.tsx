@@ -1,4 +1,4 @@
-﻿/* eslint-disable react/no-unknown-property */
+/* eslint-disable react/no-unknown-property */
 import React, { forwardRef, useRef, useMemo, useLayoutEffect, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Color } from 'three';
@@ -96,8 +96,17 @@ const SilkPlane = forwardRef<any, SilkPlaneProps>(function SilkPlane({ uniforms 
   }, [ref, viewport]);
 
   useFrame((_, delta) => {
-    if (ref && 'current' in ref && ref.current?.material?.uniforms?.uTime) {
-      ref.current.material.uniforms.uTime.value += 0.1 * delta;
+    if (ref && 'current' in ref && ref.current?.material?.uniforms) {
+      const u = ref.current.material.uniforms;
+      if (u.uTime) u.uTime.value += 0.1 * delta;
+      if (u.uLightMode && u.uLightModeTarget) {
+        const diff = u.uLightModeTarget.value - u.uLightMode.value;
+        if (Math.abs(diff) > 0.002) {
+          u.uLightMode.value += diff * Math.min(1, delta * 8.0);
+        } else {
+          u.uLightMode.value = u.uLightModeTarget.value;
+        }
+      }
     }
   });
 
@@ -143,7 +152,8 @@ export const Silk: React.FC<SilkProps> = ({
       uNoiseIntensity: { value: noiseIntensity },
       uColor: { value: new Color(...hexToNormalizedRGB(color)) },
       uRotation: { value: rotation },
-      uLightMode: { value: lightMode ? 1 : 0 },
+      uLightMode: { value: lightMode ? 1.0 : 0.0 },
+      uLightModeTarget: { value: lightMode ? 1.0 : 0.0 },
       uTime: { value: 0 }
     }),
     []
@@ -155,7 +165,7 @@ export const Silk: React.FC<SilkProps> = ({
     if (uniforms.uNoiseIntensity) uniforms.uNoiseIntensity.value = noiseIntensity;
     if (uniforms.uColor) uniforms.uColor.value.setRGB(...hexToNormalizedRGB(color));
     if (uniforms.uRotation) uniforms.uRotation.value = rotation;
-    if (uniforms.uLightMode) uniforms.uLightMode.value = lightMode ? 1 : 0;
+    if (uniforms.uLightModeTarget) uniforms.uLightModeTarget.value = lightMode ? 1.0 : 0.0;
   }, [speed, scale, noiseIntensity, color, rotation, lightMode, uniforms]);
 
   return (

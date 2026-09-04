@@ -194,7 +194,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
             whileTap={prefersReducedMotion ? {} : { scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 450, damping: 28 }}
             className={cn(
-              'h-8.5 w-8.5 sm:h-9 sm:w-9 rounded-full flex items-center justify-center font-black select-none shrink-0 transition-all duration-300',
+              'h-8.5 w-8.5 sm:h-9 sm:w-9 rounded-full flex items-center justify-center font-black select-none shrink-0 transition-colors duration-200',
               isDark
                 ? 'bg-[#121622] text-white border border-white/15 shadow-[0_2px_10px_rgba(0,0,0,0.5)] group-hover:border-[#ffd000]/40 group-hover:shadow-[0_0_16px_rgba(255,208,0,0.2)]'
                 : 'bg-[#0B0D14] text-white border border-black/10 shadow-[0_2px_10px_rgba(0,0,0,0.18)] group-hover:shadow-[0_0_16px_rgba(255,208,0,0.3)]'
@@ -320,7 +320,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 450, damping: 28 }}
               className={cn(
-                'h-[36px] sm:h-[39px] inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 rounded-full text-xs font-bold transition-all duration-300 cursor-pointer shadow-sm group select-none shrink-0',
+                'h-[36px] sm:h-[39px] inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 rounded-full text-xs font-bold transition-colors duration-200 cursor-pointer shadow-sm group select-none shrink-0',
                 isDark
                   ? 'bg-[#181B24] border border-white/15 text-white hover:border-white/30 hover:bg-[#202532] shadow-[0_2px_12px_rgba(0,0,0,0.4)]'
                   : 'bg-[#0B0D14] text-white hover:bg-neutral-900 shadow-[0_2px_10px_rgba(0,0,0,0.18)]'
@@ -345,7 +345,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
               whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 450, damping: 28 }}
               className={cn(
-                'h-[36px] sm:h-[39px] inline-flex items-center gap-2 px-3.5 sm:px-4 rounded-full text-xs font-bold tracking-wide transition-all duration-300 cursor-pointer shadow-sm group select-none shrink-0',
+                'h-[36px] sm:h-[39px] inline-flex items-center gap-2 px-3.5 sm:px-4 rounded-full text-xs font-bold tracking-wide transition-colors duration-200 cursor-pointer shadow-sm group select-none shrink-0',
                 isDark
                   ? 'bg-[#181B24] border border-white/15 text-white hover:border-white/30 hover:bg-[#202532] shadow-[0_2px_12px_rgba(0,0,0,0.4)]'
                   : 'bg-[#0B0D14] text-white hover:bg-neutral-900 shadow-[0_2px_10px_rgba(0,0,0,0.18)]'
@@ -400,7 +400,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
                     href={link.href}
                     onClick={(e) => handleScrollTo(e, link.href, link.id)}
                     className={cn(
-                      'flex items-center justify-between px-4 py-3 rounded-2xl text-[14px] font-semibold transition-all cursor-pointer select-none',
+                      'flex items-center justify-between px-4 py-3 rounded-2xl text-[14px] font-semibold transition-colors duration-200 cursor-pointer select-none',
                       isDark
                         ? (isCurrentActive ? 'bg-white/15 text-white font-bold' : 'text-neutral-400 hover:bg-white/5 hover:text-white')
                         : (isCurrentActive ? 'bg-black/[0.07] text-neutral-950 font-bold' : 'text-neutral-600 hover:bg-black/[0.04] hover:text-neutral-950')

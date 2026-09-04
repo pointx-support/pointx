@@ -144,7 +144,7 @@ export const TournamentShowcase: React.FC<TournamentShowcaseProps> = ({
               <div
                 key={tour.id}
                 className={cn(
-                  'p-8 sm:p-10 rounded-3xl bg-[var(--bg-surface-raised)]/80 dark:bg-black/50 border transition-all duration-300 flex flex-col justify-between relative overflow-hidden group shadow-2xl backdrop-blur-xl hover:-translate-y-1',
+                  'p-8 sm:p-10 rounded-3xl bg-[var(--bg-surface-raised)]/80 dark:bg-black/50 border transition-[transform,border-color,background-color] duration-200 flex flex-col justify-between relative overflow-hidden group shadow-2xl backdrop-blur-xl hover:-translate-y-1',
                   tour.featured
                     ? 'border-[var(--accent-primary)]/40 shadow-[0_0_30px_rgba(255,208,0,0.06)]'
                     : 'border-white/[0.08] hover:border-white/[0.2]'
@@ -241,7 +241,7 @@ export const TournamentShowcase: React.FC<TournamentShowcaseProps> = ({
 
         {/* Bottom Banner for Organizers */}
         <FadeIn delay={0.25}>
-          <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] flex flex-col lg:flex-row items-center justify-between gap-8 shadow-2xl backdrop-blur-2xl transition-all">
+          <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] flex flex-col lg:flex-row items-center justify-between gap-8 shadow-2xl backdrop-blur-2xl transition-colors duration-200">
             <div className="flex items-center gap-6 text-center lg:text-left">
               <div className="p-5 rounded-2xl bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30 shrink-0 hidden sm:flex shadow-md">
                 <Sparkles className="h-8 w-8" />

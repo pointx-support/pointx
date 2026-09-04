@@ -99,7 +99,7 @@ export const PlatformFeatures: React.FC = () => {
             return (
               <div
                 key={feat.title}
-                className="p-8 sm:p-9 rounded-3xl bg-[var(--bg-surface-raised)]/80 dark:bg-black/50 border border-white/[0.08] hover:border-white/[0.2] transition-all duration-300 flex flex-col justify-between group shadow-xl backdrop-blur-xl hover:-translate-y-1"
+                className="p-8 sm:p-9 rounded-3xl bg-[var(--bg-surface-raised)]/80 dark:bg-black/50 border border-white/[0.08] hover:border-white/[0.2] transition-[transform,border-color,background-color] duration-200 flex flex-col justify-between group shadow-xl backdrop-blur-xl hover:-translate-y-1"
               >
                 <div>
                   {/* Icon Container */}
@@ -133,7 +133,7 @@ export const PlatformFeatures: React.FC = () => {
 
         {/* Comparison Telemetry Card */}
         <FadeIn delay={0.2}>
-          <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] grid grid-cols-1 lg:grid-cols-2 gap-8 items-center shadow-2xl backdrop-blur-2xl transition-all">
+          <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] grid grid-cols-1 lg:grid-cols-2 gap-8 items-center shadow-2xl backdrop-blur-2xl transition-colors duration-200">
             
             {/* Old Method */}
             <div className="space-y-3 p-6 rounded-2xl bg-rose-500/5 border border-rose-500/20">

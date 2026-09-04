@@ -7,7 +7,6 @@ import { useAuthStore } from '../../store/authStore';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { haptics } from '../../lib/haptics';
 import {
-  Zap,
   ArrowRight,
   LogIn,
   LayoutDashboard,
@@ -75,8 +74,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         
         {/* Dynamic Volumetric Arena Lighting Rig with Silk Wave Shader Background */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
-          {/* Animated Silk Waves Shader */}
-          <div className="absolute inset-0">
+          {/* Animated Silk Waves Shader with smooth WebGL uniform transition */}
+          <div className="absolute inset-0 transition-opacity duration-200 ease-out opacity-40 dark:opacity-20">
             <Silk
               speed={5}
               scale={1}
@@ -84,52 +83,24 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               noiseIntensity={1.5}
               rotation={0}
               lightMode={!isDark}
-              className="w-full h-full opacity-45 dark:opacity-20"
+              className="w-full h-full"
             />
           </div>
 
-          {/* Dark Mode: Grand Finals Arena Stage Lighting */}
-          <div
-            className={`absolute inset-0 transition-opacity duration-300 ease-out ${
-              isDark ? 'opacity-100' : 'opacity-0'
-            }`}
-            style={{ willChange: 'opacity' }}
-          >
-            {/* Left Stage Volumetric Spotlight Beam (Sweeping Angled Beam) */}
-            <div className="absolute -top-24 -left-16 w-[550px] lg:w-[750px] h-[950px] lg:h-[1300px] bg-gradient-to-b from-amber-400/[0.24] via-amber-500/[0.07] to-transparent rounded-full blur-[70px] animate-spotlight-left pointer-events-none" />
+          {/* Left Stage Volumetric Spotlight Beam (Sweeping Angled Beam) */}
+          <div className="absolute -top-24 -left-16 w-[550px] lg:w-[750px] h-[950px] lg:h-[1300px] bg-gradient-to-b from-amber-400/[0.22] via-amber-500/[0.06] to-transparent rounded-full blur-[65px] animate-spotlight-left pointer-events-none transition-opacity duration-200" />
 
-            {/* Right Stage Volumetric Spotlight Beam (Sweeping Electric Cyan Beam) */}
-            <div className="absolute -top-24 -right-16 w-[500px] lg:w-[700px] h-[950px] lg:h-[1300px] bg-gradient-to-b from-cyan-400/[0.2] via-sky-500/[0.05] to-transparent rounded-full blur-[70px] animate-spotlight-right pointer-events-none" />
+          {/* Right Stage Volumetric Spotlight Beam (Sweeping Electric Cyan Beam) */}
+          <div className="absolute -top-24 -right-16 w-[500px] lg:w-[700px] h-[950px] lg:h-[1300px] bg-gradient-to-b from-cyan-400/[0.18] via-sky-500/[0.05] to-transparent rounded-full blur-[65px] animate-spotlight-right pointer-events-none transition-opacity duration-200" />
 
-            {/* Center Arena Championship Horizon Pulse Core */}
-            <div className="absolute top-[8%] left-1/2 -translate-x-1/2 w-[650px] sm:w-[900px] lg:w-[1150px] h-[400px] sm:h-[500px] lg:h-[600px] bg-gradient-to-b from-amber-500/[0.22] via-amber-400/[0.06] to-transparent rounded-full blur-[110px] animate-horizon-glow pointer-events-none" />
+          {/* Center Arena Championship Horizon Pulse Core */}
+          <div className="absolute top-[8%] left-1/2 -translate-x-1/2 w-[650px] sm:w-[900px] lg:w-[1150px] h-[400px] sm:h-[500px] lg:h-[600px] bg-gradient-to-b from-amber-500/[0.2] via-amber-400/[0.05] to-transparent rounded-full blur-[85px] animate-horizon-glow pointer-events-none transition-opacity duration-200" />
 
-            {/* Dynamic Stage Floor Moving Beam Sweep */}
-            <div className="absolute top-[35%] left-1/2 -translate-x-1/2 w-[850px] lg:w-[1350px] h-[300px] lg:h-[400px] bg-gradient-to-r from-transparent via-amber-400/[0.14] to-transparent rounded-full blur-[90px] animate-beam-sweep pointer-events-none" />
+          {/* Dynamic Stage Floor Moving Beam Sweep */}
+          <div className="absolute top-[35%] left-1/2 -translate-x-1/2 w-[850px] lg:w-[1350px] h-[300px] lg:h-[400px] bg-gradient-to-r from-transparent via-amber-400/[0.13] to-transparent rounded-full blur-[75px] animate-beam-sweep pointer-events-none transition-opacity duration-200" />
 
-            {/* Deep Stage Floor Grounding Scrim (Dark Hex #101319 prevents white flash on toggle) */}
-            <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#101319] to-transparent pointer-events-none" />
-          </div>
-
-          {/* Light Mode: Luxury Architectural Sunbeam & Stage Illumination */}
-          <div
-            className={`absolute inset-0 transition-opacity duration-300 ease-out ${
-              !isDark ? 'opacity-100' : 'opacity-0'
-            }`}
-            style={{ willChange: 'opacity' }}
-          >
-            {/* Left Warm Sunbeam Sweep */}
-            <div className="absolute -top-24 -left-16 w-[550px] lg:w-[750px] h-[950px] lg:h-[1300px] bg-gradient-to-b from-amber-400/[0.18] via-amber-300/[0.05] to-transparent rounded-full blur-[65px] animate-spotlight-left pointer-events-none" />
-
-            {/* Right Ambient Cerulean Beam */}
-            <div className="absolute -top-24 -right-16 w-[500px] lg:w-[700px] h-[950px] lg:h-[1300px] bg-gradient-to-b from-sky-400/[0.12] to-transparent rounded-full blur-[65px] animate-spotlight-right pointer-events-none" />
-
-            {/* Center Radiant Core */}
-            <div className="absolute top-[8%] left-1/2 -translate-x-1/2 w-[650px] sm:w-[900px] lg:w-[1150px] h-[400px] sm:h-[500px] lg:h-[600px] bg-gradient-to-b from-amber-400/[0.18] via-amber-300/[0.05] to-transparent rounded-full blur-[100px] animate-horizon-glow pointer-events-none" />
-
-            {/* Deep Horizon Mist Grounding (Light Hex #EEF1F5 prevents dark flash on toggle) */}
-            <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#EEF1F5] to-transparent pointer-events-none" />
-          </div>
+          {/* Deep Stage Floor Grounding Scrim */}
+          <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[var(--bg-base)] to-transparent pointer-events-none transition-colors duration-200" />
         </div>
 
         {/* ========================================================================= */}
@@ -249,22 +220,24 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                         onNavigateLogin();
                       }
                     }}
-                    className="relative w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 sm:px-10 py-4 rounded-2xl text-sm sm:text-base font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-[0_8px_30px_rgba(255,208,0,0.4)] hover:shadow-[0_0_40px_rgba(255,208,0,0.65)] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer uppercase tracking-wider group overflow-hidden border border-amber-300/80"
+                    className="relative w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 sm:px-10 py-4 rounded-2xl text-sm sm:text-base font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-[0_8px_30px_rgba(255,208,0,0.4)] hover:shadow-[0_0_40px_rgba(255,208,0,0.65)] hover:scale-105 active:scale-95 transition-[transform,box-shadow] duration-200 cursor-pointer uppercase tracking-wider group overflow-hidden border border-amber-300/80"
                     style={{ fontFamily: "'Outfit', sans-serif" }}
                   >
-                    <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none" />
-                    {isAuthenticated ? (
-                      <>
-                        <LayoutDashboard className="h-4 w-4 fill-black text-black group-hover:rotate-12 transition-transform duration-300 shrink-0" />
-                        <span className="font-black">ENTER CONSOLE</span>
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="h-4 w-4 fill-black text-black group-hover:rotate-12 transition-transform duration-300 shrink-0" />
-                        <span className="font-black">ENTER THE ARENA</span>
-                      </>
-                    )}
-                    <ArrowRight className="h-4 w-4 stroke-[3] text-black group-hover:translate-x-1 transition-transform duration-300 shrink-0" />
+                    <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none" />
+                    <span className="relative z-10 flex items-center gap-2">
+                      {isAuthenticated ? (
+                        <>
+                          <LayoutDashboard className="h-4 w-4 sm:h-5 sm:w-5 fill-black shrink-0" />
+                          <span>ENTER CONSOLE</span>
+                        </>
+                      ) : (
+                        <>
+                          <Trophy className="h-4 w-4 sm:h-5 sm:w-5 fill-black shrink-0" />
+                          <span>START TOURNAMENT</span>
+                        </>
+                      )}
+                      <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5 group-hover:translate-x-1 transition-transform shrink-0" />
+                    </span>
                   </button>
 
                   {/* Secondary CTA: Organizer Sign In / Dashboard */}
@@ -278,11 +251,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                         onNavigateLogin();
                       }
                     }}
-                    className={`relative w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 sm:px-8 py-4 rounded-2xl text-xs sm:text-sm font-bold border backdrop-blur-xl shadow-md hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer group ${
-                      isDark
-                        ? 'bg-black/60 hover:bg-black/80 border-white/20 hover:border-amber-400/60 text-white'
-                        : 'bg-white hover:bg-slate-100 border-slate-300 hover:border-amber-500 text-slate-900 shadow-sm'
-                    }`}
+                    className="relative w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 sm:px-8 py-4 rounded-2xl text-xs sm:text-sm font-bold border backdrop-blur-xl shadow-md hover:scale-105 active:scale-95 transition-[transform,box-shadow,border-color,background-color] duration-200 cursor-pointer group bg-white dark:bg-black/60 hover:bg-slate-100 dark:hover:bg-black/80 border-slate-300 dark:border-white/20 hover:border-amber-500 dark:hover:border-amber-400/60 text-slate-900 dark:text-white shadow-sm"
                     style={{ fontFamily: "'Outfit', sans-serif" }}
                   >
                     {isAuthenticated ? (
@@ -335,11 +304,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               <FadeIn delay={0.2}>
                 {/* Master Holographic Arena Command Card */}
                 <div
-                  className={`relative w-full rounded-3xl border backdrop-blur-2xl transition-all duration-300 overflow-hidden shadow-2xl ${
-                    isDark
-                      ? 'bg-[#0a0d14]/95 border-white/[0.14] shadow-[0_30px_70px_rgba(0,0,0,0.8)] hover:border-amber-400/40'
-                      : 'bg-white/95 border-slate-200 shadow-[0_24px_60px_rgba(15,23,42,0.1)] hover:border-amber-400/60'
-                  }`}
+                  className="relative w-full rounded-3xl border backdrop-blur-2xl transition-colors duration-200 overflow-hidden shadow-2xl bg-white/95 dark:bg-[#0a0d14]/95 border-slate-200 dark:border-white/[0.14] shadow-[0_24px_60px_rgba(15,23,42,0.1)] dark:shadow-[0_30px_70px_rgba(0,0,0,0.8)] hover:border-amber-400/60 dark:hover:border-amber-400/40"
                 >
                   {/* Top Golden Laser Accent Bar */}
                   <div className="absolute top-0 left-6 right-6 h-[2px] bg-gradient-to-r from-transparent via-amber-400/90 to-transparent pointer-events-none" />
@@ -375,11 +340,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   {/* 2. Grand Champion Showcase Pod */}
                   <div className="p-5 space-y-4">
                     <div
-                      className={`relative p-4 sm:p-5 rounded-2xl border transition-all overflow-hidden ${
-                        isDark
-                          ? 'bg-gradient-to-br from-[#141a27] via-[#0d111a] to-[#121622] border-amber-400/35 shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]'
-                          : 'bg-gradient-to-br from-amber-50/80 via-white to-amber-50/40 border-amber-400/40 shadow-sm'
-                      }`}
+                      className="relative p-4 sm:p-5 rounded-2xl border transition-colors duration-200 overflow-hidden bg-gradient-to-br from-amber-50/80 via-white to-amber-50/40 dark:from-[#141a27] dark:via-[#0d111a] dark:to-[#121622] border-amber-400/40 dark:border-amber-400/35 shadow-sm dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]"
                     >
                       {/* Ambient Golden Radial Beacon */}
                       <div className="absolute top-[-20%] right-[-10%] w-44 h-44 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
@@ -529,11 +490,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6 text-left">
             
             {/* Card 1: Sub-Second Calculation Matrix */}
-            <div className={`relative p-6 rounded-3xl border backdrop-blur-xl transition-all duration-300 space-y-3 group overflow-hidden ${
-              isDark
-                ? 'bg-[#0d111a]/85 border-white/[0.12] hover:border-amber-400/50 shadow-[0_16px_40px_rgba(0,0,0,0.4)]'
-                : 'bg-white/95 border-slate-200/90 hover:border-amber-400/60 shadow-[0_12px_32px_rgba(15,23,42,0.06)]'
-            }`}>
+            <div className="relative p-6 rounded-3xl border backdrop-blur-xl transition-colors duration-200 space-y-3 group overflow-hidden bg-white/95 dark:bg-[#0d111a]/85 border-slate-200/90 dark:border-white/[0.12] hover:border-amber-400/60 dark:hover:border-amber-400/50 shadow-[0_12px_32px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
               <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-amber-400/70 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="flex items-center justify-between">
                 <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-500 border border-amber-500/25">
@@ -561,11 +518,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
 
             {/* Card 2: Live OBS Browser Source Overlay */}
-            <div className={`relative p-6 rounded-3xl border backdrop-blur-xl transition-all duration-300 space-y-3 group overflow-hidden ${
-              isDark
-                ? 'bg-[#0d111a]/85 border-white/[0.12] hover:border-cyan-400/50 shadow-[0_16px_40px_rgba(0,0,0,0.4)]'
-                : 'bg-white/95 border-slate-200/90 hover:border-cyan-400/60 shadow-[0_12px_32px_rgba(15,23,42,0.06)]'
-            }`}>
+            <div className="relative p-6 rounded-3xl border backdrop-blur-xl transition-colors duration-200 space-y-3 group overflow-hidden bg-white/95 dark:bg-[#0d111a]/85 border-slate-200/90 dark:border-white/[0.12] hover:border-cyan-400/60 dark:hover:border-cyan-400/50 shadow-[0_12px_32px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
               <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-cyan-400/70 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="flex items-center justify-between">
                 <div className="p-2.5 rounded-xl bg-cyan-500/15 text-cyan-500 dark:text-cyan-400 border border-cyan-500/25">
@@ -593,11 +546,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
 
             {/* Card 3: 4K Production Banner Studio */}
-            <div className={`relative p-6 rounded-3xl border backdrop-blur-xl transition-all duration-300 space-y-3 group overflow-hidden ${
-              isDark
-                ? 'bg-[#0d111a]/85 border-white/[0.12] hover:border-emerald-400/50 shadow-[0_16px_40px_rgba(0,0,0,0.4)]'
-                : 'bg-white/95 border-slate-200/90 hover:border-emerald-400/60 shadow-[0_12px_32px_rgba(15,23,42,0.06)]'
-            }`}>
+            <div className="relative p-6 rounded-3xl border backdrop-blur-xl transition-colors duration-200 space-y-3 group overflow-hidden bg-white/95 dark:bg-[#0d111a]/85 border-slate-200/90 dark:border-white/[0.12] hover:border-emerald-400/60 dark:hover:border-emerald-400/50 shadow-[0_12px_32px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
               <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-emerald-400/70 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="flex items-center justify-between">
                 <div className="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 border border-emerald-500/25">

@@ -44,7 +44,7 @@ export const LiveEnergySection: React.FC = () => {
 
         {/* Live Match Ticker Bar (Full-Width Cinematic Card) */}
         <FadeIn delay={0.15}>
-          <div className="mb-14 p-6 sm:p-8 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-6 backdrop-blur-2xl transition-all hover:border-[var(--accent-primary)]/30">
+          <div className="mb-14 p-6 sm:p-8 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-6 backdrop-blur-2xl transition-colors duration-200 hover:border-[var(--accent-primary)]/30">
             
             {/* Left Match Info */}
             <div className="flex items-center gap-4 w-full lg:w-auto">

@@ -95,7 +95,7 @@ export const OrganizerExperience: React.FC<OrganizerExperienceProps> = ({
             return (
               <div
                 key={item.step}
-                className="p-8 sm:p-9 rounded-3xl bg-[var(--bg-surface-raised)]/80 dark:bg-black/50 border border-white/[0.08] hover:border-white/[0.2] transition-all duration-300 flex flex-col justify-between group relative overflow-hidden shadow-2xl backdrop-blur-xl hover:-translate-y-1"
+                className="p-8 sm:p-9 rounded-3xl bg-[var(--bg-surface-raised)]/80 dark:bg-black/50 border border-white/[0.08] hover:border-white/[0.2] transition-[transform,border-color,background-color] duration-200 flex flex-col justify-between group relative overflow-hidden shadow-2xl backdrop-blur-xl hover:-translate-y-1"
               >
                 {/* Step Number Background Ghost Watermark */}
                 <div className="absolute top-4 right-5 font-mono font-black text-5xl text-white/[0.04] select-none pointer-events-none">
@@ -139,7 +139,7 @@ export const OrganizerExperience: React.FC<OrganizerExperienceProps> = ({
 
         {/* Organizer Callout Action Banner */}
         <FadeIn delay={0.2}>
-          <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] flex flex-col lg:flex-row items-center justify-between gap-8 shadow-2xl backdrop-blur-2xl transition-all">
+          <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] flex flex-col lg:flex-row items-center justify-between gap-8 shadow-2xl backdrop-blur-2xl transition-colors duration-200">
             <div className="space-y-2 text-center lg:text-left">
               <div className="flex items-center justify-center lg:justify-start gap-2 text-xs font-mono font-bold text-[var(--accent-primary)] uppercase tracking-wider">
                 <ShieldCheck className="h-4 w-4" />
