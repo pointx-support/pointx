@@ -58,6 +58,14 @@ export function createApp(): Application {
   const configuredAllowedOrigins = [
     env.FRONTEND_URL,
     env.CLIENT_URL,
+    'https://pointx.in',
+    'https://www.pointx.in',
+    'http://pointx.in',
+    'http://www.pointx.in',
+    'https://pointx.gg',
+    'https://www.pointx.gg',
+    'http://pointx.gg',
+    'http://www.pointx.gg',
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:5000',
@@ -72,17 +80,24 @@ export function createApp(): Application {
 
         const isAllowed =
           configuredAllowedOrigins.includes(origin) ||
-          (!env.isProduction && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))) ||
+          origin === 'https://pointx.in' ||
+          origin === 'http://pointx.in' ||
+          origin.endsWith('.pointx.in') ||
+          origin === 'https://pointx.gg' ||
+          origin === 'http://pointx.gg' ||
+          origin.endsWith('.pointx.gg') ||
           origin.endsWith('.onrender.com') ||
           origin.endsWith('.ngrok-free.dev') ||
           origin.endsWith('.ngrok.app') ||
-          origin.endsWith('.ngrok.io');
+          origin.endsWith('.ngrok.io') ||
+          (!env.isProduction && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')));
 
         if (isAllowed) {
           return callback(null, true);
         }
 
-        return callback(new Error(`Origin ${origin} not allowed by CORS`));
+        // Reject untrusted origins without throwing 500 error
+        return callback(null, false);
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
