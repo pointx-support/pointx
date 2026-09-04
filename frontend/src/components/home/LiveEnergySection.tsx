@@ -11,9 +11,9 @@ import { FadeIn, SlideIn } from '../animation/RevealAnimations';
 import { PulseIndicator } from '../animation/MicroInteractions';
 import { Badge } from '../ui/Badge';
 
-export const LiveEnergySection: React.FC = () => {
+const LiveEnergySectionComponent: React.FC = () => {
   return (
-    <section id="live-matrix" className="py-24 md:py-32 relative overflow-hidden bg-[var(--bg-surface)]/30 border-y border-white/[0.06] transition-colors duration-300">
+    <section id="live-matrix" className="py-24 md:py-32 relative overflow-hidden bg-[var(--bg-surface)]/30 border-y border-white/[0.06]">
       
       {/* Background Ambient Radial Glow */}
       <div className="absolute inset-0 pointer-events-none opacity-30 bg-[radial-gradient(ellipse_90%_70%_at_50%_-10%,rgba(245,158,11,0.12),rgba(125,64,71,0.06),transparent_80%)]" />
@@ -44,7 +44,7 @@ export const LiveEnergySection: React.FC = () => {
 
         {/* Live Match Ticker Bar (Full-Width Cinematic Card) */}
         <FadeIn delay={0.15}>
-          <div className="mb-14 p-6 sm:p-8 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-6 backdrop-blur-2xl transition-colors duration-200 hover:border-[var(--accent-primary)]/30">
+          <div className="mb-14 p-6 sm:p-8 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-6 backdrop-blur-2xl hover:border-[var(--accent-primary)]/30">
             
             {/* Left Match Info */}
             <div className="flex items-center gap-4 w-full lg:w-auto">
@@ -188,4 +188,5 @@ export const LiveEnergySection: React.FC = () => {
   );
 };
 
+export const LiveEnergySection = React.memo(LiveEnergySectionComponent);
 export default LiveEnergySection;

@@ -14,11 +14,11 @@ export interface FinalCTAProps {
   onNavigateLogin: () => void;
 }
 
-export const FinalCTA: React.FC<FinalCTAProps> = ({
+const FinalCTAComponent: React.FC<FinalCTAProps> = ({
   onNavigateLogin,
 }) => {
   return (
-    <section className="py-24 md:py-36 relative overflow-hidden transition-colors duration-300">
+    <section className="py-24 md:py-36 relative overflow-hidden">
       
       {/* GPU Radial Stadium Halo */}
       <div
@@ -57,7 +57,7 @@ export const FinalCTA: React.FC<FinalCTAProps> = ({
               <button
                 type="button"
                 onClick={onNavigateLogin}
-                className="relative w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2.5 px-9 py-4 rounded-2xl text-sm sm:text-base font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-[0_4px_25px_rgba(255,208,0,0.35)] hover:shadow-[0_0_35px_rgba(255,208,0,0.7)] hover:-translate-y-1 hover:scale-[1.03] active:scale-[0.97] transition-all duration-300 cursor-pointer font-display border border-amber-300/70 group overflow-hidden"
+                className="relative w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2.5 px-9 py-4 rounded-2xl text-sm sm:text-base font-black bg-gradient-to-r from-[#ffd000] via-[#ffc000] to-[#ff9900] text-black shadow-[0_4px_25px_rgba(255,208,0,0.35)] hover:shadow-[0_0_35px_rgba(255,208,0,0.7)] hover:-translate-y-1 hover:scale-[1.03] active:scale-[0.97] transition-[transform,box-shadow] duration-200 cursor-pointer font-display border border-amber-300/70 group overflow-hidden"
               >
                 <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/35 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none" />
                 <Zap className="h-4 w-4 fill-black/80 stroke-black text-black group-hover:rotate-12 transition-transform duration-300" />
@@ -68,7 +68,7 @@ export const FinalCTA: React.FC<FinalCTAProps> = ({
               <button
                 type="button"
                 onClick={onNavigateLogin}
-                className="relative w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl text-sm sm:text-base font-bold bg-white/[0.04] hover:bg-[var(--accent-primary)]/10 border border-white/[0.1] hover:border-[var(--accent-primary)] text-[var(--text-primary)] hover:text-[var(--accent-primary)] shadow-md hover:shadow-[0_0_25px_rgba(255,208,0,0.25)] hover:-translate-y-1 hover:scale-[1.02] active:scale-[0.97] backdrop-blur-xl transition-all duration-300 cursor-pointer font-sans"
+                className="relative w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl text-sm sm:text-base font-bold bg-white/[0.04] hover:bg-[var(--accent-primary)]/10 border border-white/[0.1] hover:border-[var(--accent-primary)] text-[var(--text-primary)] hover:text-[var(--accent-primary)] shadow-md hover:shadow-[0_0_25px_rgba(255,208,0,0.25)] hover:-translate-y-1 hover:scale-[1.02] active:scale-[0.97] backdrop-blur-xl transition-[transform,box-shadow,border-color,background-color] duration-200 cursor-pointer font-sans"
               >
                 <LogIn className="h-4 w-4 text-[var(--accent-primary)]" />
                 <span>Sign In To Console</span>
@@ -103,4 +103,5 @@ export const FinalCTA: React.FC<FinalCTAProps> = ({
   );
 };
 
+export const FinalCTA = React.memo(FinalCTAComponent);
 export default FinalCTA;

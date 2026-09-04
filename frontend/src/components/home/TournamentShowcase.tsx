@@ -89,7 +89,7 @@ export const TournamentShowcase: React.FC<TournamentShowcaseProps> = ({
   });
 
   return (
-    <section id="tournaments" className="py-24 md:py-32 relative transition-colors duration-300">
+    <section id="tournaments" className="py-24 md:py-32 relative">
       <div className="max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-12">
         
         {/* Section Heading & Category Filter Tabs */}
@@ -241,7 +241,7 @@ export const TournamentShowcase: React.FC<TournamentShowcaseProps> = ({
 
         {/* Bottom Banner for Organizers */}
         <FadeIn delay={0.25}>
-          <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] flex flex-col lg:flex-row items-center justify-between gap-8 shadow-2xl backdrop-blur-2xl transition-colors duration-200">
+          <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] flex flex-col lg:flex-row items-center justify-between gap-8 shadow-2xl backdrop-blur-2xl">
             <div className="flex items-center gap-6 text-center lg:text-left">
               <div className="p-5 rounded-2xl bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30 shrink-0 hidden sm:flex shadow-md">
                 <Sparkles className="h-8 w-8" />

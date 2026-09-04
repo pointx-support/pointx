@@ -23,7 +23,7 @@ export interface HomePageProps {
  * - 60 FPS GPU-accelerated scrolling with zero layout shift.
  * - Interactive live tournament calculation engine & OBS broadcast telemetry preview.
  */
-export const HomePage: React.FC<HomePageProps> = ({
+const HomePageComponent: React.FC<HomePageProps> = ({
   onNavigateLogin,
   onNavigateSignup,
   onNavigateDashboard,
@@ -82,4 +82,5 @@ export const HomePage: React.FC<HomePageProps> = ({
   );
 };
 
+export const HomePage = React.memo(HomePageComponent);
 export default HomePage;

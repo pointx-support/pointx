@@ -31,7 +31,7 @@ const INITIAL_TEAMS: PreviewTeam[] = [
   { rank: 6, name: 'Blind Esports', tag: 'BLIND', booyahs: 0, placementPts: 16, killPts: 17, totalPts: 33 },
 ];
 
-export const LiveStandingsPreview: React.FC = () => {
+const LiveStandingsPreviewComponent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'matrix' | 'obs' | 'poster'>('matrix');
   const [teams, setTeams] = useState<PreviewTeam[]>(INITIAL_TEAMS);
   const [lastCalculatedTime, setLastCalculatedTime] = useState<string>('0.38ms');
@@ -70,7 +70,7 @@ export const LiveStandingsPreview: React.FC = () => {
   };
 
   return (
-    <section id="broadcast" className="py-24 md:py-32 relative overflow-hidden bg-[var(--bg-surface)]/20 border-t border-white/[0.06] transition-colors duration-300">
+    <section id="broadcast" className="py-24 md:py-32 relative overflow-hidden bg-[var(--bg-surface)]/20 border-t border-white/[0.06]">
       <div className="max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-12 relative z-10">
         
         {/* Section Header */}
@@ -143,7 +143,7 @@ export const LiveStandingsPreview: React.FC = () => {
         </div>
 
         {/* Interactive Preview Canvas (Widescreen High-Resolution Panel) */}
-        <div className="w-full rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] shadow-2xl p-6 sm:p-8 lg:p-10 overflow-hidden relative backdrop-blur-2xl transition-colors duration-200">
+        <div className="w-full rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] shadow-2xl p-6 sm:p-8 lg:p-10 overflow-hidden relative backdrop-blur-2xl">
           
           {/* TAB 1: Live Interactive Admin Scoring Matrix Table */}
           {activeTab === 'matrix' && (
@@ -378,4 +378,5 @@ export const LiveStandingsPreview: React.FC = () => {
   );
 };
 
+export const LiveStandingsPreview = React.memo(LiveStandingsPreviewComponent);
 export default LiveStandingsPreview;

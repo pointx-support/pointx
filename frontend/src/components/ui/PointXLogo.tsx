@@ -1,5 +1,4 @@
 import React from 'react';
-import { useAuthStore } from '../../store/authStore';
 
 export interface PointXLogoProps {
   className?: string;
@@ -9,16 +8,20 @@ export interface PointXLogoProps {
   withShine?: boolean;
 }
 
-export const PointXLogo: React.FC<PointXLogoProps> = ({
+export const PointXLogoComponent: React.FC<PointXLogoProps> = ({
   className = 'h-8 w-auto object-contain',
   imgClassName = 'w-full h-full object-contain',
   alt = 'PointX Esports',
   forceTheme,
   withShine = false
 }) => {
-  const storeTheme = useAuthStore((s) => s.theme);
-  const activeTheme = forceTheme || storeTheme || 'dark';
-  const isDark = activeTheme === 'dark';
+  const darkOpacity = forceTheme
+    ? (forceTheme === 'dark' ? 'opacity-100' : 'opacity-0')
+    : 'opacity-0 dark:opacity-100';
+
+  const lightOpacity = forceTheme
+    ? (forceTheme === 'light' ? 'opacity-100' : 'opacity-0')
+    : 'opacity-100 dark:opacity-0';
 
   return (
     <div className={`relative inline-flex items-center justify-center ${className} select-none`}>
@@ -26,7 +29,7 @@ export const PointXLogo: React.FC<PointXLogoProps> = ({
       <img
         src="/brand/pointx-logo.png"
         alt={alt}
-        className={`${imgClassName} transition-opacity duration-200 ease-out pointer-events-none ${isDark ? 'opacity-100' : 'opacity-0'}`}
+        className={`${imgClassName} transition-opacity duration-200 ease-out pointer-events-none ${darkOpacity}`}
         loading="eager"
         decoding="async"
         draggable={false}
@@ -36,7 +39,7 @@ export const PointXLogo: React.FC<PointXLogoProps> = ({
       <img
         src="/brand/pointx-logo-light.png"
         alt={alt}
-        className={`absolute inset-0 ${imgClassName} transition-opacity duration-200 ease-out pointer-events-none ${!isDark ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 ${imgClassName} transition-opacity duration-200 ease-out pointer-events-none ${lightOpacity}`}
         loading="eager"
         decoding="async"
         draggable={false}
@@ -45,7 +48,7 @@ export const PointXLogo: React.FC<PointXLogoProps> = ({
       {/* Optional Alpha-Masked Precision Shine Layer */}
       {withShine && (
         <div
-          className={`absolute inset-0 pointer-events-none overflow-hidden transition-opacity duration-200 ${isDark ? 'opacity-100' : 'opacity-0'}`}
+          className={`absolute inset-0 pointer-events-none overflow-hidden transition-opacity duration-200 ${darkOpacity}`}
           style={{
             WebkitMaskImage: 'url("/brand/pointx-logo.png")',
             maskImage: 'url("/brand/pointx-logo.png")',
@@ -64,7 +67,7 @@ export const PointXLogo: React.FC<PointXLogoProps> = ({
 
       {withShine && (
         <div
-          className={`absolute inset-0 pointer-events-none overflow-hidden transition-opacity duration-200 ${!isDark ? 'opacity-100' : 'opacity-0'}`}
+          className={`absolute inset-0 pointer-events-none overflow-hidden transition-opacity duration-200 ${lightOpacity}`}
           style={{
             WebkitMaskImage: 'url("/brand/pointx-logo-light.png")',
             maskImage: 'url("/brand/pointx-logo-light.png")',
@@ -83,4 +86,7 @@ export const PointXLogo: React.FC<PointXLogoProps> = ({
     </div>
   );
 };
+
+export const PointXLogo = React.memo(PointXLogoComponent);
+export default PointXLogo;
 

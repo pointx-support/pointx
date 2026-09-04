@@ -164,7 +164,6 @@
     line-height: 1.55;
     min-height: 100vh;
     overflow-x: hidden;
-    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   /* Esports Numerical Font Tuning */
@@ -756,12 +755,12 @@ button, a, input, select, textarea {
 
 /* Controlled Smooth Theme Switch Transition (GPU-friendly, zero full-page flicker) */
 body {
-  transition: background-color 200ms ease, color 200ms ease;
+  transition: background-color 200ms ease;
 }
 
 .theme-transition,
 .theme-transition-all {
-  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease;
+  transition: background-color 200ms ease, border-color 200ms ease;
 }
 
 /* Interactive Feedback Tokens for Buttons & Touch Surfaces */

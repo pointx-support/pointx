@@ -17,7 +17,7 @@ export interface FeaturedGamesProps {
   onNavigateLogin?: () => void;
 }
 
-export const FeaturedGames: React.FC<FeaturedGamesProps> = ({ onNavigateLogin, onNavigateSignup }) => {
+const FeaturedGamesComponent: React.FC<FeaturedGamesProps> = ({ onNavigateLogin, onNavigateSignup }) => {
   const navigateToAuth = onNavigateLogin || onNavigateSignup || (() => {});
 
   const games = [
@@ -92,7 +92,7 @@ export const FeaturedGames: React.FC<FeaturedGamesProps> = ({ onNavigateLogin, o
   ];
 
   return (
-    <section id="games" className="py-24 md:py-32 relative overflow-hidden transition-colors duration-300">
+    <section id="games" className="py-24 md:py-32 relative overflow-hidden">
       <div className="max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-12">
         
         {/* Section Heading */}
@@ -125,11 +125,11 @@ export const FeaturedGames: React.FC<FeaturedGamesProps> = ({ onNavigateLogin, o
             return (
               <div
                 key={game.id}
-                className="p-8 sm:p-10 rounded-3xl bg-[var(--bg-surface-raised)]/80 dark:bg-black/50 border border-white/[0.08] hover:border-white/[0.2] transition-all duration-300 flex flex-col justify-between group relative overflow-hidden shadow-2xl backdrop-blur-xl hover:-translate-y-1"
+                className="p-8 sm:p-10 rounded-3xl bg-[var(--bg-surface-raised)]/80 dark:bg-black/50 border border-white/[0.08] hover:border-white/[0.2] transition-[transform,border-color,background-color] duration-200 flex flex-col justify-between group relative overflow-hidden shadow-2xl backdrop-blur-xl hover:-translate-y-1"
               >
                 {/* Subtle top ambient accent bar */}
                 <div
-                  className="absolute top-0 left-0 right-0 h-1.5 transition-all duration-300 group-hover:h-2"
+                  className="absolute top-0 left-0 right-0 h-1.5 transition-[height] duration-200 group-hover:h-2"
                   style={{ backgroundColor: game.color }}
                 />
 
@@ -199,7 +199,7 @@ export const FeaturedGames: React.FC<FeaturedGamesProps> = ({ onNavigateLogin, o
                   <button
                     type="button"
                     onClick={navigateToAuth}
-                    className="inline-flex items-center gap-2 text-xs font-black font-display uppercase tracking-wider text-[var(--accent-primary)] hover:brightness-110 transition-all cursor-pointer group/btn"
+                    className="inline-flex items-center gap-2 text-xs font-black font-display uppercase tracking-wider text-[var(--accent-primary)] hover:brightness-110 transition-colors duration-200 cursor-pointer group/btn"
                   >
                     <span>Launch {game.title} Arena</span>
                     <ArrowRight className="h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
@@ -214,4 +214,5 @@ export const FeaturedGames: React.FC<FeaturedGamesProps> = ({ onNavigateLogin, o
   );
 };
 
+export const FeaturedGames = React.memo(FeaturedGamesComponent);
 export default FeaturedGames;

@@ -19,7 +19,8 @@ import type { Tournament } from './types/tournament';
 
 export function App() {
   const { currentTournament, setTournament, clearActiveTournament, setActiveTab } = useTournamentStore();
-  const user = useAuthStore((s) => s.user);
+  const userRole = useAuthStore((s) => s.user?.role);
+  const userIsOnboarded = useAuthStore((s) => s.user?.isOnboarded);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   
   // Dynamic Route & View Mode Resolution
@@ -130,7 +131,7 @@ export function App() {
       if (path === '/login' || path === '/signup' || path === '/signin' || path === '/register') {
         navigateTo('command-center', '/dashboard');
       } else if (path.startsWith('/admin') || path.startsWith('/super-admin')) {
-        if (user?.role === 'admin') {
+        if (userRole === 'admin') {
           setViewMode('admin-dashboard');
         } else {
           navigateTo('command-center', '/dashboard');
@@ -149,7 +150,7 @@ export function App() {
         setPublicRoute('login');
       }
     }
-  }, [isAuthenticated, user?.role, navigateTo]);
+  }, [isAuthenticated, userRole, navigateTo]);
 
   // Listen to browser navigation popstate (Back/Forward buttons)
   useEffect(() => {
@@ -164,7 +165,7 @@ export function App() {
       } else if (path.startsWith('/signup') || path.startsWith('/register') || authParam === 'signup' || authParam === 'register') {
         setPublicRoute('signup');
       } else if (path.startsWith('/admin') || path.startsWith('/super-admin')) {
-        if (isAuthenticated && user?.role === 'admin') {
+        if (isAuthenticated && userRole === 'admin') {
           setViewMode('admin-dashboard');
         } else {
           setPublicRoute('login');
@@ -181,7 +182,7 @@ export function App() {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [isAuthenticated, user?.role]);
+  }, [isAuthenticated, userRole]);
 
   // Direct URL Tab Navigation Handler (e.g. ?tab=organization or ?tab=template-studio)
   useEffect(() => {
@@ -298,7 +299,7 @@ export function App() {
   }
 
   // 3b. Mandatory Organization Onboarding Guard (Requires organization profile activation)
-  if (isAuthenticated && user && !user.isOnboarded) {
+  if (isAuthenticated && userIsOnboarded === false) {
     return (
       <ToastProvider>
         <OnboardingModal />
@@ -363,7 +364,7 @@ export function App() {
             <div className="w-full">
               {viewMode === 'command-center' ? (
                 <CommandCenter onSelectTournament={handleSelectTournament} />
-              ) : viewMode === 'admin-dashboard' && user?.role === 'admin' ? (
+              ) : viewMode === 'admin-dashboard' && userRole === 'admin' ? (
                 <SuperAdminDashboard
                   isEmbedded={true}
                   onExitAdmin={handleBackToDashboard}
@@ -391,7 +392,7 @@ export function App() {
         {viewMode === 'workspace' && <BottomNav />}
 
         {/* Mandatory Non-Skippable First-Time Login Onboarding Modal */}
-        {isAuthenticated && user && !user.isOnboarded && <OnboardingModal />}
+        {isAuthenticated && userIsOnboarded === false && <OnboardingModal />}
       </div>
     </ToastProvider>
   );

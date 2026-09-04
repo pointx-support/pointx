@@ -2,6 +2,7 @@
 import React, { forwardRef, useRef, useMemo, useLayoutEffect, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Color } from 'three';
+import { useAuthStore } from '../../store/authStore';
 
 const hexToNormalizedRGB = (hex: string): [number, number, number] => {
   hex = hex.replace('#', '');
@@ -65,19 +66,20 @@ void main() {
                            sin(20.0 * (tex.x + tex.y - 0.1 * tOffset)));
 
   float grain = rnd / 15.0 * uNoiseIntensity;
-  vec3 result = uColor * pattern - vec3(grain);
-  if (uLightMode > 0.5) {
-    float fold = smoothstep(0.28, 0.9, pattern);
-    float specular = smoothstep(0.72, 0.98, pattern);
-    vec3 shadowColor = uColor * 0.72;
-    vec3 bodyColor = min(uColor * 1.18, vec3(1.0));
-    vec3 lightBase = mix(shadowColor, bodyColor, fold);
-    lightBase = mix(lightBase, vec3(1.0), specular * 0.92);
-    float fineNoise = noise(gl_FragCoord.xy * 0.63 + vec2(17.0, 41.0));
-    float grainSignal = (rnd + fineNoise - 1.0);
-    float grainStrength = clamp(uNoiseIntensity * 0.038, 0.0, 0.16);
-    result = lightBase + grainSignal * grainStrength;
-  }
+  vec3 darkResult = uColor * pattern - vec3(grain);
+
+  float fold = smoothstep(0.28, 0.9, pattern);
+  float specular = smoothstep(0.72, 0.98, pattern);
+  vec3 shadowColor = uColor * 0.72;
+  vec3 bodyColor = min(uColor * 1.18, vec3(1.0));
+  vec3 lightBase = mix(shadowColor, bodyColor, fold);
+  lightBase = mix(lightBase, vec3(1.0), specular * 0.92);
+  float fineNoise = noise(gl_FragCoord.xy * 0.63 + vec2(17.0, 41.0));
+  float grainSignal = (rnd + fineNoise - 1.0);
+  float grainStrength = clamp(uNoiseIntensity * 0.038, 0.0, 0.16);
+  vec3 lightResult = lightBase + grainSignal * grainStrength;
+
+  vec3 result = mix(darkResult, lightResult, clamp(uLightMode, 0.0, 1.0));
   gl_FragColor = vec4(clamp(result, 0.0, 1.0), 1.0);
 }
 `;
@@ -133,17 +135,19 @@ export interface SilkProps {
   style?: React.CSSProperties;
 }
 
-export const Silk: React.FC<SilkProps> = ({
+export const SilkComponent: React.FC<SilkProps> = ({
   speed = 5,
   scale = 1,
   color = '#ffdede',
   noiseIntensity = 1.5,
   rotation = 0,
-  lightMode = false,
+  lightMode,
   className = '',
   style
 }) => {
   const meshRef = useRef<any>(null);
+  const storeTheme = useAuthStore((s) => s.theme);
+  const effectiveLightMode = lightMode !== undefined ? lightMode : storeTheme === 'light';
 
   const uniforms = useMemo(
     () => ({
@@ -152,8 +156,8 @@ export const Silk: React.FC<SilkProps> = ({
       uNoiseIntensity: { value: noiseIntensity },
       uColor: { value: new Color(...hexToNormalizedRGB(color)) },
       uRotation: { value: rotation },
-      uLightMode: { value: lightMode ? 1.0 : 0.0 },
-      uLightModeTarget: { value: lightMode ? 1.0 : 0.0 },
+      uLightMode: { value: effectiveLightMode ? 1.0 : 0.0 },
+      uLightModeTarget: { value: effectiveLightMode ? 1.0 : 0.0 },
       uTime: { value: 0 }
     }),
     []
@@ -165,8 +169,8 @@ export const Silk: React.FC<SilkProps> = ({
     if (uniforms.uNoiseIntensity) uniforms.uNoiseIntensity.value = noiseIntensity;
     if (uniforms.uColor) uniforms.uColor.value.setRGB(...hexToNormalizedRGB(color));
     if (uniforms.uRotation) uniforms.uRotation.value = rotation;
-    if (uniforms.uLightModeTarget) uniforms.uLightModeTarget.value = lightMode ? 1.0 : 0.0;
-  }, [speed, scale, noiseIntensity, color, rotation, lightMode, uniforms]);
+    if (uniforms.uLightModeTarget) uniforms.uLightModeTarget.value = effectiveLightMode ? 1.0 : 0.0;
+  }, [speed, scale, noiseIntensity, color, rotation, effectiveLightMode, uniforms]);
 
   return (
     <div
@@ -190,4 +194,5 @@ export const Silk: React.FC<SilkProps> = ({
   );
 };
 
+export const Silk = React.memo(SilkComponent);
 export default Silk;

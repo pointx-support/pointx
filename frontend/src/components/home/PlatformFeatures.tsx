@@ -66,7 +66,7 @@ export const PlatformFeatures: React.FC = () => {
   ];
 
   return (
-    <section id="features" className="py-24 md:py-32 relative bg-[var(--bg-surface)]/30 border-y border-white/[0.06] transition-colors duration-300">
+    <section id="features" className="py-24 md:py-32 relative bg-[var(--bg-surface)]/30 border-y border-white/[0.06]">
       <div className="max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-12">
         
         {/* Section Heading */}
@@ -133,7 +133,7 @@ export const PlatformFeatures: React.FC = () => {
 
         {/* Comparison Telemetry Card */}
         <FadeIn delay={0.2}>
-          <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] grid grid-cols-1 lg:grid-cols-2 gap-8 items-center shadow-2xl backdrop-blur-2xl transition-colors duration-200">
+          <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] grid grid-cols-1 lg:grid-cols-2 gap-8 items-center shadow-2xl backdrop-blur-2xl">
             
             {/* Old Method */}
             <div className="space-y-3 p-6 rounded-2xl bg-rose-500/5 border border-rose-500/20">

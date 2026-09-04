@@ -62,7 +62,7 @@ export const OrganizerExperience: React.FC<OrganizerExperienceProps> = ({
   ];
 
   return (
-    <section id="organizer-workflow" className="py-24 md:py-32 relative overflow-hidden transition-colors duration-300">
+    <section id="organizer-workflow" className="py-24 md:py-32 relative overflow-hidden">
       <div className="max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-12 relative z-10">
         
         {/* Section Header */}
@@ -139,7 +139,7 @@ export const OrganizerExperience: React.FC<OrganizerExperienceProps> = ({
 
         {/* Organizer Callout Action Banner */}
         <FadeIn delay={0.2}>
-          <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] flex flex-col lg:flex-row items-center justify-between gap-8 shadow-2xl backdrop-blur-2xl transition-colors duration-200">
+          <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-[var(--bg-surface-raised)]/90 dark:bg-black/60 border border-white/[0.08] flex flex-col lg:flex-row items-center justify-between gap-8 shadow-2xl backdrop-blur-2xl">
             <div className="space-y-2 text-center lg:text-left">
               <div className="flex items-center justify-center lg:justify-start gap-2 text-xs font-mono font-bold text-[var(--accent-primary)] uppercase tracking-wider">
                 <ShieldCheck className="h-4 w-4" />

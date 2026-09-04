@@ -23,16 +23,13 @@ export interface HeroSectionProps {
   onNavigateDashboard?: () => void;
 }
 
-export const HeroSection: React.FC<HeroSectionProps> = ({
+const HeroSectionComponent: React.FC<HeroSectionProps> = ({
   onNavigateLogin,
   onNavigateDashboard,
 }) => {
-  const theme = useAuthStore((s) => s.theme);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const user = useAuthStore((s) => s.user);
+  const userEmail = useAuthStore((s) => s.user?.email);
   const prefersReducedMotion = useReducedMotion();
-
-  const isDark = theme === 'dark';
 
   // Rotating Championship Value Propositions (Stable min-height = 0 Layout Shift, No Clipping)
   const ROTATING_HEADLINES = [
@@ -65,7 +62,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   }, [prefersReducedMotion]);
 
   return (
-    <div className="relative w-full overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)] transition-colors duration-200">
+    <div className="relative w-full overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)]">
       
       {/* ========================================================================= */}
       {/* 1. CINEMATIC ESPORTS ARENA VOLUMETRIC STAGE LIGHTING (PRO BROADCAST AURA)  */}
@@ -82,25 +79,24 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               color="#ffdede"
               noiseIntensity={1.5}
               rotation={0}
-              lightMode={!isDark}
               className="w-full h-full"
             />
           </div>
 
           {/* Left Stage Volumetric Spotlight Beam (Sweeping Angled Beam) */}
-          <div className="absolute -top-24 -left-16 w-[550px] lg:w-[750px] h-[950px] lg:h-[1300px] bg-gradient-to-b from-amber-400/[0.22] via-amber-500/[0.06] to-transparent rounded-full blur-[65px] animate-spotlight-left pointer-events-none transition-opacity duration-200" />
+          <div className="absolute -top-24 -left-16 w-[550px] lg:w-[750px] h-[950px] lg:h-[1300px] bg-gradient-to-b from-amber-400/[0.22] via-amber-500/[0.06] to-transparent rounded-full blur-[65px] animate-spotlight-left pointer-events-none" />
 
           {/* Right Stage Volumetric Spotlight Beam (Sweeping Electric Cyan Beam) */}
-          <div className="absolute -top-24 -right-16 w-[500px] lg:w-[700px] h-[950px] lg:h-[1300px] bg-gradient-to-b from-cyan-400/[0.18] via-sky-500/[0.05] to-transparent rounded-full blur-[65px] animate-spotlight-right pointer-events-none transition-opacity duration-200" />
+          <div className="absolute -top-24 -right-16 w-[500px] lg:w-[700px] h-[950px] lg:h-[1300px] bg-gradient-to-b from-cyan-400/[0.18] via-sky-500/[0.05] to-transparent rounded-full blur-[65px] animate-spotlight-right pointer-events-none" />
 
           {/* Center Arena Championship Horizon Pulse Core */}
-          <div className="absolute top-[8%] left-1/2 -translate-x-1/2 w-[650px] sm:w-[900px] lg:w-[1150px] h-[400px] sm:h-[500px] lg:h-[600px] bg-gradient-to-b from-amber-500/[0.2] via-amber-400/[0.05] to-transparent rounded-full blur-[85px] animate-horizon-glow pointer-events-none transition-opacity duration-200" />
+          <div className="absolute top-[8%] left-1/2 -translate-x-1/2 w-[650px] sm:w-[900px] lg:w-[1150px] h-[400px] sm:h-[500px] lg:h-[600px] bg-gradient-to-b from-amber-500/[0.2] via-amber-400/[0.05] to-transparent rounded-full blur-[85px] animate-horizon-glow pointer-events-none" />
 
           {/* Dynamic Stage Floor Moving Beam Sweep */}
-          <div className="absolute top-[35%] left-1/2 -translate-x-1/2 w-[850px] lg:w-[1350px] h-[300px] lg:h-[400px] bg-gradient-to-r from-transparent via-amber-400/[0.13] to-transparent rounded-full blur-[75px] animate-beam-sweep pointer-events-none transition-opacity duration-200" />
+          <div className="absolute top-[35%] left-1/2 -translate-x-1/2 w-[850px] lg:w-[1350px] h-[300px] lg:h-[400px] bg-gradient-to-r from-transparent via-amber-400/[0.13] to-transparent rounded-full blur-[75px] animate-beam-sweep pointer-events-none" />
 
           {/* Deep Stage Floor Grounding Scrim */}
-          <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[var(--bg-base)] to-transparent pointer-events-none transition-colors duration-200" />
+          <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[var(--bg-base)] to-transparent pointer-events-none" />
         </div>
 
         {/* ========================================================================= */}
@@ -117,11 +113,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {/* Top Eyebrow Status Capsule */}
               <FadeIn delay={0.05}>
                 <div
-                  className={`inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border text-xs backdrop-blur-xl shadow-sm transition-colors duration-300 ${
-                    isDark
-                      ? 'bg-black/60 border-white/15 text-zinc-300'
-                      : 'bg-white/90 border-slate-300 text-slate-800 shadow-sm'
-                  }`}
+                  className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border text-xs backdrop-blur-xl shadow-sm bg-white/90 dark:bg-black/60 border-slate-300 dark:border-white/15 text-slate-800 dark:text-zinc-300"
                   style={{ fontFamily: "'Outfit', sans-serif" }}
                 >
                   <span className="relative flex h-2 w-2">
@@ -146,21 +138,18 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               <div className="relative my-2 sm:my-3">
                 {/* Logo Backlight Glow */}
                 <div
-                  className={`absolute inset-0 rounded-full blur-3xl pointer-events-none transition-opacity duration-500 ${
-                    isDark ? 'bg-amber-400/20' : 'bg-amber-300/25'
-                  }`}
+                  className="absolute inset-0 rounded-full blur-3xl pointer-events-none transition-opacity duration-500 bg-amber-300/25 dark:bg-amber-400/20"
                 />
 
                 {/* Telemetry Radar Pulse Waves (Active Transmission Field) */}
-                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] sm:w-[460px] h-[320px] sm:h-[460px] rounded-full border pointer-events-none animate-radar-slow ${isDark ? 'border-amber-400/25' : 'border-amber-500/15'}`} />
-                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[220px] sm:w-[320px] h-[220px] sm:h-[320px] rounded-full border pointer-events-none animate-radar-fast ${isDark ? 'border-amber-400/35' : 'border-amber-500/20'}`} />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] sm:w-[460px] h-[320px] sm:h-[460px] rounded-full border pointer-events-none animate-radar-slow border-amber-500/15 dark:border-amber-400/25" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[220px] sm:w-[320px] h-[220px] sm:h-[320px] rounded-full border pointer-events-none animate-radar-fast border-amber-500/20 dark:border-amber-400/35" />
 
                 {/* Animated Logo Container with Zero Black Shade in Light Theme */}
                 <div className="relative z-10 select-none">
                   <PointXLogo
                     className="h-20 sm:h-28 md:h-36 lg:h-44 w-auto max-w-[280px] sm:max-w-[420px] md:max-w-[560px] object-contain hover:scale-[1.02] transition-transform duration-300 drop-shadow-none dark:drop-shadow-[0_20px_48px_rgba(0,0,0,0.85)]"
                     alt="PointX Esports Infrastructure Platform"
-                    forceTheme={theme}
                     withShine={true}
                   />
                 </div>
@@ -181,7 +170,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                         className="text-2xl sm:text-3xl md:text-4xl lg:text-[44px] xl:text-[48px] font-black uppercase tracking-[-0.03em] leading-[1.12] drop-shadow-sm"
                         style={{ fontFamily: "'Outfit', sans-serif" }}
                       >
-                        <span className={isDark ? 'text-white' : 'text-slate-900'}>
+                        <span className="text-slate-900 dark:text-white">
                           {ROTATING_HEADLINES[headlineIdx].line1}
                         </span>{' '}
                         <br className="hidden sm:inline" />
@@ -194,9 +183,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
                   {/* Refined Supporting Narrative with Luxury Outfit Typography */}
                   <p
-                    className={`font-normal text-sm sm:text-base md:text-lg max-w-xl leading-relaxed tracking-[-0.015em] ${
-                      isDark ? 'text-zinc-300/90' : 'text-slate-700'
-                    }`}
+                    className="font-normal text-sm sm:text-base md:text-lg max-w-xl leading-relaxed tracking-[-0.015em] text-slate-700 dark:text-zinc-300/90"
                     style={{
                       fontFamily: "'Outfit', sans-serif"
                     }}
@@ -257,7 +244,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     {isAuthenticated ? (
                       <>
                         <LayoutDashboard className="h-4 w-4 text-amber-500 group-hover:translate-x-0.5 transition-transform duration-300 shrink-0" />
-                        <span className="truncate max-w-[140px] uppercase font-bold">{user?.email || 'Dashboard'}</span>
+                        <span className="truncate max-w-[140px] uppercase font-bold">{userEmail || 'Dashboard'}</span>
                       </>
                     ) : (
                       <>
@@ -304,7 +291,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               <FadeIn delay={0.2}>
                 {/* Master Holographic Arena Command Card */}
                 <div
-                  className="relative w-full rounded-3xl border backdrop-blur-2xl transition-colors duration-200 overflow-hidden shadow-2xl bg-white/95 dark:bg-[#0a0d14]/95 border-slate-200 dark:border-white/[0.14] shadow-[0_24px_60px_rgba(15,23,42,0.1)] dark:shadow-[0_30px_70px_rgba(0,0,0,0.8)] hover:border-amber-400/60 dark:hover:border-amber-400/40"
+                  className="relative w-full rounded-3xl border backdrop-blur-2xl overflow-hidden shadow-2xl bg-white/95 dark:bg-[#0a0d14]/95 border-slate-200 dark:border-white/[0.14] shadow-[0_24px_60px_rgba(15,23,42,0.1)] dark:shadow-[0_30px_70px_rgba(0,0,0,0.8)] hover:border-amber-400/60 dark:hover:border-amber-400/40"
                 >
                   {/* Top Golden Laser Accent Bar */}
                   <div className="absolute top-0 left-6 right-6 h-[2px] bg-gradient-to-r from-transparent via-amber-400/90 to-transparent pointer-events-none" />
@@ -340,7 +327,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   {/* 2. Grand Champion Showcase Pod */}
                   <div className="p-5 space-y-4">
                     <div
-                      className="relative p-4 sm:p-5 rounded-2xl border transition-colors duration-200 overflow-hidden bg-gradient-to-br from-amber-50/80 via-white to-amber-50/40 dark:from-[#141a27] dark:via-[#0d111a] dark:to-[#121622] border-amber-400/40 dark:border-amber-400/35 shadow-sm dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]"
+                      className="relative p-4 sm:p-5 rounded-2xl border overflow-hidden bg-gradient-to-br from-amber-50/80 via-white to-amber-50/40 dark:from-[#141a27] dark:via-[#0d111a] dark:to-[#121622] border-amber-400/40 dark:border-amber-400/35 shadow-sm dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]"
                     >
                       {/* Ambient Golden Radial Beacon */}
                       <div className="absolute top-[-20%] right-[-10%] w-44 h-44 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
@@ -490,7 +477,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6 text-left">
             
             {/* Card 1: Sub-Second Calculation Matrix */}
-            <div className="relative p-6 rounded-3xl border backdrop-blur-xl transition-colors duration-200 space-y-3 group overflow-hidden bg-white/95 dark:bg-[#0d111a]/85 border-slate-200/90 dark:border-white/[0.12] hover:border-amber-400/60 dark:hover:border-amber-400/50 shadow-[0_12px_32px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
+            <div className="relative p-6 rounded-3xl border backdrop-blur-xl space-y-3 group overflow-hidden bg-white/95 dark:bg-[#0d111a]/85 border-slate-200/90 dark:border-white/[0.12] hover:border-amber-400/60 dark:hover:border-amber-400/50 shadow-[0_12px_32px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
               <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-amber-400/70 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="flex items-center justify-between">
                 <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-500 border border-amber-500/25">
@@ -518,7 +505,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
 
             {/* Card 2: Live OBS Browser Source Overlay */}
-            <div className="relative p-6 rounded-3xl border backdrop-blur-xl transition-colors duration-200 space-y-3 group overflow-hidden bg-white/95 dark:bg-[#0d111a]/85 border-slate-200/90 dark:border-white/[0.12] hover:border-cyan-400/60 dark:hover:border-cyan-400/50 shadow-[0_12px_32px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
+            <div className="relative p-6 rounded-3xl border backdrop-blur-xl space-y-3 group overflow-hidden bg-white/95 dark:bg-[#0d111a]/85 border-slate-200/90 dark:border-white/[0.12] hover:border-cyan-400/60 dark:hover:border-cyan-400/50 shadow-[0_12px_32px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
               <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-cyan-400/70 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="flex items-center justify-between">
                 <div className="p-2.5 rounded-xl bg-cyan-500/15 text-cyan-500 dark:text-cyan-400 border border-cyan-500/25">
@@ -546,7 +533,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
 
             {/* Card 3: 4K Production Banner Studio */}
-            <div className="relative p-6 rounded-3xl border backdrop-blur-xl transition-colors duration-200 space-y-3 group overflow-hidden bg-white/95 dark:bg-[#0d111a]/85 border-slate-200/90 dark:border-white/[0.12] hover:border-emerald-400/60 dark:hover:border-emerald-400/50 shadow-[0_12px_32px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
+            <div className="relative p-6 rounded-3xl border backdrop-blur-xl space-y-3 group overflow-hidden bg-white/95 dark:bg-[#0d111a]/85 border-slate-200/90 dark:border-white/[0.12] hover:border-emerald-400/60 dark:hover:border-emerald-400/50 shadow-[0_12px_32px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
               <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-emerald-400/70 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="flex items-center justify-between">
                 <div className="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 border border-emerald-500/25">
@@ -606,4 +593,5 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   );
 };
 
+export const HeroSection = React.memo(HeroSectionComponent);
 export default HeroSection;

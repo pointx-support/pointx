@@ -19,11 +19,14 @@ export interface HomeNavbarProps {
   onNavigateDashboard: () => void;
 }
 
-export const HomeNavbar: React.FC<HomeNavbarProps> = ({
+const HomeNavbarComponent: React.FC<HomeNavbarProps> = ({
   onNavigateLogin,
   onNavigateDashboard,
 }) => {
-  const { isAuthenticated, user, theme, toggleTheme } = useAuthStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const userEmail = useAuthStore((s) => s.user?.email);
+  const theme = useAuthStore((s) => s.theme);
+  const toggleTheme = useAuthStore((s) => s.toggleTheme);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<string>('live-matrix');
@@ -329,7 +332,7 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
             >
               <LayoutGrid className="h-3.5 w-3.5 text-neutral-300 shrink-0 transition-transform duration-200 group-hover:rotate-6" />
               <span className="truncate max-w-[85px] sm:max-w-[115px] md:max-w-[135px] font-bold text-white tracking-wide">
-                {user?.email || 'admin@pointx.gg'}
+                {userEmail || 'admin@pointx.gg'}
               </span>
               <ArrowRight className="h-3.5 w-3.5 text-neutral-400 group-hover:text-white group-hover:translate-x-0.5 transition-all duration-200 ease-out shrink-0" />
             </motion.button>
@@ -459,4 +462,5 @@ export const HomeNavbar: React.FC<HomeNavbarProps> = ({
   );
 };
 
+export const HomeNavbar = React.memo(HomeNavbarComponent);
 export default HomeNavbar;

@@ -3,13 +3,13 @@ import { ArrowUp } from 'lucide-react';
 import { PointXLogo } from '../ui/PointXLogo';
 import { PulseIndicator } from '../animation/MicroInteractions';
 
-export const HomeFooter: React.FC = () => {
+const HomeFooterComponent: React.FC = () => {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
-    <footer className="border-t border-white/[0.08] bg-[var(--bg-surface)]/80 backdrop-blur-2xl pt-16 pb-12 font-sans transition-colors duration-300">
+    <footer className="border-t border-white/[0.08] bg-[var(--bg-surface)]/80 backdrop-blur-2xl pt-16 pb-12 font-sans">
       <div className="max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-12 space-y-14">
         
         {/* Top Row: Brand & Quick Links */}
@@ -91,7 +91,7 @@ export const HomeFooter: React.FC = () => {
           <button
             type="button"
             onClick={scrollToTop}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-[var(--text-primary)] hover:text-[var(--accent-primary)] transition-all cursor-pointer shadow-md font-sans font-bold"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-[var(--text-primary)] hover:text-[var(--accent-primary)] transition-colors duration-200 cursor-pointer shadow-md font-sans font-bold"
           >
             <span>Back to Top</span>
             <ArrowUp className="h-3.5 w-3.5" />
@@ -103,4 +103,5 @@ export const HomeFooter: React.FC = () => {
   );
 };
 
+export const HomeFooter = React.memo(HomeFooterComponent);
 export default HomeFooter;
