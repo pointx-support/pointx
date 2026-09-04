@@ -41,7 +41,7 @@ export async function updateTeam(req: AuthenticatedRequest, res: Response, next:
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
     const validated = updateGlobalTeamSchema.parse(req.body);
-    const updated = await updateGlobalTeam(id, req.user._id.toString(), validated as any);
+    const updated = await updateGlobalTeam(id, req.user._id.toString(), validated as any, req.user.role);
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Team not found.' });
     }
@@ -55,7 +55,7 @@ export async function deleteTeam(req: AuthenticatedRequest, res: Response, next:
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
-    const deleted = await deleteGlobalTeam(id, req.user._id.toString());
+    const deleted = await deleteGlobalTeam(id, req.user._id.toString(), req.user.role);
     if (!deleted) {
       return res.status(404).json({ success: false, error: 'Team not found.' });
     }
@@ -67,9 +67,10 @@ export async function deleteTeam(req: AuthenticatedRequest, res: Response, next:
 
 export async function addPlayer(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
+    if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
     const validated = globalPlayerSchema.parse(req.body);
-    const player = await addPlayerToTeam(id, validated);
+    const player = await addPlayerToTeam(id, req.user._id.toString(), validated, req.user.role);
     if (!player) {
       return res.status(404).json({ success: false, error: 'Team not found.' });
     }
@@ -81,10 +82,11 @@ export async function addPlayer(req: AuthenticatedRequest, res: Response, next: 
 
 export async function updatePlayer(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
+    if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
     const playerId = req.params.playerId as string;
     const validated = globalPlayerSchema.partial().parse(req.body);
-    const success = await updatePlayerInTeam(id, playerId, validated);
+    const success = await updatePlayerInTeam(id, playerId, req.user._id.toString(), validated, req.user.role);
     if (!success) {
       return res.status(404).json({ success: false, error: 'Team or player not found.' });
     }
@@ -96,9 +98,10 @@ export async function updatePlayer(req: AuthenticatedRequest, res: Response, nex
 
 export async function deletePlayer(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
+    if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
     const playerId = req.params.playerId as string;
-    const success = await deletePlayerFromTeam(id, playerId);
+    const success = await deletePlayerFromTeam(id, playerId, req.user._id.toString(), req.user.role);
     if (!success) {
       return res.status(404).json({ success: false, error: 'Team or player not found.' });
     }

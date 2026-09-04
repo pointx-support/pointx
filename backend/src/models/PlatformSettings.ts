@@ -14,6 +14,8 @@ export interface IPlatformSettings extends Document {
   key: string;
   maintenanceMode: boolean;
   maintenanceReason: string;
+  customMessage?: string;
+  estimatedReturnTime?: string;
   allowRegistrations: boolean;
   maxTournamentsPerOrganizer: number;
   maxTeamsPerTournament: number;
@@ -42,7 +44,9 @@ const PlatformSettingsSchema = new Schema<IPlatformSettings>(
   {
     key: { type: String, required: true, unique: true, default: 'global_config' },
     maintenanceMode: { type: Boolean, default: false },
-    maintenanceReason: { type: String, default: 'Scheduled database indexing and system upgrade.' },
+    maintenanceReason: { type: String, default: 'PointX is temporarily offline while we improve the tournament experience. We\'ll be back shortly.' },
+    customMessage: { type: String, default: '' },
+    estimatedReturnTime: { type: String },
     allowRegistrations: { type: Boolean, default: true },
     maxTournamentsPerOrganizer: { type: Number, default: 25 },
     maxTeamsPerTournament: { type: Number, default: 48 },

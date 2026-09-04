@@ -24,11 +24,13 @@ export async function saveGraphicRecord(req: AuthenticatedRequest, res: Response
     const customId = record.id || `rec-${Date.now()}`;
 
     const saved = await GraphicsHistory.findOneAndUpdate(
-      { customId },
+      { customId, userId: req.user._id },
       {
-        ...record,
-        customId,
-        userId: req.user._id,
+        $set: {
+          ...record,
+          customId,
+          userId: req.user._id,
+        },
       },
       { upsert: true, returnDocument: 'after' }
     );

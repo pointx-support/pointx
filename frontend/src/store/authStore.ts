@@ -477,13 +477,10 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         get().recordActivity('Password Changed', 'security', 'Account security credentials changed successfully.');
         return { success: true };
       }
-      if (res.error && (res.error.toLowerCase().includes('incorrect') || res.error.toLowerCase().includes('wrong'))) {
-        return { success: false, error: res.error };
-      }
-    } catch {}
-
-    get().recordActivity('Password Changed', 'security', 'Account security credentials changed successfully.');
-    return { success: true };
+      return { success: false, error: res.error || 'Failed to update password. Please check your current password.' };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Network error while updating password.' };
+    }
   },
 
   updatePreferences: async (prefs) => {

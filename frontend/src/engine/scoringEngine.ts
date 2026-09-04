@@ -191,7 +191,12 @@ export function calculateTeamMatchScore(
   rawResult: RawMatchTeamResult,
   config?: ScoringPreset | null
 ): ScoringCalculationResult {
-  const normalizedConfig = normalizeScoringConfig(config);
+  if (config === undefined) {
+    return {
+      success: false,
+      error: { code: 'MISSING_CONFIG', message: 'Scoring configuration is missing', field: 'config' }
+    };
+  }
 
   const teamId = rawResult.teamId || '';
   if (!teamId) {
@@ -200,6 +205,22 @@ export function calculateTeamMatchScore(
       error: { code: 'INVALID_PLACEMENT', message: 'Team ID is required', field: 'teamId' }
     };
   }
+
+  if (rawResult.kills !== undefined && (rawResult.kills < 0 || isNaN(rawResult.kills))) {
+    return {
+      success: false,
+      error: { code: 'INVALID_KILLS', message: 'Kills cannot be negative', field: 'kills' }
+    };
+  }
+
+  if (rawResult.placement !== undefined && (rawResult.placement < 1 || isNaN(rawResult.placement))) {
+    return {
+      success: false,
+      error: { code: 'INVALID_PLACEMENT', message: 'Placement must be greater than or equal to 1', field: 'placement' }
+    };
+  }
+
+  const normalizedConfig = normalizeScoringConfig(config);
 
   const placement = Math.max(0, Math.floor(Number(rawResult.placement) || 0));
   const kills = Math.max(0, Math.floor(Number(rawResult.kills) || 0));

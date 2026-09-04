@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useAdminStore } from '../../../store/adminStore';
 import { useTournamentStore } from '../../../store/tournamentStore';
+import { usePlatformStore } from '../../../store/platformStore';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
 import { useToast } from '../../ui/Toast';
 import {
-  Settings,
   AlertTriangle,
   Plus,
   Trash2,
@@ -14,7 +14,9 @@ import {
   Bell,
   Sparkles,
   Eye,
-  EyeOff
+  EyeOff,
+  Clock,
+  ShieldAlert
 } from 'lucide-react';
 
 export const AdminSettingsView: React.FC = () => {
@@ -23,21 +25,95 @@ export const AdminSettingsView: React.FC = () => {
     platformSettings,
     toggleMaintenanceMode,
     updatePlatformSettings,
+    fetchSettings,
     addAnnouncement,
     toggleAnnouncement,
     deleteAnnouncement
   } = useAdminStore();
 
   const { showToast } = useToast();
+  const setPreviewMaintenance = usePlatformStore((s) => s.setPreviewMaintenance);
 
   React.useEffect(() => {
     fetchAdminDemoSetting();
-  }, [fetchAdminDemoSetting]);
+    fetchSettings();
+  }, [fetchAdminDemoSetting, fetchSettings]);
 
   const [isAnnModalOpen, setIsAnnModalOpen] = useState(false);
   const [annTitle, setAnnTitle] = useState('');
   const [annMessage, setAnnMessage] = useState('');
   const [annSeverity, setAnnSeverity] = useState<'info' | 'warning' | 'critical'>('info');
+
+  // Maintenance Mode Management State
+  const [isMaintModalOpen, setIsMaintModalOpen] = useState(false);
+  const [maintReasonInput, setMaintReasonInput] = useState('');
+  const [maintCustomMessageInput, setMaintCustomMessageInput] = useState('');
+  const [maintReturnTimeInput, setMaintReturnTimeInput] = useState('');
+  const [isUpdatingMaint, setIsUpdatingMaint] = useState(false);
+
+  const handleToggleMaintenanceClick = () => {
+    if (platformSettings.maintenanceMode) {
+      // Deactivating Maintenance Mode immediately
+      setIsUpdatingMaint(true);
+      toggleMaintenanceMode(false)
+        .then(() => {
+          showToast({
+            type: 'success',
+            title: 'Maintenance Mode Disabled',
+            message: 'PointX is now live and accessible to all users.'
+          });
+        })
+        .catch(() => {
+          showToast({
+            type: 'error',
+            title: 'Update Failed',
+            message: 'Could not deactivate maintenance mode.'
+          });
+        })
+        .finally(() => setIsUpdatingMaint(false));
+    } else {
+      // Activating Maintenance Mode: prompt confirmation modal with configurable reason, custom message and return time
+      setMaintReasonInput(
+        platformSettings.maintenanceReason ||
+        "Scheduled Platform & Arena Upgrade"
+      );
+      setMaintCustomMessageInput(
+        platformSettings.customMessage ||
+        "PointX is temporarily offline while we upgrade our tournament arena and live scoring engine. We will be back online shortly!"
+      );
+      setMaintReturnTimeInput(platformSettings.estimatedReturnTime || '');
+      setIsMaintModalOpen(true);
+    }
+  };
+
+  const handleConfirmActivateMaintenance = async (andPreview: boolean = false) => {
+    setIsUpdatingMaint(true);
+    try {
+      await toggleMaintenanceMode(
+        true,
+        maintReasonInput.trim(),
+        maintReturnTimeInput.trim() || null,
+        maintCustomMessageInput.trim() || null
+      );
+      setIsMaintModalOpen(false);
+      showToast({
+        type: 'info',
+        title: 'Maintenance Mode Activated',
+        message: 'Global maintenance mode is active. Public users are now routed to the maintenance page.'
+      });
+      if (andPreview) {
+        setPreviewMaintenance(true);
+      }
+    } catch {
+      showToast({
+        type: 'error',
+        title: 'Update Failed',
+        message: 'Could not activate maintenance mode.'
+      });
+    } finally {
+      setIsUpdatingMaint(false);
+    }
+  };
 
   const handleCreateAnnouncement = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,55 +139,109 @@ export const AdminSettingsView: React.FC = () => {
 
   return (
     <div className="space-y-6 font-sans">
-      {/* Header */}
-      <div className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-[var(--shadow-flat)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-extrabold text-[var(--text-primary)] font-display tracking-tight flex items-center gap-2">
-            <Settings className="h-5 w-5 text-[#7D4047] dark:text-[#E8C4C8]" />
-            Platform Controls & Governance
-          </h2>
-          <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-            Configure system-wide maintenance states, broadcast announcements, and enforce organizer limits.
-          </p>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 1. Maintenance Mode Card */}
-        <div className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-[var(--shadow-flat)] space-y-4">
-          <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-              <h3 className="font-bold text-sm text-[var(--text-primary)] font-display">
-                Emergency & Maintenance Mode
-              </h3>
+        {/* 1. Global Maintenance Mode Control Card (Hero Section) */}
+        <div className="lg:col-span-2 p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-[var(--shadow-flat)] space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className={`p-2 rounded-xl ${platformSettings.maintenanceMode ? 'bg-amber-500/15 text-amber-500' : 'bg-emerald-500/15 text-emerald-500'}`}>
+                <AlertTriangle className={`h-5 w-5 ${platformSettings.maintenanceMode ? 'animate-bounce' : ''}`} />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm sm:text-base text-[var(--text-primary)] font-display">
+                  Global Maintenance Mode
+                </h3>
+                <p className="text-[11px] text-[var(--text-secondary)]">
+                  Instant sitewide access lock with real-time public redirection
+                </p>
+              </div>
             </div>
-            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase ${
-              platformSettings.maintenanceMode
-                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-                : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-            }`}>
-              {platformSettings.maintenanceMode ? 'Active' : 'Standby'}
-            </span>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPreviewMaintenance(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-inset)] hover:bg-[var(--bg-surface-hover)] text-xs font-mono font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer shadow-xs"
+                title="Preview what regular visitors see when maintenance is active"
+              >
+                <Eye className="h-3.5 w-3.5 text-amber-500" />
+                <span className="hidden sm:inline">Preview Maintenance Screen</span>
+                <span className="sm:hidden">Preview</span>
+              </button>
+
+              <span className={`text-[10px] sm:text-xs font-mono font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
+                platformSettings.maintenanceMode
+                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse'
+                  : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+              }`}>
+                {platformSettings.maintenanceMode ? 'ACTIVE (PUBLIC LOCKED)' : 'STANDBY (NORMAL)'}
+              </span>
+            </div>
           </div>
 
-          <p className="text-xs text-[var(--text-secondary)]">
-            When enabled, non-admin organizers will see a maintenance notice preventing match finalization and tournament edits.
+          <p className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed">
+            When enabled, all public visitors and organizers are immediately redirected to <code className="px-1.5 py-0.5 rounded bg-[var(--bg-surface-inset)] font-mono text-xs text-[var(--text-primary)] font-bold">/maintenance</code> with zero content flash. Only authenticated Super Admins retain console access.
           </p>
 
-          <div className="space-y-3 pt-2 font-mono text-xs">
-            <label className="flex items-center gap-3 p-3 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] cursor-pointer">
-              <input
-                type="checkbox"
-                checked={platformSettings.maintenanceMode}
-                onChange={(e) => toggleMaintenanceMode(e.target.checked)}
-                className="rounded text-[#7D4047] h-4 w-4"
-              />
-              <span className="font-bold text-[var(--text-primary)] font-sans">
-                Enable Platform Maintenance Lock
+          <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="min-w-0">
+              <span className="text-xs sm:text-sm font-bold text-[var(--text-primary)] block">
+                Platform State: {platformSettings.maintenanceMode ? 'Locked for Calibration' : 'Online & Fully Accessible'}
               </span>
-            </label>
+              <span className="text-xs font-mono text-[var(--text-secondary)] mt-1 block truncate max-w-lg">
+                {platformSettings.maintenanceMode
+                  ? `Active Reason: "${platformSettings.maintenanceReason || 'Arena Upgrade'}"`
+                  : 'All features, APIs, and tournament portals running normally.'}
+              </span>
+            </div>
+
+            {/* Segmented [ ON / OFF ] Toggle Switch with large touch targets */}
+            <div className="flex items-center bg-[var(--bg-surface)] p-1 rounded-2xl border border-[var(--border-subtle)] shadow-xs shrink-0 self-stretch sm:self-auto justify-center">
+              <button
+                type="button"
+                onClick={handleToggleMaintenanceClick}
+                disabled={isUpdatingMaint}
+                className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-xs sm:text-sm font-mono font-bold transition-all cursor-pointer ${
+                  platformSettings.maintenanceMode
+                    ? 'bg-amber-500 text-black shadow-md font-extrabold scale-[1.02]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                ON
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleMaintenanceClick}
+                disabled={isUpdatingMaint}
+                className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-xs sm:text-sm font-mono font-bold transition-all cursor-pointer ${
+                  !platformSettings.maintenanceMode
+                    ? 'bg-emerald-600 text-white shadow-md font-extrabold scale-[1.02]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                OFF
+              </button>
+            </div>
           </div>
+
+          {platformSettings.maintenanceMode && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-[var(--text-secondary)] pt-2 border-t border-[var(--border-subtle)] font-mono">
+              <span>
+                {platformSettings.estimatedReturnTime ? `Reopening ETA: ${platformSettings.estimatedReturnTime}` : 'No estimated return time configured.'}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setMaintReasonInput(platformSettings.maintenanceReason || '');
+                  setMaintReturnTimeInput(platformSettings.estimatedReturnTime || '');
+                  setIsMaintModalOpen(true);
+                }}
+                className="text-amber-500 hover:underline text-xs font-bold cursor-pointer self-start sm:self-auto"
+              >
+                Edit Reason / ETA
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 2. Demo Tournaments & Feature Testing Card (Admin Only) */}
@@ -319,6 +449,110 @@ export const AdminSettingsView: React.FC = () => {
               </Button>
               <Button variant="primary" size="sm" type="submit" leftIcon={<Plus className="h-4 w-4" />} >
                 Broadcast Now
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* ACTIVATE / EDIT MAINTENANCE MODE MODAL */}
+      {isMaintModalOpen && (
+        <Modal
+          isOpen={isMaintModalOpen}
+          onClose={() => setIsMaintModalOpen(false)}
+          title={platformSettings.maintenanceMode ? 'Update Maintenance Details' : 'Activate Global Maintenance Mode'}
+          description="Configure the outage details before enforcing public lockdown."
+          maxWidth="md"
+        >
+          <form onSubmit={(e) => { e.preventDefault(); handleConfirmActivateMaintenance(false); }} className="space-y-4 font-sans text-xs sm:text-sm">
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-3 text-amber-700 dark:text-amber-400">
+              <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />
+              <div className="text-xs leading-relaxed">
+                <span className="font-bold block mb-0.5">Warning: Sitewide Public Impact</span>
+                Enabling maintenance mode will immediately lock out all unauthenticated visitors and organizers across all routes and redirect them to <span className="font-mono font-bold">/maintenance</span>. Only Super Admins can log in and manage the console.
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
+                Maintenance Heading / Reason *
+              </label>
+              <input
+                type="text"
+                value={maintReasonInput}
+                onChange={(e) => setMaintReasonInput(e.target.value)}
+                placeholder="e.g. Scheduled Platform & Database Maintenance"
+                required
+                className="w-full p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-amber-500 font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
+                Custom Message to Display to Visitors *
+              </label>
+              <textarea
+                value={maintCustomMessageInput}
+                onChange={(e) => setMaintCustomMessageInput(e.target.value)}
+                placeholder="Enter the message displayed to users on the maintenance screen..."
+                rows={3}
+                required
+                className="w-full p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-amber-500 leading-relaxed"
+              />
+              <span className="text-[10px] text-[var(--text-secondary)] font-mono mt-1 block">
+                This message will be rendered directly on the public maintenance screen.
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
+                Estimated Reopening / Return Time (Optional)
+              </label>
+              <div className="relative">
+                <Input
+                  value={maintReturnTimeInput}
+                  onChange={(e) => setMaintReturnTimeInput(e.target.value)}
+                  placeholder="e.g. Approx. 2 Hours, or 18:00 UTC"
+                  className="pl-8"
+                />
+                <Clock className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={() => setIsMaintModalOpen(false)}
+                disabled={isUpdatingMaint}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={() => handleConfirmActivateMaintenance(true)}
+                disabled={isUpdatingMaint}
+                leftIcon={<Eye className="h-4 w-4 text-amber-500" />}
+                className="border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+              >
+                Activate & Preview
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                type="submit"
+                disabled={isUpdatingMaint}
+                leftIcon={<AlertTriangle className="h-4 w-4 text-black" />}
+                className="!bg-amber-500 hover:!bg-amber-400 !text-black font-extrabold"
+              >
+                {isUpdatingMaint
+                  ? 'Applying Lock...'
+                  : platformSettings.maintenanceMode
+                  ? 'Save Details'
+                  : 'Turn ON Maintenance'}
               </Button>
             </div>
           </form>

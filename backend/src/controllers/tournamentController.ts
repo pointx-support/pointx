@@ -110,6 +110,12 @@ export async function importTournamentsBatch(req: AuthenticatedRequest, res: Res
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const { tournaments } = req.body;
+    if (!Array.isArray(tournaments) || tournaments.length === 0) {
+      return res.status(400).json({ success: false, error: 'Invalid payload: tournaments array is required.' });
+    }
+    if (tournaments.length > 50) {
+      return res.status(400).json({ success: false, error: 'Maximum 50 tournaments can be imported in a single batch.' });
+    }
     const count = await importTournaments(req.user._id.toString(), tournaments);
     return res.status(200).json({ success: true, importedCount: count });
   } catch (error) {

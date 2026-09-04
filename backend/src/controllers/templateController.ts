@@ -30,9 +30,9 @@ export async function updateExistingTemplate(req: AuthenticatedRequest, res: Res
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
-    const updated = await updateTemplate(id, req.user._id.toString(), req.body);
+    const updated = await updateTemplate(id, req.user._id.toString(), req.body, req.user.role);
     if (!updated) {
-      return res.status(404).json({ success: false, error: 'Template not found.' });
+      return res.status(404).json({ success: false, error: 'Template not found or cannot be edited.' });
     }
     return res.status(200).json({ success: true, data: updated.toJSON() });
   } catch (error) {
@@ -44,9 +44,9 @@ export async function deleteExistingTemplate(req: AuthenticatedRequest, res: Res
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
-    const deleted = await deleteTemplate(id, req.user._id.toString());
+    const deleted = await deleteTemplate(id, req.user._id.toString(), req.user.role);
     if (!deleted) {
-      return res.status(404).json({ success: false, error: 'Template not found.' });
+      return res.status(404).json({ success: false, error: 'Template not found or cannot be deleted.' });
     }
     return res.status(200).json({ success: true, message: 'Template deleted.' });
   } catch (error) {

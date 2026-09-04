@@ -15,13 +15,20 @@ import { useTournamentStore } from './store/tournamentStore';
 import { useAuthStore } from './store/authStore';
 import { preloadAndCacheFonts } from './engine/fontEmbedder';
 import { SuperAdminDashboard } from './components/admin/SuperAdminDashboard';
+import { usePlatformStore } from './store/platformStore';
+import { MaintenancePage } from './components/maintenance/MaintenancePage';
 import type { Tournament } from './types/tournament';
 
 export function App() {
   const { currentTournament, setTournament, clearActiveTournament, setActiveTab } = useTournamentStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const userRole = useAuthStore((s) => s.user?.role);
   const userIsOnboarded = useAuthStore((s) => s.user?.isOnboarded);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const maintenanceMode = usePlatformStore((s) => s.maintenanceMode);
+  const hasInitialCheck = usePlatformStore((s) => s.hasInitialCheck);
+  const previewMaintenance = usePlatformStore((s) => s.previewMaintenance);
+  const setPreviewMaintenance = usePlatformStore((s) => s.setPreviewMaintenance);
+  const startPolling = usePlatformStore((s) => s.startPolling);
   
   // Dynamic Route & View Mode Resolution
   const [viewMode, setViewMode] = useState<'home' | 'command-center' | 'workspace' | 'admin-dashboard'>(() => {
@@ -115,6 +122,21 @@ export function App() {
   useEffect(() => {
     useAuthStore.getState().checkAuth();
   }, []);
+
+  // Poll platform status every 8 seconds for real-time maintenance detection
+  useEffect(() => {
+    const stopPolling = startPolling(8000);
+    return () => stopPolling();
+  }, [startPolling]);
+
+  // When maintenance mode is deactivated, restore user from /maintenance back to /
+  useEffect(() => {
+    if (hasInitialCheck && !maintenanceMode && typeof window !== 'undefined' && window.location.pathname.toLowerCase() === '/maintenance') {
+      window.history.replaceState({}, '', '/');
+      setViewMode('home');
+      setPublicRoute('home');
+    }
+  }, [hasInitialCheck, maintenanceMode]);
 
   // Preload and cache all font binary Base64 streams in the background
   useEffect(() => {
@@ -221,6 +243,75 @@ export function App() {
       window.location.pathname.startsWith('/remote')
     );
   }, []);
+
+  // Preview Maintenance Mode for Admins
+  if (previewMaintenance) {
+    return (
+      <ToastProvider>
+        <div className="relative w-full min-h-screen">
+          <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-amber-500 text-black px-4 py-2 rounded-full font-mono text-xs font-bold shadow-2xl border border-amber-600">
+            <span>ADMIN PREVIEW</span>
+            <button
+              onClick={() => setPreviewMaintenance(false)}
+              className="px-2.5 py-0.5 bg-black text-white rounded-full text-[11px] hover:bg-neutral-800 cursor-pointer transition-colors"
+            >
+              Exit Preview
+            </button>
+          </div>
+          <MaintenancePage onAdminLoginClick={() => setPreviewMaintenance(false)} />
+        </div>
+      </ToastProvider>
+    );
+  }
+
+  // 0. Global Maintenance Mode Guard (blocks all non-admin users across all routes)
+  const isAdmin = userRole === 'admin';
+  const isMaintenanceRoute = typeof window !== 'undefined' && window.location.pathname.toLowerCase() === '/maintenance';
+  const isAdminRoute = typeof window !== 'undefined' && (
+    window.location.pathname.toLowerCase().startsWith('/admin') ||
+    window.location.pathname.toLowerCase().startsWith('/super-admin')
+  );
+  const isMaintenanceActive = maintenanceMode || isMaintenanceRoute;
+
+  if (isMaintenanceActive && !isAdmin) {
+    // If an unauthenticated Super Admin is navigating to /admin, allow them to view LoginView
+    if (!isAuthenticated && isAdminRoute) {
+      return (
+        <ToastProvider>
+          <div className="w-full min-h-screen">
+            <LoginView
+              initialMode="signin"
+              onBackToHome={() => {
+                window.history.replaceState({}, '', '/maintenance');
+                navigateTo('home', '/maintenance');
+              }}
+              onModeChange={(mode) => navigateTo(mode === 'signup' ? 'signup' : 'login')}
+              onAuthSuccess={() => navigateTo('admin-dashboard', '/admin')}
+            />
+          </div>
+        </ToastProvider>
+      );
+    }
+
+    // Synchronize URL to /maintenance without reload/flash
+    if (typeof window !== 'undefined' && window.location.pathname !== '/maintenance') {
+      window.history.replaceState({}, '', '/maintenance');
+    }
+
+    return (
+      <ToastProvider>
+        <MaintenancePage
+          onAdminLoginClick={() => {
+            if (useAuthStore.getState().user?.role === 'admin') {
+              navigateTo('admin-dashboard', '/admin');
+            } else {
+              navigateTo('login', '/admin');
+            }
+          }}
+        />
+      </ToastProvider>
+    );
+  }
 
   // 1. Dedicated OBS Browser Source: Zero Admin Chrome Transparent Overlay
   if (isBroadcastMode) {

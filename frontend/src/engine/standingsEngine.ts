@@ -70,13 +70,13 @@ export function calculateTournamentStandings(
   const teams = Array.isArray(tournament.teams) ? tournament.teams : [];
   const matches = Array.isArray(tournament.matches) ? tournament.matches : [];
   const scoringPreset = normalizeScoringConfig(tournament.scoringPreset);
-  const includeDrafts = options?.includeDrafts ?? true;
+  const includeDrafts = options?.includeDrafts ?? false;
 
   // Filter eligible matches
   const eligibleMatches = matches
     .filter((m) => {
       if (!m) return false;
-      if (!includeDrafts && m.status === 'Draft' && (!m.results || m.results.length === 0)) return false;
+      if (!includeDrafts && m.status === 'Draft') return false;
       if (options?.matchRange?.start && m.matchNumber < options.matchRange.start) return false;
       if (options?.matchRange?.end && m.matchNumber > options.matchRange.end) return false;
       return true;
@@ -439,6 +439,23 @@ export function calculateTournamentSummary(tournament: Tournament): TournamentSt
     ? { playerName: players[0].playerName, teamTag: players[0].teamTag, totalKills: players[0].totalKills }
     : undefined;
 
+  let highestSingleMatchKills: { teamName: string; matchNumber: number; kills: number } | undefined;
+  (tournament.matches || [])
+    .filter((m) => m && (m.status === 'Completed' || m.status === 'Finalized'))
+    .forEach((m) => {
+      (m.results || []).forEach((r) => {
+        const kills = Number(r.kills) || 0;
+        if (!highestSingleMatchKills || kills > highestSingleMatchKills.kills) {
+          const team = (tournament.teams || []).find((t) => t.id === r.teamId);
+          highestSingleMatchKills = {
+            teamName: team?.name || r.teamId,
+            matchNumber: m.matchNumber || 1,
+            kills,
+          };
+        }
+      });
+    });
+
   return {
     totalTeams: tournament.teams?.length || 0,
     totalMatches,
@@ -449,6 +466,7 @@ export function calculateTournamentSummary(tournament: Tournament): TournamentSt
     topScoringTeam,
     mostKillsTeam,
     mostBooyahsTeam,
-    topFragger
+    topFragger,
+    highestSingleMatchKills,
   };
 }

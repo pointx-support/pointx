@@ -97,3 +97,30 @@ export function requireOnboarded(req: AuthenticatedRequest, res: Response, next:
   }
   next();
 }
+
+export async function optionalAuthenticate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    let token: string | undefined;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7).trim();
+    }
+    if (!token && (req as any).cookies?.token) {
+      token = (req as any).cookies.token;
+    }
+    if (token) {
+      try {
+        const decoded: any = jwt.verify(token, env.JWT_SECRET);
+        if (decoded?.id) {
+          const user = await User.findById(decoded.id);
+          if (user && user.status !== 'suspended') {
+            req.user = user;
+            req.token = token;
+          }
+        }
+      } catch {}
+    }
+  } catch {}
+  next();
+}
+

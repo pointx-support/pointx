@@ -22,7 +22,6 @@ import {
   Activity,
   Eye,
   Palette,
-  ArrowLeft,
   User,
 } from 'lucide-react';
 import { PointXLogo } from '../ui/PointXLogo';
@@ -50,13 +49,13 @@ export interface SuperAdminDashboardProps {
 }
 
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
-  onExitAdmin,
+  onExitAdmin: _onExitAdmin,
   onOpenTemplateStudio: _onOpenTemplateStudio,
   onControlTournament,
   isEmbedded = false,
 }) => {
   const { user, theme, toggleTheme, logout } = useAuthStore();
-  const { activeAdminTab, setActiveAdminTab } = useAdminStore();
+  const { activeAdminTab, setActiveAdminTab, platformSettings, toggleMaintenanceMode } = useAdminStore();
   const [activeTab, setActiveTabState] = useState<AdminTab>(activeAdminTab || 'overview');
   const [advancedSubTab, setAdvancedSubTab] = useState<'general' | 'requests' | 'mongodb' | 'cloudinary' | 'brevo' | 'health'>('general');
   const [isPrecisionStudioOpen, setIsPrecisionStudioOpen] = useState(false);
@@ -324,15 +323,61 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
       {/* Main Dashboard Canvas Frame (Large Rounded Shell Inspired by Reference) */}
       <div className={cn(
-        'max-w-[1440px] mx-auto rounded-[2rem] sm:rounded-[2.75rem] bg-[#FFFFFF] dark:bg-[#10131B] border border-black/[0.06] dark:border-white/[0.08] shadow-2xl shadow-black/5 p-5 sm:p-8 lg:p-10 space-y-8 transition-colors duration-300',
+        'max-w-[1440px] mx-auto rounded-2xl sm:rounded-[2.75rem] bg-[#FFFFFF] dark:bg-[#10131B] border border-black/[0.06] dark:border-white/[0.08] shadow-2xl shadow-black/5 p-3.5 sm:p-8 lg:p-10 space-y-6 sm:space-y-8 transition-colors duration-300',
         isEmbedded ? 'border-none shadow-none p-0 sm:p-2 lg:p-4 bg-transparent dark:bg-transparent' : ''
       )}>
         
-        {/* 1. Top Navigation Bar (Reference-Inspired Pill Design) */}
-        <header className="flex flex-col lg:flex-row items-center justify-between gap-4 pb-2">
-          
-          {/* Left Brand Container (Shown when standalone or provides title in embedded) */}
-          {!isEmbedded ? (
+        {/* Global Maintenance Mode Active Banner */}
+        {platformSettings.maintenanceMode && (
+          <div className="rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/30 p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-amber-500 text-black shrink-0">
+                <AlertTriangle className="h-5 w-5 animate-bounce" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-xs sm:text-sm text-amber-700 dark:text-amber-400 font-display uppercase tracking-tight">
+                    Global Maintenance Mode Active
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 font-bold">
+                    PUBLIC LOCKED
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-600 dark:text-neutral-400 font-mono mt-0.5">
+                  All public routes and organizers are redirected to <span className="font-bold text-amber-600 dark:text-amber-400">/maintenance</span>. Only Super Admins can access PointX.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('settings');
+                  setAdvancedSubTab('general');
+                }}
+                className="px-3 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-xs font-mono font-bold text-amber-800 dark:text-amber-300 transition-colors cursor-pointer"
+              >
+                Configure
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await toggleMaintenanceMode(false);
+                  showToast('success', 'Maintenance mode deactivated. Platform is now open to the public.');
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-mono font-extrabold transition-colors cursor-pointer shadow-xs"
+              >
+                Deactivate Now
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 1. Top Navigation & Sub-Tabs Bar */}
+        {!isEmbedded ? (
+          <header className="flex flex-col lg:flex-row items-center justify-between gap-4 pb-2">
+            {/* Standalone Brand Container */}
             <div className="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-start">
               <div className="flex items-center gap-3 px-5 py-2.5 rounded-full border border-black/[0.08] dark:border-white/[0.1] bg-neutral-50/90 dark:bg-neutral-900/90 shadow-xs">
                 <PointXLogo className="h-6 w-auto max-w-[95px] object-contain select-none" />
@@ -360,110 +405,116 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </button>
               </div>
             </div>
-          ) : (
-            <div className="flex items-center gap-2.5">
-              {onExitAdmin && (
-                <button
-                  type="button"
-                  onClick={onExitAdmin}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-raised)] hover:bg-[var(--bg-surface-hover)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer shadow-xs font-mono"
-                  title="Back to Dashboard"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5 text-[var(--accent-primary)]" />
-                  <span>Back to Dashboard</span>
-                </button>
-              )}
-              <div className="hidden lg:flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20 text-[var(--accent-primary)] text-xs font-mono font-bold uppercase tracking-wider">
-                <ShieldCheck className="h-4 w-4" />
-                <span>Governance Control Room</span>
+
+            {/* Navigation Tabs Strip */}
+            <nav className="flex items-center gap-1 p-1 sm:p-1.5 rounded-2xl sm:rounded-full bg-neutral-100/90 dark:bg-neutral-900/90 border border-black/[0.05] dark:border-white/[0.07] overflow-x-auto no-scrollbar max-w-full shadow-inner w-full lg:w-auto">
+              {NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      if (item.id === 'organizers' || item.id === 'requests') {
+                        const filter = item.id === 'requests' ? 'pending' : statusFilter;
+                        fetchOrganizers(1, filter);
+                      }
+                    }}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl sm:rounded-full text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none shrink-0',
+                      isActive
+                        ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-md font-black'
+                        : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* Standalone Right Utility Buttons */}
+            <div className="hidden lg:flex items-center gap-2.5">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-mono font-bold shadow-xs">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>System Live</span>
               </div>
-            </div>
-          )}
-
-          {/* Center Navigation Tabs Strip (Pill Segmented Menu) */}
-          <nav className="flex items-center gap-1 p-1.5 rounded-full bg-neutral-100/90 dark:bg-neutral-900/90 border border-black/[0.05] dark:border-white/[0.07] overflow-x-auto no-scrollbar max-w-full shadow-inner">
-            {NAV_ITEMS.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveTab(item.id);
-                    if (item.id === 'organizers' || item.id === 'requests') {
-                      const filter = item.id === 'requests' ? 'pending' : statusFilter;
-                      fetchOrganizers(1, filter);
-                    }
-                  }}
-                  className={cn(
-                    'px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none',
-                    isActive
-                      ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-md font-black'
-                      : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'
-                  )}
-                >
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Right Utility Buttons */}
-          <div className="hidden lg:flex items-center gap-2.5">
-            {/* System Status Pill */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-mono font-bold shadow-xs">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>System Live</span>
-            </div>
-
-            {/* Refresh Button */}
-            <button
-              type="button"
-              onClick={fetchOverview}
-              className="p-2.5 rounded-full border border-black/[0.08] dark:border-white/[0.1] bg-neutral-50 hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer shadow-xs"
-              title="Refresh Telemetry"
-            >
-              <RefreshCw className={cn('h-4 w-4', isOverviewLoading ? 'animate-spin' : '')} />
-            </button>
-
-            {/* Theme Toggle Switch */}
-            <AnimatedThemeToggle
-              isDark={theme === 'dark'}
-              onToggle={toggleTheme}
-              size="md"
-            />
-
-            {/* Admin Profile Circle */}
-            <div className="flex items-center gap-2 pl-1">
-              <div className="h-9 w-9 rounded-full bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 font-display font-black text-xs flex items-center justify-center shadow-md">
-                {user?.name ? user.name.slice(0, 2).toUpperCase() : 'SA'}
-              </div>
-            </div>
-
-            {/* Exit to Workspace Button */}
-            {onExitAdmin && (
               <button
                 type="button"
-                onClick={onExitAdmin}
-                className="px-4 py-2 rounded-full border border-black/[0.08] dark:border-white/[0.1] bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs hover:opacity-90"
+                onClick={fetchOverview}
+                className="p-2.5 rounded-full border border-black/[0.08] dark:border-white/[0.1] bg-neutral-50 hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer shadow-xs"
+                title="Refresh Telemetry"
               >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                <span>Workspace</span>
+                <RefreshCw className={cn('h-4 w-4', isOverviewLoading ? 'animate-spin' : '')} />
               </button>
-            )}
+              <AnimatedThemeToggle
+                isDark={theme === 'dark'}
+                onToggle={toggleTheme}
+                size="md"
+              />
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="px-4 py-2 rounded-full border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          </header>
+        ) : (
+          /* Sleek Embedded Sub-Nav Bar (Zero Duplicate Headers, Zero Duplicate Theme Toggles) */
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-3 border-b border-black/[0.06] dark:border-white/[0.06]">
+            {/* Center Navigation Tabs Strip (Pill Segmented Menu) */}
+            <nav className="flex items-center gap-1 p-1 rounded-2xl sm:rounded-full bg-neutral-100/90 dark:bg-neutral-900/90 border border-black/[0.05] dark:border-white/[0.07] overflow-x-auto no-scrollbar max-w-full shadow-inner">
+              {NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      if (item.id === 'organizers' || item.id === 'requests') {
+                        const filter = item.id === 'requests' ? 'pending' : statusFilter;
+                        fetchOrganizers(1, filter);
+                      }
+                    }}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl sm:rounded-full text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none shrink-0',
+                      isActive
+                        ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-sm font-black'
+                        : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
 
-            {/* Sign Out Button */}
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="px-4 py-2 rounded-full border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              <span>Sign Out</span>
-            </button>
+            {/* Quick Telemetry Indicators */}
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-mono font-bold shadow-xs">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>System Live</span>
+              </div>
+              <button
+                type="button"
+                onClick={fetchOverview}
+                className="p-2 rounded-xl sm:rounded-full border border-black/[0.08] dark:border-white/[0.1] bg-white hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer shadow-xs"
+                title="Refresh Telemetry"
+              >
+                <RefreshCw className={cn('h-3.5 w-3.5', isOverviewLoading ? 'animate-spin' : '')} />
+              </button>
+            </div>
           </div>
-
-        </header>
+        )}
 
         {/* 2. TAB: MAIN DASHBOARD OVERVIEW (Inspired by the Reference Layout) */}
         {activeTab === 'overview' && (
@@ -938,8 +989,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Table */}
-              <div className="overflow-x-auto rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-white dark:bg-[#10131B]">
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-white dark:bg-[#10131B]">
                 <table className="w-full text-left border-collapse min-w-[650px]">
                   <thead>
                     <tr className="border-b border-black/[0.06] dark:border-white/[0.06] text-[11px] font-mono font-bold uppercase tracking-wider text-neutral-400 bg-neutral-50/50 dark:bg-neutral-900/30">
@@ -1050,6 +1101,106 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </table>
               </div>
 
+              {/* Mobile Cards (Phones & Small Devices) */}
+              <div className="md:hidden space-y-3">
+                {organizers.slice(0, 6).map((org) => {
+                  const id = org.id || (org as any)._id;
+                  const isPending = org.status === 'pending' || org.status === 'pending_verification';
+                  const isActive = org.status === 'active';
+                  const isSuspended = org.status === 'suspended';
+
+                  return (
+                    <div
+                      key={id}
+                      className="p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#10131B] space-y-3 shadow-xs"
+                    >
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="h-9 w-9 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center font-bold text-neutral-700 dark:text-neutral-300 text-xs shrink-0">
+                            {org.name ? org.name.slice(0, 2).toUpperCase() : 'OR'}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-bold text-neutral-900 dark:text-white text-xs truncate">{org.name}</div>
+                            <div className="text-[11px] text-neutral-400 font-mono truncate">{org.email}</div>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0">
+                          {isActive && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-mono font-bold">
+                              <CheckCircle2 className="h-3 w-3" /> Approved
+                            </span>
+                          )}
+                          {isPending && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-mono font-bold">
+                              <Clock className="h-3 w-3" /> Pending
+                            </span>
+                          )}
+                          {isSuspended && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-mono font-bold">
+                              <Ban className="h-3 w-3" /> Suspended
+                            </span>
+                          )}
+                          {!isActive && !isPending && !isSuspended && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-neutral-500/10 text-neutral-500 text-[10px] font-mono font-bold">
+                              {org.status}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-neutral-500 pt-2 border-t border-black/[0.04] dark:border-white/[0.04]">
+                        <span className="font-medium text-neutral-700 dark:text-neutral-300 truncate max-w-[60%]">
+                          {org.organizationName || 'Individual Club'}
+                        </span>
+                        <span className="font-mono text-neutral-400 shrink-0">
+                          {org.createdAt ? new Date(org.createdAt).toLocaleDateString() : 'Recent'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1">
+                        {org.role === 'admin' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleDemoteToOrganizer(id)}
+                            className="flex-1 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <User className="h-3 w-3" />
+                            <span>Demote</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handlePromoteToAdmin(id)}
+                            className="flex-1 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                          >
+                            <ShieldCheck className="h-3 w-3" />
+                            <span>Make Admin</span>
+                          </button>
+                        )}
+                        {isPending && (
+                          <button
+                            type="button"
+                            onClick={() => handleApprove(id)}
+                            className="flex-1 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer"
+                          >
+                            Approve
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedOrganizer(org)}
+                          className="py-1.5 px-3 rounded-xl border border-black/[0.08] dark:border-white/[0.08] hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          <span>View</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
               {/* View All Organizers CTA Strip */}
               <div className="flex items-center justify-between pt-2">
                 <span className="text-xs font-mono text-neutral-400">
@@ -1086,7 +1237,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               </div>
 
               {/* Search & Filter Strip */}
-              <div className="flex flex-col sm:flex-row items-center gap-2.5">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                 <form onSubmit={handleSearchSubmit} className="relative w-full sm:w-72">
                   <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
                   <input
@@ -1098,14 +1249,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   />
                 </form>
 
-                <div className="flex items-center gap-1 bg-white dark:bg-[#10131B] p-1 rounded-full border border-black/[0.08] dark:border-white/[0.08]">
+                <div className="flex items-center gap-1 bg-white dark:bg-[#10131B] p-1 rounded-full border border-black/[0.08] dark:border-white/[0.08] overflow-x-auto no-scrollbar max-w-full">
                   {['all', 'approved', 'pending', 'suspended', 'rejected'].map((st) => (
                     <button
                       key={st}
                       type="button"
                       onClick={() => handleFilterChange(st)}
                       className={cn(
-                        'px-3.5 py-1.5 rounded-full text-xs font-bold capitalize transition-all cursor-pointer',
+                        'px-3.5 py-1.5 rounded-full text-xs font-bold capitalize transition-all cursor-pointer whitespace-nowrap',
                         statusFilter === st
                           ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-xs'
                           : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-white'
@@ -1118,9 +1269,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               </div>
             </div>
 
-            {/* Organizers Table */}
-            <div className="rounded-3xl bg-neutral-50/90 dark:bg-[#151923] border border-black/[0.06] dark:border-white/[0.08] p-5 sm:p-7 shadow-sm">
-              <div className="overflow-x-auto rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-white dark:bg-[#10131B]">
+            {/* Organizers Table & Mobile Cards */}
+            <div className="rounded-3xl bg-neutral-50/90 dark:bg-[#151923] border border-black/[0.06] dark:border-white/[0.08] p-4 sm:p-7 shadow-sm">
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-white dark:bg-[#10131B]">
                 <table className="w-full text-left border-collapse min-w-[750px]">
                   <thead>
                     <tr className="border-b border-black/[0.06] dark:border-white/[0.06] text-[11px] font-mono font-bold uppercase tracking-wider text-neutral-400 bg-neutral-50/50 dark:bg-neutral-900/30">
@@ -1261,6 +1413,137 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     })}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Mobile Cards View */}
+              <div className="md:hidden space-y-3">
+                {organizers.map((org) => {
+                  const id = org.id || (org as any)._id;
+                  const isPending = org.status === 'pending' || org.status === 'pending_verification';
+                  const isActive = org.status === 'active';
+                  const isSuspended = org.status === 'suspended';
+
+                  return (
+                    <div
+                      key={id}
+                      className="p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#10131B] space-y-3 shadow-xs"
+                    >
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="h-10 w-10 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center font-bold text-neutral-700 dark:text-neutral-300 text-xs shrink-0">
+                            {org.name ? org.name.slice(0, 2).toUpperCase() : 'OR'}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-bold text-neutral-900 dark:text-white text-xs truncate">{org.name}</div>
+                            <div className="text-[11px] text-neutral-400 font-mono truncate">{org.email}</div>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0">
+                          {isActive && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-mono font-bold">
+                              <CheckCircle2 className="h-3 w-3" /> Approved
+                            </span>
+                          )}
+                          {isPending && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-mono font-bold">
+                              <Clock className="h-3 w-3" /> Pending
+                            </span>
+                          )}
+                          {isSuspended && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-mono font-bold">
+                              <Ban className="h-3 w-3" /> Suspended
+                            </span>
+                          )}
+                          {!isActive && !isPending && !isSuspended && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-neutral-500/10 text-neutral-500 text-[10px] font-mono font-bold">
+                              {org.status}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-neutral-500 pt-2 border-t border-black/[0.04] dark:border-white/[0.04]">
+                        <span className="font-medium text-neutral-700 dark:text-neutral-300 truncate max-w-[60%]">
+                          {org.organizationName || 'Independent Organizer'}
+                        </span>
+                        <span className="font-mono text-neutral-400 shrink-0">
+                          {org.createdAt ? new Date(org.createdAt).toLocaleDateString() : 'Recent'}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {org.role === 'admin' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleDemoteToOrganizer(id)}
+                            className="flex-1 py-2 px-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <User className="h-3 w-3" />
+                            <span>Demote</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handlePromoteToAdmin(id)}
+                            className="flex-1 py-2 px-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                          >
+                            <ShieldCheck className="h-3 w-3" />
+                            <span>Make Admin</span>
+                          </button>
+                        )}
+
+                        {isPending && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleApprove(id)}
+                              className="flex-1 py-2 px-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleReject(id, 'Requirements not fulfilled.')}
+                              className="flex-1 py-2 px-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold text-xs cursor-pointer"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+
+                        {isActive && (
+                          <button
+                            type="button"
+                            onClick={() => handleSuspend(id, 'Administrative suspension.')}
+                            className="flex-1 py-2 px-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold text-xs cursor-pointer"
+                          >
+                            Suspend
+                          </button>
+                        )}
+
+                        {isSuspended && (
+                          <button
+                            type="button"
+                            onClick={() => handleRestore(id)}
+                            className="flex-1 py-2 px-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer"
+                          >
+                            Restore
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedOrganizer(org)}
+                          className="py-2 px-3 rounded-xl border border-black/[0.08] dark:border-white/[0.08] hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          <span>Details</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Pagination Bar */}

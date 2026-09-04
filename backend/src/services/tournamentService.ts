@@ -146,16 +146,25 @@ export async function cloneTournament(sourceId: string, userId: string, options:
 
 export async function importTournaments(userId: string, incoming: any[]): Promise<number> {
   if (!Array.isArray(incoming) || incoming.length === 0) return 0;
+  const batch = incoming.slice(0, 50);
   let count = 0;
 
-  for (const item of incoming) {
-    if (item && item.title) {
+  for (const item of batch) {
+    if (item && typeof item === 'object' && typeof item.title === 'string' && item.title.trim()) {
       const customId = `tour-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-      await Tournament.create({
-        ...item,
+      const safeData = {
+        title: item.title.trim().slice(0, 100),
+        subtitle: typeof item.subtitle === 'string' ? item.subtitle.slice(0, 150) : '',
+        organizerName: typeof item.organizerName === 'string' ? item.organizerName.slice(0, 100) : '',
+        game: typeof item.game === 'string' ? item.game.slice(0, 50) : 'Free Fire',
+        stageFormat: typeof item.stageFormat === 'string' ? item.stageFormat : 'Battle Royale',
+        scoringSystem: item.scoringSystem && typeof item.scoringSystem === 'object' ? item.scoringSystem : undefined,
+        matches: Array.isArray(item.matches) ? item.matches.slice(0, 50) : [],
+        teams: Array.isArray(item.teams) ? item.teams.slice(0, 50) : [],
         customId,
         userId,
-      });
+      };
+      await Tournament.create(safeData);
       count++;
     }
   }

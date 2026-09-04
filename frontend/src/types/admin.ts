@@ -55,6 +55,8 @@ export interface SystemAnnouncement {
 export interface PlatformSettings {
   maintenanceMode: boolean;
   maintenanceReason?: string;
+  customMessage?: string | null;
+  estimatedReturnTime?: string | null;
   allowRegistrations: boolean;
   maxTournamentsPerOrganizer: number;
   maxTeamsPerTournament: number;

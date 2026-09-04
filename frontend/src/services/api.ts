@@ -58,6 +58,20 @@ async function request<T = any>(
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
+      if (response.status === 503 && data.maintenanceMode) {
+        try {
+          const raw = localStorage.getItem('pointx_platform_status_v1');
+          const parsed = raw ? JSON.parse(raw) : { state: {} };
+          parsed.state = {
+            ...parsed.state,
+            maintenanceMode: true,
+            maintenanceReason: data.message || data.error,
+            estimatedReturnTime: data.estimatedReturnTime || null,
+          };
+          localStorage.setItem('pointx_platform_status_v1', JSON.stringify(parsed));
+          window.dispatchEvent(new Event('pointx_maintenance_lock'));
+        } catch {}
+      }
       return {
         success: false,
         error: data.error || data.message || `Request failed with status ${response.status}`,
@@ -373,4 +387,15 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify({ action, category, details }),
     }),
+};
+
+// ----------------- PLATFORM API -----------------
+
+export const platformApi = {
+  getStatus: () =>
+    request<{
+      maintenanceMode: boolean;
+      maintenanceReason?: string;
+      estimatedReturnTime?: string | null;
+    }>('/platform/status', { method: 'GET' }),
 };

@@ -22,6 +22,8 @@ import adminRoutes from './routes/adminRoutes';
 import contactRoutes from './routes/contactRoutes';
 import healthRoutes from './routes/healthRoutes';
 import syncRoutes from './routes/syncRoutes';
+import platformRoutes from './routes/platformRoutes';
+import { enforceMaintenanceMode } from './middleware/maintenance';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,47 +31,62 @@ const __dirname = path.dirname(__filename);
 export function createApp(): Application {
   const app = express();
 
-  // 1. Security Headers
+  // Trust reverse proxy (Render, AWS ALB, NGINX) for accurate client IP & rate limiting
+  app.set('trust proxy', 1);
+
+  // 1. Security Headers & Content Security Policy
   app.use(
     helmet({
-      contentSecurityPolicy: false, // Disabled on API layer to allow rich OBS browser overlays & SVG font rasterizer
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+          fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+          imgSrc: ["'self'", 'data:', 'blob:', 'https:', 'http:'],
+          mediaSrc: ["'self'", 'data:', 'blob:', 'https:', 'http:'],
+          connectSrc: ["'self'", 'ws:', 'wss:', 'https:', 'http:'],
+          frameAncestors: ["*"], // Allow embedding in OBS Studio Browser Source
+        },
+      },
       crossOriginResourcePolicy: { policy: 'cross-origin' },
       crossOriginEmbedderPolicy: false,
     })
   );
 
   // 2. CORS Configuration
+  const configuredAllowedOrigins = [
+    env.FRONTEND_URL,
+    env.CLIENT_URL,
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
+  ].filter(Boolean);
+
   app.use(
     cors({
       origin: (origin, callback) => {
         // Allow requests with no origin (like mobile apps, curl, OBS browser source)
         if (!origin) return callback(null, true);
 
-        const allowedOrigins = [
-          env.FRONTEND_URL,
-          env.CLIENT_URL,
-          'http://localhost:5173',
-          'http://127.0.0.1:5173',
-          'http://localhost:5000',
-          'http://127.0.0.1:5000',
-        ].filter(Boolean);
-
-        if (
-          !env.isProduction ||
-          allowedOrigins.includes(origin) ||
+        const isAllowed =
+          configuredAllowedOrigins.includes(origin) ||
+          (!env.isProduction && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))) ||
           origin.endsWith('.onrender.com') ||
           origin.endsWith('.ngrok-free.dev') ||
           origin.endsWith('.ngrok.app') ||
-          origin.endsWith('.ngrok.io')
-        ) {
+          origin.endsWith('.ngrok.io');
+
+        if (isAllowed) {
           return callback(null, true);
         }
 
-        return callback(null, true);
+        return callback(new Error(`Origin ${origin} not allowed by CORS`));
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-broadcast-token', 'x-device-id'],
     })
   );
 
@@ -89,7 +106,13 @@ export function createApp(): Application {
   // 6. Rate Limiting for general API routes
   app.use('/api', apiLimiter);
 
-  // 7. Route Mounting
+  // 7. Platform Status Route (public & whitelisted)
+  app.use('/api/platform', platformRoutes);
+
+  // 8. Global Maintenance Mode Guard (blocks non-admin access to protected routes when active)
+  app.use(enforceMaintenanceMode);
+
+  // 9. Route Mounting
   app.use('/api/auth', authRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/tournaments', tournamentRoutes);

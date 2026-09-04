@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   X,
   User,
@@ -57,6 +57,29 @@ export const OrganizerDrawer: React.FC<OrganizerDrawerProps> = ({
   const [organizerTournaments, setOrganizerTournaments] = useState<any[]>([]);
   const [isLoadingTournaments, setIsLoadingTournaments] = useState(false);
   const [deletingTourId, setDeletingTourId] = useState<string | null>(null);
+
+  const fetchTournaments = useCallback(async () => {
+    if (!organizer) return;
+    const orgId = organizer.id || (organizer as any)._id;
+    if (!orgId) return;
+    setIsLoadingTournaments(true);
+    try {
+      const res = await adminApi.getOrganizerTournaments(orgId);
+      if (res && res.data) {
+        setOrganizerTournaments(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load organizer tournaments:', err);
+    } finally {
+      setIsLoadingTournaments(false);
+    }
+  }, [organizer]);
+
+  React.useEffect(() => {
+    if (organizer && activeTab === 'tournaments') {
+      fetchTournaments();
+    }
+  }, [activeTab, organizer, fetchTournaments]);
 
   if (!organizer) return null;
 
@@ -119,29 +142,6 @@ export const OrganizerDrawer: React.FC<OrganizerDrawerProps> = ({
       onClose();
     }
   };
-
-  const fetchTournaments = async () => {
-    if (!organizer) return;
-    const orgId = organizer.id || (organizer as any)._id;
-    if (!orgId) return;
-    setIsLoadingTournaments(true);
-    try {
-      const res = await adminApi.getOrganizerTournaments(orgId);
-      if (res && res.data) {
-        setOrganizerTournaments(res.data);
-      }
-    } catch (err) {
-      console.error('Failed to load organizer tournaments:', err);
-    } finally {
-      setIsLoadingTournaments(false);
-    }
-  };
-
-  React.useEffect(() => {
-    if (activeTab === 'tournaments') {
-      fetchTournaments();
-    }
-  }, [activeTab, organizer?.id]);
 
   const handleDeleteTournament = async (tournamentId: string) => {
     if (!window.confirm('Are you sure you want to permanently delete this tournament? All associated match results will be removed.')) {

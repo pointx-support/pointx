@@ -8,6 +8,7 @@ export interface RemoteDeviceSession {
   ipAddress: string;
   lastActive: number;
   isBlocked: boolean;
+  verified?: boolean;
 }
 
 export interface TournamentSyncState {
@@ -32,6 +33,7 @@ interface ClientMeta {
   deviceId: string;
   deviceName: string;
   isAlive: boolean;
+  token?: string;
 }
 
 // In-Memory Authoritative Live State Store
@@ -102,6 +104,20 @@ export async function getOrCreateAuthoritativeState(tournamentId: string): Promi
   return state;
 }
 
+export function sanitizeStateForBroadcast(state: TournamentSyncState): any {
+  return {
+    ...state,
+    pinCode: undefined,
+    connectedDevices: (state.connectedDevices || []).map((d) => ({
+      deviceId: d.deviceId,
+      deviceName: d.deviceName,
+      lastActive: d.lastActive,
+      isBlocked: d.isBlocked,
+      verified: d.verified,
+    })),
+  };
+}
+
 /**
  * Atomically update state, increment revision, broadcast to all connected clients,
  * and persist tournament updates to MongoDB
@@ -148,11 +164,12 @@ export async function updateAuthoritativeState(
   }
 
   // Real-time broadcast to all connected WebSocket clients in this tournament room
+  const safeState = sanitizeStateForBroadcast(state);
   broadcastToRoom(tourId, {
     type: 'STATE_UPDATED',
     tournamentId: tourId,
     revision: state.revision,
-    data: state,
+    data: safeState,
     timestamp: state.timestamp,
   });
 
@@ -161,7 +178,7 @@ export async function updateAuthoritativeState(
     type: 'STATE_UPDATED',
     tournamentId: tourId,
     revision: state.revision,
-    data: state,
+    data: safeState,
     timestamp: state.timestamp,
   });
 
@@ -229,7 +246,7 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
     path: '/api/sync/ws',
   });
 
-  console.log(`?? [RealTime Sync] WebSocket Server attached to /api/sync/ws`);
+  console.log(`📡 [RealTime Sync] WebSocket Server attached to /api/sync/ws`);
 
   wss.on('connection', async (ws: WebSocket, req: http.IncomingMessage) => {
     // Parse URL params
@@ -238,6 +255,7 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
     const role = (url.searchParams.get('role') as 'obs' | 'remote' | 'dashboard') || 'obs';
     const deviceId = url.searchParams.get('deviceId') || `dev_${Math.random().toString(36).substr(2, 8)}`;
     const deviceName = url.searchParams.get('deviceName') || (role === 'obs' ? 'OBS Studio' : 'Remote Control');
+    const token = url.searchParams.get('token') || '';
 
     // Register client in room
     if (!roomClients.has(tournamentId)) {
@@ -251,6 +269,7 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
       deviceId,
       deviceName,
       isAlive: true,
+      token,
     });
 
     // Send Authoritative Initial State immediately
@@ -274,14 +293,16 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
       }
     }
 
-    // Send full snapshot to newly connected client
+    // Send sanitized snapshot to client (unless dashboard)
+    const isDashboard = role === 'dashboard';
+    const clientInitialState = isDashboard ? initialState : sanitizeStateForBroadcast(initialState);
     try {
       ws.send(
         JSON.stringify({
           type: 'INITIAL_STATE',
           tournamentId,
           revision: initialState.revision,
-          data: initialState,
+          data: clientInitialState,
           timestamp: initialState.timestamp,
         })
       );
@@ -313,12 +334,13 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
           roomClients.get(newTourId)!.add(ws);
 
           const state = await getOrCreateAuthoritativeState(newTourId);
+          const isDash = meta?.role === 'dashboard';
           ws.send(
             JSON.stringify({
               type: 'INITIAL_STATE',
               tournamentId: newTourId,
               revision: state.revision,
-              data: state,
+              data: isDash ? state : sanitizeStateForBroadcast(state),
               timestamp: state.timestamp,
             })
           );
@@ -327,6 +349,29 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
 
         if (parsed.type === 'UPDATE_STATE') {
           const payload = parsed.payload || parsed.data || {};
+          const state = await getOrCreateAuthoritativeState(activeTourId);
+
+          const isVerifiedRemote = meta?.deviceId && state.connectedDevices.some(
+            (d) => d.deviceId === meta.deviceId && d.verified && !d.isBlocked && !state.blockedDeviceIds.includes(d.deviceId)
+          );
+          const hasValidToken = (meta?.token && meta.token === state.sessionToken) ||
+            (parsed.token && parsed.token === state.sessionToken) ||
+            meta?.role === 'dashboard';
+
+          if (meta?.role === 'obs' && !hasValidToken && !isVerifiedRemote) {
+            ws.send(JSON.stringify({ type: 'ERROR', error: 'OBS clients are read-only.' }));
+            return;
+          }
+
+          if (!isVerifiedRemote && !hasValidToken) {
+            ws.send(JSON.stringify({ type: 'ERROR', error: 'Unauthorized to update state. PIN verification or token required.' }));
+            return;
+          }
+
+          delete payload.pinCode;
+          delete payload.sessionToken;
+          delete payload.blockedDeviceIds;
+
           const updatedState = await updateAuthoritativeState(activeTourId, payload, ws);
 
           // Send ACK back to sender
@@ -344,12 +389,13 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
 
         if (parsed.type === 'REQUEST_SYNC') {
           const state = await getOrCreateAuthoritativeState(activeTourId);
+          const isDash = meta?.role === 'dashboard';
           ws.send(
             JSON.stringify({
               type: 'STATE_UPDATED',
               tournamentId: activeTourId,
               revision: state.revision,
-              data: state,
+              data: isDash ? state : sanitizeStateForBroadcast(state),
               timestamp: state.timestamp,
             })
           );

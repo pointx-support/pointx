@@ -4,7 +4,8 @@ import { useAuthStore } from '../../store/authStore';
 import {
   Shield,
   Menu,
-  ArrowLeft
+  ArrowLeft,
+  AlertTriangle
 } from 'lucide-react';
 import { AnimatedThemeToggle } from '../animation';
 
@@ -17,7 +18,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
   onExitAdmin,
   onToggleMobileMenu
 }) => {
-  const { activeAdminTab, platformHealth } = useAdminStore();
+  const { activeAdminTab, platformHealth, platformSettings } = useAdminStore();
   const { user, theme, toggleTheme } = useAuthStore();
   const isDark = theme === 'dark';
 
@@ -59,6 +60,20 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
 
       {/* Right: Health Badge, Exit Shortcut, Theme Toggle & User Avatar */}
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* Persistent Maintenance Mode Warning Pill */}
+        {platformSettings.maintenanceMode && (
+          <button
+            type="button"
+            onClick={() => useAdminStore.getState().setActiveAdminTab('settings')}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400 text-xs font-mono font-bold hover:bg-amber-500/25 transition-colors cursor-pointer shadow-xs"
+            title="Global Maintenance Mode is ACTIVE. Click to manage in Settings."
+          >
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 animate-bounce" />
+            <span className="hidden sm:inline">MAINTENANCE ACTIVE</span>
+            <span className="sm:hidden">MAINT</span>
+          </button>
+        )}
+
         {/* System Health Pill (Desktop) */}
         <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-xs font-mono font-bold">
           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />

@@ -112,16 +112,19 @@ export const useFontStore = create<FontStoreState>()(
 
         // 2. Base64 embedded @font-face declarations for custom uploaded fonts
         const customFontFaces = customFonts
-          .map(
-            (f) => `
+          .map((f) => {
+            const cleanName = (f.name || 'CustomFont').replace(/[^a-zA-Z0-9 _\-]/g, '').slice(0, 50);
+            const cleanFormat = (f.format || 'woff2').replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
+            const cleanDataUrl = (f.dataUrl || '').replace(/['"\\()<>]/g, '');
+            return `
 @font-face {
-  font-family: '${f.name}';
-  src: url('${f.dataUrl}') format('${f.format}');
+  font-family: '${cleanName}';
+  src: url('${cleanDataUrl}') format('${cleanFormat}');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
-}`
-          )
+}`;
+          })
           .join('\n');
 
         return `${googleImport}\n${customFontFaces}`;

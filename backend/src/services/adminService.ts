@@ -8,6 +8,7 @@ import { Tournament } from '../models/Tournament';
 import { CustomTemplate } from '../models/CustomTemplate';
 import { UserSession } from '../models/UserSession';
 import { env } from '../config/env';
+import { setMaintenanceCache } from '../middleware/maintenance';
 
 /**
  * 1. Bootstrap Auto-Seeding for Super Admin
@@ -70,16 +71,8 @@ export async function verifySuperAdminLogin(usernameInput: string, passwordInput
     return null;
   }
 
-  // Compare password hash
-  let isPasswordValid = await bcrypt.compare(passwordInput, adminUser.passwordHash);
-  
-  // Fallback check against env variable
-  if (!isPasswordValid && passwordInput === env.SUPER_ADMIN_PASSWORD) {
-    isPasswordValid = true;
-    const salt = await bcrypt.genSalt(10);
-    adminUser.passwordHash = await bcrypt.hash(passwordInput, salt);
-    await adminUser.save();
-  }
+  // Compare password hash strictly
+  const isPasswordValid = await bcrypt.compare(passwordInput, adminUser.passwordHash);
 
   if (!isPasswordValid) {
     return null;
@@ -593,12 +586,23 @@ export async function updatePlatformSettings(updates: Partial<IPlatformSettings>
     { returnDocument: 'after', upsert: true }
   );
 
+  if (settings && updates.maintenanceMode !== undefined) {
+    setMaintenanceCache(
+      settings.maintenanceMode,
+      settings.maintenanceReason,
+      settings.estimatedReturnTime,
+      (settings as any).customMessage
+    );
+  }
+
   await AuditActivity.create({
     customId: `act-${Date.now().toString(36)}`,
     userId: adminUserId || 'admin-root',
     action: 'UPDATE_CONFIG',
     category: 'security',
-    details: 'Global platform configuration limits updated by Super Admin.',
+    details: updates.maintenanceMode !== undefined
+      ? `Global platform maintenance mode set to ${updates.maintenanceMode ? 'ENABLED' : 'DISABLED'} by Super Admin.`
+      : 'Global platform configuration limits updated by Super Admin.',
   });
 
   return settings;
@@ -627,7 +631,7 @@ export async function changeSuperAdminPassword(
   }
 
   const isOldPasswordValid = await bcrypt.compare(oldPasswordInput, adminUser.passwordHash);
-  if (!isOldPasswordValid && oldPasswordInput !== env.SUPER_ADMIN_PASSWORD) {
+  if (!isOldPasswordValid) {
     return { success: false, error: 'Current password is incorrect.' };
   }
 

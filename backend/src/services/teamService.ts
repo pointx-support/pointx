@@ -32,30 +32,50 @@ export async function createGlobalTeam(userId: string, data: any): Promise<IGlob
   });
 }
 
-export async function updateGlobalTeam(teamId: string, userId: string, updates: Partial<IGlobalTeam>): Promise<IGlobalTeam | null> {
-  const query: any = {
-    $or: [{ customId: teamId }],
-  };
+export async function updateGlobalTeam(
+  teamId: string,
+  userId: string,
+  updates: Partial<IGlobalTeam>,
+  role?: string
+): Promise<IGlobalTeam | null> {
+  const idQueries: any[] = [{ customId: teamId }];
   if (teamId.match(/^[0-9a-fA-F]{24}$/)) {
-    query.$or.push({ _id: teamId });
+    idQueries.push({ _id: teamId });
+  }
+
+  const query: any = { $or: idQueries };
+  if (role !== 'admin') {
+    query.userId = userId;
   }
 
   return GlobalTeam.findOneAndUpdate(query, { $set: updates }, { returnDocument: 'after' });
 }
 
-export async function deleteGlobalTeam(teamId: string, _userId?: string): Promise<boolean> {
-  const query: any = {
-    $or: [{ customId: teamId }],
-  };
+export async function deleteGlobalTeam(
+  teamId: string,
+  userId?: string,
+  role?: string
+): Promise<boolean> {
+  const idQueries: any[] = [{ customId: teamId }];
   if (teamId.match(/^[0-9a-fA-F]{24}$/)) {
-    query.$or.push({ _id: teamId });
+    idQueries.push({ _id: teamId });
+  }
+
+  const query: any = { $or: idQueries };
+  if (role !== 'admin' && userId) {
+    query.userId = userId;
   }
 
   const res = await GlobalTeam.deleteOne(query);
   return res.deletedCount > 0;
 }
 
-export async function addPlayerToTeam(teamId: string, player: Omit<IGlobalPlayer, 'id' | 'createdAt' | 'updatedAt'>): Promise<IGlobalPlayer | null> {
+export async function addPlayerToTeam(
+  teamId: string,
+  userId: string,
+  player: Omit<IGlobalPlayer, 'id' | 'createdAt' | 'updatedAt'>,
+  role?: string
+): Promise<IGlobalPlayer | null> {
   const newPlayer: IGlobalPlayer = {
     ...player,
     id: `gp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -63,11 +83,14 @@ export async function addPlayerToTeam(teamId: string, player: Omit<IGlobalPlayer
     updatedAt: new Date().toISOString(),
   };
 
-  const query: any = {
-    $or: [{ customId: teamId }],
-  };
+  const idQueries: any[] = [{ customId: teamId }];
   if (teamId.match(/^[0-9a-fA-F]{24}$/)) {
-    query.$or.push({ _id: teamId });
+    idQueries.push({ _id: teamId });
+  }
+
+  const query: any = { $or: idQueries };
+  if (role !== 'admin') {
+    query.userId = userId;
   }
 
   const team = await GlobalTeam.findOne(query);
@@ -78,12 +101,21 @@ export async function addPlayerToTeam(teamId: string, player: Omit<IGlobalPlayer
   return newPlayer;
 }
 
-export async function updatePlayerInTeam(teamId: string, playerId: string, updates: Partial<IGlobalPlayer>): Promise<boolean> {
-  const query: any = {
-    $or: [{ customId: teamId }],
-  };
+export async function updatePlayerInTeam(
+  teamId: string,
+  playerId: string,
+  userId: string,
+  updates: Partial<IGlobalPlayer>,
+  role?: string
+): Promise<boolean> {
+  const idQueries: any[] = [{ customId: teamId }];
   if (teamId.match(/^[0-9a-fA-F]{24}$/)) {
-    query.$or.push({ _id: teamId });
+    idQueries.push({ _id: teamId });
+  }
+
+  const query: any = { $or: idQueries };
+  if (role !== 'admin') {
+    query.userId = userId;
   }
 
   const team = await GlobalTeam.findOne(query);
@@ -102,12 +134,20 @@ export async function updatePlayerInTeam(teamId: string, playerId: string, updat
   return true;
 }
 
-export async function deletePlayerFromTeam(teamId: string, playerId: string): Promise<boolean> {
-  const query: any = {
-    $or: [{ customId: teamId }],
-  };
+export async function deletePlayerFromTeam(
+  teamId: string,
+  playerId: string,
+  userId: string,
+  role?: string
+): Promise<boolean> {
+  const idQueries: any[] = [{ customId: teamId }];
   if (teamId.match(/^[0-9a-fA-F]{24}$/)) {
-    query.$or.push({ _id: teamId });
+    idQueries.push({ _id: teamId });
+  }
+
+  const query: any = { $or: idQueries };
+  if (role !== 'admin') {
+    query.userId = userId;
   }
 
   const team = await GlobalTeam.findOne(query);

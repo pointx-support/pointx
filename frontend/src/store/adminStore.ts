@@ -9,6 +9,7 @@ import type {
 } from '../types/admin';
 import type { AuditActivity } from '../types/auth';
 import { adminApi } from '../services/api';
+import { usePlatformStore } from './platformStore';
 
 const ADMIN_SETTINGS_STORAGE_KEY = 'pointx_admin_platform_settings_v1';
 const ACTIVITIES_STORAGE_KEY = 'pointx_audit_activities_v1';
@@ -56,8 +57,9 @@ export interface AdminStoreState {
   suspendUser: (userId: string, reason?: string) => void;
   restoreUser: (userId: string) => void;
   deleteUser: (userId: string) => void;
-  toggleMaintenanceMode: (enabled: boolean, reason?: string) => void;
+  toggleMaintenanceMode: (enabled: boolean, reason?: string, returnTime?: string | null, customMessage?: string | null) => Promise<void>;
   updatePlatformSettings: (settings: Partial<PlatformSettings>) => void;
+  fetchSettings: () => Promise<void>;
   addAnnouncement: (announcement: Omit<SystemAnnouncement, 'id' | 'createdAt'>) => void;
   toggleAnnouncement: (id: string) => void;
   deleteAnnouncement: (id: string) => void;
@@ -110,20 +112,51 @@ export const useAdminStore = create<AdminStoreState>()(
         );
       },
 
-      toggleMaintenanceMode: (enabled, reason) => {
-        const updated = {
-          ...get().platformSettings,
+      toggleMaintenanceMode: async (enabled, reason, returnTime, customMessage) => {
+        const current = get().platformSettings;
+        const updated: PlatformSettings = {
+          ...current,
           maintenanceMode: enabled,
-          maintenanceReason: reason || get().platformSettings.maintenanceReason
+          maintenanceReason: reason !== undefined && reason !== null ? reason : current.maintenanceReason,
+          customMessage: customMessage !== undefined ? customMessage : current.customMessage,
+          estimatedReturnTime: returnTime !== undefined ? returnTime : current.estimatedReturnTime
         };
         set({ platformSettings: updated });
-        adminApi.saveSettings(updated).catch(() => {});
+
+        // Immediately sync with platform store for instant UI response
+        usePlatformStore.getState().setMaintenanceState(
+          enabled,
+          updated.maintenanceReason,
+          updated.estimatedReturnTime,
+          updated.customMessage
+        );
+
+        try {
+          const res = await adminApi.saveSettings(updated);
+          if (res.success && res.data) {
+            set({ platformSettings: res.data });
+          }
+        } catch {}
 
         get().recordAdminEvent(
           enabled ? 'Maintenance Mode Enabled' : 'Maintenance Mode Disabled',
           'security',
           enabled ? `Admin activated platform maintenance: ${reason || 'Scheduled'}` : 'Admin resumed standard operations.'
         );
+      },
+
+      fetchSettings: async () => {
+        try {
+          const res = await adminApi.getSettings();
+          if (res.success && res.data) {
+            set({ platformSettings: res.data });
+            usePlatformStore.getState().setMaintenanceState(
+              Boolean(res.data.maintenanceMode),
+              res.data.maintenanceReason,
+              res.data.estimatedReturnTime
+            );
+          }
+        } catch {}
       },
 
       updatePlatformSettings: (settings) => {

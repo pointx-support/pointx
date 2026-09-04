@@ -12,6 +12,7 @@ import {
   getForgotPasswordEmailTemplate,
   getPasswordChangedConfirmationEmailTemplate,
 } from './emailService';
+import { getMaintenanceStatus } from '../middleware/maintenance';
 
 // OTP Configuration: Exactly 5 minutes (300 seconds)
 export const OTP_EXPIRATION_SECONDS = 300;
@@ -91,6 +92,16 @@ export async function registerUserInitiate(data: {
   const email = data.email.toLowerCase().trim();
   const name = data.name.trim();
   console.log(`[SIGNUP_INITIATE] Received signup request for domain @${email.split('@')[1] || 'unknown'}`);
+
+  const { maintenanceMode } = getMaintenanceStatus();
+  if (maintenanceMode) {
+    return {
+      success: false,
+      requiresOtp: false,
+      message: 'PointX is currently under maintenance. New organizer registration is temporarily paused.',
+      error: 'PointX is currently under maintenance. New organizer registration is temporarily paused.',
+    };
+  }
 
   // Check if active user already exists
   const existingUser = await User.findOne({ email });
@@ -402,10 +413,20 @@ export async function loginUser(data: {
   const email = data.email.toLowerCase().trim();
   const user = await User.findOne({ email });
   if (!user) {
+    // Perform dummy comparison to equalize timing against timing attacks
+    await bcrypt.compare(data.password || 'dummy', '$2a$10$e8460p/L5/dD6f62v3H1z.DkUqRzV3bU49fX.bKqS6P57Z9zXpTmu');
     return {
       success: false,
-      notRegistered: true,
-      error: 'This email is not registered. Please register first to access PointX.',
+      error: 'Invalid email or password. Please verify your credentials.',
+    };
+  }
+
+  // Security Wall: If maintenance mode is active, ONLY super administrators (role === 'admin') can log in!
+  const { maintenanceMode } = getMaintenanceStatus();
+  if (maintenanceMode && user.role !== 'admin') {
+    return {
+      success: false,
+      error: 'PointX is currently undergoing scheduled maintenance. Only Super Administrators can log in at this time.',
     };
   }
 
@@ -429,7 +450,7 @@ export async function loginUser(data: {
   if (data.password) {
     const isMatch = await bcrypt.compare(data.password, user.passwordHash);
     if (!isMatch) {
-      return { success: false, error: 'Invalid email or password.' };
+      return { success: false, error: 'Invalid email or password. Please verify your credentials.' };
     }
   }
 
