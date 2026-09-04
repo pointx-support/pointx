@@ -277,12 +277,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     }
   };
 
-  const NAV_ITEMS: { id: AdminTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'organizers', label: 'Organizers', icon: Users },
-    { id: 'templates', label: 'Template Studio', icon: Palette },
-    { id: 'audit-logs', label: 'Activity', icon: FileText },
-    { id: 'settings', label: 'Advance Settings', icon: Settings },
+  const NAV_ITEMS: { id: AdminTab; label: string; shortLabel: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { id: 'overview', label: 'Dashboard', shortLabel: 'Dashboard', icon: LayoutDashboard },
+    { id: 'organizers', label: 'Organizers', shortLabel: 'Organizers', icon: Users },
+    { id: 'templates', label: 'Template Studio', shortLabel: 'Templates', icon: Palette },
+    { id: 'audit-logs', label: 'Activity', shortLabel: 'Activity', icon: FileText },
+    { id: 'settings', label: 'Advance Settings', shortLabel: 'Settings', icon: Settings },
   ];
 
   // Organizer breakdown numbers
@@ -407,7 +407,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             </div>
 
             {/* Navigation Tabs Strip */}
-            <nav className="flex items-center gap-1 p-1 sm:p-1.5 rounded-2xl sm:rounded-full bg-neutral-100/90 dark:bg-neutral-900/90 border border-black/[0.05] dark:border-white/[0.07] overflow-x-auto no-scrollbar max-w-full shadow-inner w-full lg:w-auto">
+            <nav className="flex items-center gap-1 p-1 sm:p-1.5 rounded-xl sm:rounded-full bg-neutral-100/90 dark:bg-neutral-900/90 border border-black/[0.05] dark:border-white/[0.07] overflow-x-auto no-scrollbar max-w-full shadow-inner w-full lg:w-auto scroll-smooth snap-x snap-mandatory">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
@@ -423,14 +423,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       }
                     }}
                     className={cn(
-                      'flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl sm:rounded-full text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none shrink-0',
+                      'flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-full text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none shrink-0 snap-start',
                       isActive
                         ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-md font-black'
                         : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'
                     )}
                   >
                     <Icon className="h-3.5 w-3.5 shrink-0" />
-                    <span>{item.label}</span>
+                    <span className="sm:hidden">{item.shortLabel}</span>
+                    <span className="hidden sm:inline">{item.label}</span>
                   </button>
                 );
               })}
@@ -467,9 +468,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           </header>
         ) : (
           /* Sleek Embedded Sub-Nav Bar (Zero Duplicate Headers, Zero Duplicate Theme Toggles) */
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-3 border-b border-black/[0.06] dark:border-white/[0.06]">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pb-3 border-b border-black/[0.06] dark:border-white/[0.06]">
             {/* Center Navigation Tabs Strip (Pill Segmented Menu) */}
-            <nav className="flex items-center gap-1 p-1 rounded-2xl sm:rounded-full bg-neutral-100/90 dark:bg-neutral-900/90 border border-black/[0.05] dark:border-white/[0.07] overflow-x-auto no-scrollbar max-w-full shadow-inner">
+            <nav className="flex items-center gap-1 p-1 rounded-xl sm:rounded-full bg-neutral-100/90 dark:bg-neutral-900/90 border border-black/[0.05] dark:border-white/[0.07] overflow-x-auto no-scrollbar max-w-full shadow-inner scroll-smooth snap-x snap-mandatory flex-1 min-w-0">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
@@ -485,29 +486,30 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       }
                     }}
                     className={cn(
-                      'flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl sm:rounded-full text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none shrink-0',
+                      'flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-full text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none shrink-0 snap-start',
                       isActive
                         ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-sm font-black'
                         : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'
                     )}
                   >
                     <Icon className="h-3.5 w-3.5 shrink-0" />
-                    <span>{item.label}</span>
+                    <span className="sm:hidden">{item.shortLabel}</span>
+                    <span className="hidden sm:inline">{item.label}</span>
                   </button>
                 );
               })}
             </nav>
 
             {/* Quick Telemetry Indicators */}
-            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-mono font-bold shadow-xs">
+            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto shrink-0 pt-0.5 sm:pt-0">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[11px] sm:text-xs font-mono font-bold shadow-xs">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>System Live</span>
               </div>
               <button
                 type="button"
                 onClick={fetchOverview}
-                className="p-2 rounded-xl sm:rounded-full border border-black/[0.08] dark:border-white/[0.1] bg-white hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer shadow-xs"
+                className="p-1.5 sm:p-2 rounded-xl sm:rounded-full border border-black/[0.08] dark:border-white/[0.1] bg-white hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer shadow-xs"
                 title="Refresh Telemetry"
               >
                 <RefreshCw className={cn('h-3.5 w-3.5', isOverviewLoading ? 'animate-spin' : '')} />
@@ -1592,14 +1594,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         {activeTab === 'settings' && (
           <div className="space-y-6">
             {/* Advance Settings Sub-Navigation Strip (Merged Verification Queue, MongoDB Atlas, Cloudinary CDN) */}
-            <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-white dark:bg-[#10131B] border border-black/[0.08] dark:border-white/[0.08] overflow-x-auto no-scrollbar shadow-xs">
+            <div className="flex items-center gap-1 sm:gap-1.5 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl bg-white dark:bg-[#10131B] border border-black/[0.08] dark:border-white/[0.08] overflow-x-auto no-scrollbar shadow-xs scroll-smooth snap-x snap-mandatory">
               {[
-                { id: 'general', label: 'Platform Rules', icon: Settings },
-                { id: 'requests', label: 'Verification Queue', icon: Clock, badge: pendingOrgs },
-                { id: 'mongodb', label: 'MongoDB Atlas', icon: Database },
-                { id: 'cloudinary', label: 'Cloudinary CDN', icon: Cloud },
-                { id: 'brevo', label: 'Brevo Email', icon: Mail },
-                { id: 'health', label: 'System Health', icon: Cpu },
+                { id: 'general', label: 'Platform Rules', shortLabel: 'Rules', icon: Settings },
+                { id: 'requests', label: 'Verification Queue', shortLabel: 'Queue', icon: Clock, badge: pendingOrgs },
+                { id: 'mongodb', label: 'MongoDB Atlas', shortLabel: 'MongoDB', icon: Database },
+                { id: 'cloudinary', label: 'Cloudinary CDN', shortLabel: 'Cloudinary', icon: Cloud },
+                { id: 'brevo', label: 'Brevo Email', shortLabel: 'Brevo', icon: Mail },
+                { id: 'health', label: 'System Health', shortLabel: 'Health', icon: Cpu },
               ].map((sub) => {
                 const Icon = sub.icon;
                 const isCurrent = advancedSubTab === sub.id;
@@ -1615,14 +1617,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       }
                     }}
                     className={cn(
-                      'flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer',
+                      'flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 snap-start',
                       isCurrent
                         ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] shadow-sm'
                         : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'
                     )}
                   >
-                    <Icon className="h-3.5 w-3.5" />
-                    <span>{sub.label}</span>
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="sm:hidden">{sub.shortLabel}</span>
+                    <span className="hidden sm:inline">{sub.label}</span>
                     {typeof sub.badge === 'number' && sub.badge > 0 && (
                       <span
                         className={cn(

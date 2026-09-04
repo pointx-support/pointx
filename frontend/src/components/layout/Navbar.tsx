@@ -318,24 +318,17 @@ export const Navbar: FC<NavbarProps> = ({
                 </div>
               </div>
             ) : viewMode === 'admin-dashboard' ? (
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0 border-l border-[var(--border-subtle)] pl-3.5">
-                <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 border-l border-[var(--border-subtle)] pl-2 sm:pl-3.5">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                   <Shield className="h-4 w-4 text-[var(--accent-primary)] shrink-0" />
-                  <h1 className="text-sm sm:text-base font-bold text-[var(--text-primary)] truncate font-display">
+                  <span className="sm:hidden px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-[10px] font-mono font-bold text-amber-500 shrink-0">
+                    ADMIN
+                  </span>
+                  <h1 className="hidden sm:inline text-sm sm:text-base font-bold text-[var(--text-primary)] truncate font-display">
                     Admin Control Center
                   </h1>
-                  <Badge variant="live" size="sm">GOVERNANCE</Badge>
+                  <Badge variant="live" size="sm" className="hidden lg:inline-flex">GOVERNANCE</Badge>
                 </div>
-                {onBackToDashboard && (
-                  <button
-                    type="button"
-                    onClick={onBackToDashboard}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-raised)] hover:bg-[var(--bg-surface-hover)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer shadow-xs ml-1 sm:ml-3 font-mono"
-                  >
-                    <ArrowLeft className="h-3.5 w-3.5 text-[var(--accent-primary)]" />
-                    <span className="hidden sm:inline">Back to Dashboard</span>
-                  </button>
-                )}
               </div>
             ) : (
               <div className="flex flex-col border-l border-[var(--border-subtle)] pl-3.5 hidden sm:flex">
@@ -345,7 +338,20 @@ export const Navbar: FC<NavbarProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 ml-auto">
+            {viewMode === 'admin-dashboard' && onBackToDashboard && (
+              <button
+                type="button"
+                onClick={onBackToDashboard}
+                className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-raised)] hover:bg-[var(--bg-surface-hover)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer shadow-xs font-mono shrink-0"
+                title="Exit Admin to Organizer Dashboard"
+              >
+                <ArrowLeft className="h-3.5 w-3.5 text-[var(--accent-primary)] shrink-0" />
+                <span className="hidden sm:inline">Back to Dashboard</span>
+                <span className="sm:hidden text-[11px]">Exit</span>
+              </button>
+            )}
+
             {onNavigateHome && (
               <button
                 type="button"
