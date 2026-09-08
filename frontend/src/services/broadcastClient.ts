@@ -95,17 +95,18 @@ export function connectBroadcastSession(
       const wsUrl = `${protocol}//${host}/api/sync/ws?role=obs`;
 
       const WsClass = typeof WebSocket !== 'undefined' ? WebSocket : (globalThis as any).WebSocket;
-      ws = new WsClass(wsUrl);
+      const socket: WebSocket = new WsClass(wsUrl);
+      ws = socket;
 
-      ws.onopen = () => {
+      socket.onopen = () => {
         if (isDisposed) {
-          ws?.close();
+          socket.close();
           return;
         }
         reconnectDelay = 1000;
 
         // Join the dedicated Broadcast Session room
-        ws?.send(
+        socket.send(
           JSON.stringify({
             action: 'JOIN_BROADCAST_SESSION',
             type: 'JOIN_BROADCAST_SESSION',
@@ -119,7 +120,7 @@ export function connectBroadcastSession(
         syncAuthoritativeSnapshot();
       };
 
-      ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
         if (isDisposed) return;
 
         try {
@@ -148,13 +149,13 @@ export function connectBroadcastSession(
         }
       };
 
-      ws.onerror = (err) => {
+      socket.onerror = (err) => {
         if (!isDisposed && callbacks.onError) {
           callbacks.onError(err);
         }
       };
 
-      ws.onclose = () => {
+      socket.onclose = () => {
         if (isDisposed) return;
         updateStatus('RECONNECTING');
 
