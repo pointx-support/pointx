@@ -3,6 +3,7 @@ import { connectDB, disconnectDB } from './config/db';
 import { env } from './config/env';
 import { ensureSuperAdminAccount } from './services/adminService';
 import { setupRealtimeSyncServer } from './services/realtimeSync';
+import { migrateExistingTemplates } from './services/templateService';
 
 async function startServer() {
   try {
@@ -27,6 +28,10 @@ async function startServer() {
       .then(async () => {
         console.log(`🗄  Database: MongoDB Connected successfully`);
         await ensureSuperAdminAccount();
+        const migrationResult = await migrateExistingTemplates();
+        if (migrationResult.migrated > 0 || migrationResult.needsReview > 0) {
+          console.log(`🎨 [Template Migration] Migrated: ${migrationResult.migrated}, Needs Review: ${migrationResult.needsReview}`);
+        }
       })
       .catch((err) => {
         console.error('[Database Connection Warning]', err);

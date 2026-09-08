@@ -42,12 +42,7 @@ beforeEach(async () => {
     isOnboarded: true,
   });
 
-  authToken = generateJwtToken({
-    _id: testUser._id.toString(),
-    email: testUser.email,
-    role: testUser.role,
-    isOnboarded: true,
-  });
+  authToken = generateJwtToken(testUser);
 });
 
 describe('Realtime Concurrency & Authoritative Score Endpoint Suite', () => {

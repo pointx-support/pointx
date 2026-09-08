@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useTemplateStore } from '../../store/templateStore';
 import { useAuthStore } from '../../store/authStore';
-import { DynamicCustomTemplate } from './templates/DynamicCustomTemplate';
-import { GraphicCategoryCanvas } from './templates/GraphicCategoryCanvas';
+import { MasterGraphicRenderer } from './renderers/MasterGraphicRenderer';
+import { normalizeTemplateType } from '../../types/customTemplate';
 import { useAdminStore } from '../../store/adminStore';
 import { exportSvgToPng, downloadBlobFile } from '../../engine/exportEngine';
 import { Button } from '../ui/Button';
@@ -67,7 +67,12 @@ export const GraphicsStudioView: React.FC = () => {
 
   const activeCategory = activeGraphicsCategory || 'standings';
   const setActiveCategory = setActiveGraphicsCategory;
+  const activeTemplateType = normalizeTemplateType(activeCategory);
+
   const [selectedTeamId, setSelectedTeamId] = useState<string>(currentTournament.teams[0]?.id || '');
+  const [winnerTeamId, setWinnerTeamId] = useState<string>(currentTournament.teams[0]?.id || '');
+  const [awardTitle, setAwardTitle] = useState<string>('CHAMPION');
+  const [awardSubtitle, setAwardSubtitle] = useState<string>('For Outstanding Battle Royale Performance');
   const [selectedScope, setSelectedScope] = useState<'overall' | number>('overall');
   const [formatFilter, setFormatFilter] = useState<'all' | 'portrait' | 'landscape'>('all');
   const [customOrgName, setCustomOrgName] = useState(currentTournament.organizer || 'PointX Arena');
@@ -95,7 +100,11 @@ export const GraphicsStudioView: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFullScreenOpen]);
 
-  const categoryTemplates = templates.filter((t) => (t.category || 'standings') === activeCategory);
+  const categoryTemplates = templates.filter((t) => {
+    const tmplType = t.templateType ? t.templateType : normalizeTemplateType(t.category);
+    return tmplType === activeTemplateType;
+  });
+
   const currentCategoryTemplate = categoryTemplates.find((t) => t.id === activeTemplateId) || categoryTemplates[0] || getActiveTemplate();
 
   const publishedTemplates = categoryTemplates.filter((t) => {
@@ -107,11 +116,14 @@ export const GraphicsStudioView: React.FC = () => {
 
   // Keep activeTemplateId in sync when category switches
   useEffect(() => {
-    const matching = templates.filter((t) => (t.category || 'standings') === activeCategory);
+    const matching = templates.filter((t) => {
+      const tmplType = t.templateType ? t.templateType : normalizeTemplateType(t.category);
+      return tmplType === activeTemplateType;
+    });
     if (matching.length > 0 && !matching.some((t) => t.id === activeTemplateId)) {
       setActiveTemplateId(matching[0].id);
     }
-  }, [activeCategory, templates, activeTemplateId, setActiveTemplateId]);
+  }, [activeCategory, activeTemplateType, templates, activeTemplateId, setActiveTemplateId]);
 
   const currentTemplate = currentCategoryTemplate;
 
@@ -158,35 +170,105 @@ export const GraphicsStudioView: React.FC = () => {
   const baseExportWidth = isPortrait ? 1080 : 1920;
   const baseExportHeight = isPortrait ? 1350 : 1080;
 
-  const handleExport = async (format: '1080p' | '4k') => {
+  // Dedicated section-specific generators (Requirement 13)
+  const generatePointsTable = async (format: '1080p' | '4k') => {
     const targetSvg = isFullScreenOpen ? fullScreenSvgRef.current || svgRef.current : svgRef.current;
     if (!targetSvg) return;
+    const scale = format === '4k' ? 2 : 1;
+    const width = baseExportWidth * scale;
+    const height = baseExportHeight * scale;
+    const blob = await exportSvgToPng(targetSvg, width, height);
+    const filename = `${customEventTitle.replace(/\s+/g, '_').toUpperCase()}_${scopeLabel.replace(/\s+/g, '_').toUpperCase()}_${currentCategoryTemplate.name.replace(/\s+/g, '_')}_${format.toUpperCase()}${hueRotate ? `_HUE${hueRotate}` : ''}.png`;
+    downloadBlobFile(blob, filename);
+    showToast({ type: 'success', title: 'Points Table Exported', message: `Exported ${format.toUpperCase()} (${width}x${height}) successfully!` });
+  };
+
+  const generateKillLeader = async (format: '1080p' | '4k') => {
+    const targetSvg = isFullScreenOpen ? fullScreenSvgRef.current || svgRef.current : svgRef.current;
+    if (!targetSvg) return;
+    const scale = format === '4k' ? 2 : 1;
+    const width = baseExportWidth * scale;
+    const height = baseExportHeight * scale;
+    const blob = await exportSvgToPng(targetSvg, width, height);
+    const filename = `${customEventTitle.replace(/\s+/g, '_').toUpperCase()}_KILL_LEADER_${format.toUpperCase()}${hueRotate ? `_HUE${hueRotate}` : ''}.png`;
+    downloadBlobFile(blob, filename);
+    showToast({ type: 'success', title: 'Kill Leader Graphic Exported', message: `Exported ${format.toUpperCase()} (${width}x${height}) successfully!` });
+  };
+
+  const generateTopFraggers = async (format: '1080p' | '4k') => {
+    const targetSvg = isFullScreenOpen ? fullScreenSvgRef.current || svgRef.current : svgRef.current;
+    if (!targetSvg) return;
+    const scale = format === '4k' ? 2 : 1;
+    const width = baseExportWidth * scale;
+    const height = baseExportHeight * scale;
+    const blob = await exportSvgToPng(targetSvg, width, height);
+    const filename = `${customEventTitle.replace(/\s+/g, '_').toUpperCase()}_TOP3_FRAGGERS_${format.toUpperCase()}${hueRotate ? `_HUE${hueRotate}` : ''}.png`;
+    downloadBlobFile(blob, filename);
+    showToast({ type: 'success', title: 'Top Fraggers MVP Exported', message: `Exported ${format.toUpperCase()} (${width}x${height}) successfully!` });
+  };
+
+  const generateTeamPoster = async (format: '1080p' | '4k') => {
+    const targetSvg = isFullScreenOpen ? fullScreenSvgRef.current || svgRef.current : svgRef.current;
+    if (!targetSvg) return;
+    const scale = format === '4k' ? 2 : 1;
+    const width = baseExportWidth * scale;
+    const height = baseExportHeight * scale;
+    const blob = await exportSvgToPng(targetSvg, width, height);
+    const team = currentTournament.teams.find((t) => t.id === selectedTeamId) || currentTournament.teams[0];
+    const teamName = team ? team.name.replace(/\s+/g, '_').toUpperCase() : 'TEAM';
+    const filename = `${customEventTitle.replace(/\s+/g, '_').toUpperCase()}_ROSTER_${teamName}_${format.toUpperCase()}${hueRotate ? `_HUE${hueRotate}` : ''}.png`;
+    downloadBlobFile(blob, filename);
+    showToast({ type: 'success', title: 'Team Poster Exported', message: `Exported ${format.toUpperCase()} (${width}x${height}) successfully!` });
+  };
+
+  const generateSlotsList = async (format: '1080p' | '4k') => {
+    const targetSvg = isFullScreenOpen ? fullScreenSvgRef.current || svgRef.current : svgRef.current;
+    if (!targetSvg) return;
+    const scale = format === '4k' ? 2 : 1;
+    const width = baseExportWidth * scale;
+    const height = baseExportHeight * scale;
+    const blob = await exportSvgToPng(targetSvg, width, height);
+    const filename = `${customEventTitle.replace(/\s+/g, '_').toUpperCase()}_SLOTS_MATRIX_${format.toUpperCase()}${hueRotate ? `_HUE${hueRotate}` : ''}.png`;
+    downloadBlobFile(blob, filename);
+    showToast({ type: 'success', title: 'Slots List Exported', message: `Exported ${format.toUpperCase()} (${width}x${height}) successfully!` });
+  };
+
+  const generateVictoryCertificate = async (format: '1080p' | '4k') => {
+    const targetSvg = isFullScreenOpen ? fullScreenSvgRef.current || svgRef.current : svgRef.current;
+    if (!targetSvg) return;
+    const scale = format === '4k' ? 2 : 1;
+    const width = (currentCategoryTemplate.aspectRatio === '4:5' ? 1080 : 1920) * scale;
+    const height = (currentCategoryTemplate.aspectRatio === '4:5' ? 1350 : 1080) * scale;
+    const blob = await exportSvgToPng(targetSvg, width, height);
+    const winnerTeam = currentTournament.teams.find((t) => t.id === winnerTeamId) || currentTournament.teams[0];
+    const winnerName = winnerTeam ? winnerTeam.name.replace(/\s+/g, '_').toUpperCase() : 'WINNER';
+    const filename = `${customEventTitle.replace(/\s+/g, '_').toUpperCase()}_CERTIFICATE_${winnerName}_${format.toUpperCase()}${hueRotate ? `_HUE${hueRotate}` : ''}.png`;
+    downloadBlobFile(blob, filename);
+    showToast({ type: 'success', title: 'Victory Certificate Exported', message: `Exported ${format.toUpperCase()} (${width}x${height}) successfully!` });
+  };
+
+  const handleExport = async (format: '1080p' | '4k') => {
     setIsExporting(true);
-
     try {
-      const scale = format === '4k' ? 2 : 1;
-      const width = baseExportWidth * scale;
-      const height = baseExportHeight * scale;
-
-      const blob = await exportSvgToPng(targetSvg, width, height);
-
-      const categoryName = GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase() || 'GRAPHIC';
-      const filename = activeCategory === 'standings'
-        ? `${customEventTitle.replace(/\s+/g, '_').toUpperCase()}_${scopeLabel.replace(/\s+/g, '_').toUpperCase()}_${currentCategoryTemplate.name.replace(/\s+/g, '_')}_${format.toUpperCase()}${hueRotate ? `_HUE${hueRotate}` : ''}.png`
-        : `${customEventTitle.replace(/\s+/g, '_').toUpperCase()}_${categoryName}_${format.toUpperCase()}${hueRotate ? `_HUE${hueRotate}` : ''}.png`;
-
-      downloadBlobFile(blob, filename);
-
-      showToast({
-        type: 'success',
-        title: 'Export Complete',
-        message: `Generated ${format.toUpperCase()} ${isPortrait ? 'Poster' : 'Graphic'} (${width}x${height}) successfully!`
-      });
+      const type = currentCategoryTemplate.templateType || normalizeTemplateType(activeCategory);
+      if (type === 'KILL_LEADER') {
+        await generateKillLeader(format);
+      } else if (type === 'TOP_FRAGGERS') {
+        await generateTopFraggers(format);
+      } else if (type === 'TEAM_POSTER') {
+        await generateTeamPoster(format);
+      } else if (type === 'SLOTS_LIST') {
+        await generateSlotsList(format);
+      } else if (type === 'VICTORY_CERTIFICATE') {
+        await generateVictoryCertificate(format);
+      } else {
+        await generatePointsTable(format);
+      }
     } catch (err) {
       showToast({
         type: 'error',
         title: 'Export Failed',
-        message: `Failed to rasterize poster: ${err instanceof Error ? err.message : String(err)}`
+        message: `Failed to rasterize graphic: ${err instanceof Error ? err.message : String(err)}`
       });
     } finally {
       setIsExporting(false);
@@ -208,12 +290,12 @@ export const GraphicsStudioView: React.FC = () => {
   const sortedMatches = [...currentTournament.matches].sort((a, b) => a.matchNumber - b.matchNumber);
 
   const GRAPHIC_CATEGORIES = [
-    { id: 'standings', label: 'Point Tables', icon: Trophy, isAvailable: true, isPro: false },
-    { id: 'warheads', label: 'Warheads / Kill Leader', icon: Flame, isAvailable: true, isPro: true },
-    { id: 'fraggers', label: 'Top Fraggers / MVP', icon: UserCheck, isAvailable: true, isPro: true },
-    { id: 'team-poster', label: 'Team Poster', icon: ImageIcon, isAvailable: true, isPro: true },
-    { id: 'slots-list', label: 'Slots List', icon: ListOrdered, isAvailable: true, isPro: true },
-    { id: 'certificate', label: 'Victory Certificate', icon: Award, isAvailable: true, isPro: true }
+    { id: 'standings', label: 'Points Table', description: 'Full tournament standings', icon: Trophy, isAvailable: true, isPro: false },
+    { id: 'warheads', label: 'Kill Leader', description: 'Highest-kill player', icon: Flame, isAvailable: true, isPro: true },
+    { id: 'fraggers', label: 'Top Fraggers / MVP', description: 'Top 3 players by kills', icon: UserCheck, isAvailable: true, isPro: true },
+    { id: 'team-poster', label: 'Team Poster', description: 'Single team + roster', icon: ImageIcon, isAvailable: true, isPro: true },
+    { id: 'slots-list', label: 'Slots List', description: 'All teams and slots', icon: ListOrdered, isAvailable: true, isPro: true },
+    { id: 'certificate', label: 'Victory Certificate', description: 'Winner/achievement certificate', icon: Award, isAvailable: true, isPro: true }
   ] as const;
 
   return (
@@ -236,7 +318,7 @@ export const GraphicsStudioView: React.FC = () => {
               High-Resolution Esports Graphics Studio
             </h1>
             <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-0.5">
-              Render professional 4K Ultra HD Instagram posters and 16:9 broadcast overlays with dynamic branding.
+              Purpose-specific graphics generator: Standings, MVP Fraggers, Kill Leader, Rosters, Slots, & Certificates.
             </p>
           </div>
         </div>
@@ -312,21 +394,19 @@ export const GraphicsStudioView: React.FC = () => {
               key={cat.id}
               type="button"
               onClick={() => setActiveCategory(cat.id as GraphicCategoryTab)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer ${
+              className={`flex flex-col items-start px-3.5 py-2 rounded-xl text-left transition-all cursor-pointer border ${
                 isActive
-                  ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] shadow-md'
-                  : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)]'
+                  ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] border-[var(--accent-primary)] shadow-md'
+                  : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] border-[var(--border-subtle)]'
               }`}
             >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span>{cat.label}</span>
-              {!cat.isAvailable && (
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-mono uppercase font-black ${
-                  isActive ? 'bg-black/20 text-[var(--accent-primary-text)]' : 'bg-[var(--bg-surface-inset)] text-[var(--accent-primary)] border border-[var(--border-subtle)]'
-                }`}>
-                  PRO
-                </span>
-              )}
+              <div className="flex items-center gap-2 text-xs sm:text-sm font-bold whitespace-nowrap">
+                <Icon className="h-4 w-4 shrink-0" />
+                <span>{cat.label}</span>
+              </div>
+              <span className={`text-[10px] font-mono mt-0.5 ${isActive ? 'text-black/80 font-bold' : 'text-[var(--text-muted)]'}`}>
+                {cat.description}
+              </span>
             </button>
           );
         })}
@@ -359,7 +439,7 @@ export const GraphicsStudioView: React.FC = () => {
             {activeCategory === 'team-poster' && (
               <div className="pt-2 border-t border-[var(--border-subtle)] space-y-1.5">
                 <label className="text-xs font-mono font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-                  Select Squad / Team
+                  Select Showcase Squad / Team
                 </label>
                 <select
                   value={selectedTeamId}
@@ -372,6 +452,62 @@ export const GraphicsStudioView: React.FC = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {activeCategory === 'certificate' && (
+              <div className="pt-2 border-t border-[var(--border-subtle)] space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-mono font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                      Select Winner / Champion Squad
+                    </label>
+                    <select
+                      value={winnerTeamId}
+                      onChange={(e) => setWinnerTeamId(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] cursor-pointer"
+                    >
+                      {currentTournament.teams.map((team, idx) => (
+                        <option key={team.id} value={team.id}>
+                          #{idx + 1} {team.name} ({team.tag || 'TEAM'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <Input
+                    label="Award Title / Distinction"
+                    value={awardTitle}
+                    onChange={(e) => setAwardTitle(e.target.value)}
+                    placeholder="e.g. CHAMPION, RUNNER-UP, MVP"
+                  />
+                </div>
+                <Input
+                  label="Award Subtitle / Citation"
+                  value={awardSubtitle}
+                  onChange={(e) => setAwardSubtitle(e.target.value)}
+                  placeholder="e.g. For Outstanding Battle Royale Performance"
+                />
+              </div>
+            )}
+
+            {activeCategory === 'slots-list' && (
+              <div className="pt-2 border-t border-[var(--border-subtle)] text-xs font-mono text-[var(--text-secondary)] flex items-center gap-2">
+                <ListOrdered className="h-4 w-4 text-[var(--accent-primary)]" />
+                <span>Official Squad Allocation Matrix (Slots 01-12) — No points or kills.</span>
+              </div>
+            )}
+
+            {activeCategory === 'warheads' && (
+              <div className="pt-2 border-t border-[var(--border-subtle)] text-xs font-mono text-[var(--text-secondary)] flex items-center gap-2">
+                <Flame className="h-4 w-4 text-rose-500" />
+                <span>Featuring the tournament's #1 Kill Leader computed automatically across all battles.</span>
+              </div>
+            )}
+
+            {activeCategory === 'fraggers' && (
+              <div className="pt-2 border-t border-[var(--border-subtle)] text-xs font-mono text-[var(--text-secondary)] flex items-center gap-2">
+                <UserCheck className="h-4 w-4 text-amber-500" />
+                <span>Featuring exactly the Top 3 players by total tournament eliminations.</span>
               </div>
             )}
           </div>
@@ -508,26 +644,21 @@ export const GraphicsStudioView: React.FC = () => {
             {/* Vector Canvas Preview */}
             <div className="flex justify-center">
               <div className={`relative w-full ${isPortrait ? 'max-w-md aspect-[4/5]' : 'max-w-2xl aspect-video'} rounded-2xl overflow-hidden shadow-2xl bg-black border border-[var(--border-subtle)] transition-all flex items-center justify-center`}>
-                {activeCategory === 'standings' ? (
-                  <DynamicCustomTemplate
-                    template={currentCategoryTemplate}
-                    data={renderData}
-                    svgRef={svgRef}
-                    hueRotate={hueRotate}
-                  />
-                ) : (
-                  <GraphicCategoryCanvas
-                    category={activeCategory}
-                    tournament={currentTournament}
-                    tournamentTitle={customEventTitle}
-                    organizerName={customOrgName}
-                    tournamentLogo={currentTournament.logoUrl}
-                    organizerLogo={currentTournament.organizerLogoUrl}
-                    selectedTeamId={selectedTeamId}
-                    hueRotate={hueRotate}
-                    svgRef={svgRef}
-                  />
-                )}
+                <MasterGraphicRenderer
+                  template={currentCategoryTemplate}
+                  tournament={currentTournament}
+                  options={{
+                    customTitle: customEventTitle,
+                    organizerName: customOrgName,
+                    selectedTeamId,
+                    winnerTeamId,
+                    awardTitle,
+                    awardSubtitle,
+                    standingsData: renderData,
+                  }}
+                  hueRotate={hueRotate}
+                  svgRef={svgRef}
+                />
               </div>
             </div>
           </div>
@@ -807,26 +938,21 @@ export const GraphicsStudioView: React.FC = () => {
               }}
               className="relative shadow-2xl rounded-2xl overflow-hidden ring-1 ring-white/20"
             >
-              {activeCategory === 'standings' ? (
-                <DynamicCustomTemplate
-                  template={currentTemplate}
-                  data={renderData}
-                  svgRef={fullScreenSvgRef}
-                  hueRotate={hueRotate}
-                />
-              ) : (
-                <GraphicCategoryCanvas
-                  category={activeCategory}
-                  tournament={currentTournament}
-                  tournamentTitle={customEventTitle}
-                  organizerName={customOrgName}
-                  tournamentLogo={currentTournament.logoUrl}
-                  organizerLogo={currentTournament.organizerLogoUrl}
-                  selectedTeamId={selectedTeamId}
-                  hueRotate={hueRotate}
-                  svgRef={fullScreenSvgRef}
-                />
-              )}
+              <MasterGraphicRenderer
+                template={currentTemplate}
+                tournament={currentTournament}
+                options={{
+                  customTitle: customEventTitle,
+                  organizerName: customOrgName,
+                  selectedTeamId,
+                  winnerTeamId,
+                  awardTitle,
+                  awardSubtitle,
+                  standingsData: renderData,
+                }}
+                hueRotate={hueRotate}
+                svgRef={fullScreenSvgRef}
+              />
             </div>
           </div>
         </div>

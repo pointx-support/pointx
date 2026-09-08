@@ -13,7 +13,8 @@ import { updateAuthoritativeState } from '../services/realtimeSync';
 export async function listTemplates(req: Request, res: Response, next: NextFunction) {
   try {
     const user = (req as AuthenticatedRequest).user;
-    const templates = await getTemplates(user);
+    const section = (req.query.section || req.query.templateType || req.query.category) as string | undefined;
+    const templates = await getTemplates(user, section ? { templateType: section } : undefined);
     return res.status(200).json({ success: true, data: templates.map((t) => t.toJSON()) });
   } catch (error) {
     next(error);
@@ -24,14 +25,21 @@ export async function getSingleTemplate(req: Request, res: Response, next: NextF
   try {
     const id = req.params.id as string;
     const user = (req as AuthenticatedRequest).user;
-    const template = await getTemplateById(id, user);
+    const requiredSection = (req.query.section || req.query.templateType) as string | undefined;
+    const template = await getTemplateById(id, user, requiredSection);
     if (!template) {
       return res.status(404).json({ success: false, error: 'Template not found.' });
     }
     return res.status(200).json({ success: true, data: template.toJSON() });
   } catch (error: any) {
+    if (error.statusCode === 400) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
     if (error.statusCode === 403) {
       return res.status(403).json({ success: false, error: error.message });
+    }
+    if (error.statusCode === 404) {
+      return res.status(404).json({ success: false, error: error.message });
     }
     next(error);
   }

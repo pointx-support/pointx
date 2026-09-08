@@ -3,7 +3,9 @@ import { useTemplateStore } from '../../store/templateStore';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useAuthStore } from '../../store/authStore';
 import { useFontStore } from '../../store/fontStore';
-import { DynamicCustomTemplate } from './templates/DynamicCustomTemplate';
+import { MasterGraphicRenderer } from './renderers/MasterGraphicRenderer';
+import { getVariablesForSection } from '../../engine/sectionVariables';
+import type { Tournament } from '../../types/tournament';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
@@ -147,6 +149,50 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
     totalPages: 1,
     totalMatchesCount: currentTournament?.matches?.length || 6,
     subtitle: 'OVERALL'
+  };
+
+  const templateType = activeTemplate?.templateType || 'POINTS_TABLE';
+  const isPointsTable = templateType === 'POINTS_TABLE';
+  const sectionVariables = getVariablesForSection(templateType);
+
+  const previewTournament: Tournament = (currentTournament as Tournament) || {
+    id: 'studio-preview-tourney',
+    title: currentTournament?.title || user?.defaultTournamentTitle || 'POINTX CHAMPIONSHIP',
+    organizer: currentTournament?.organizer || user?.organizationName || 'POINTX ARENA',
+    game: 'FREE_FIRE',
+    status: 'ONGOING',
+    scoringSystem: 'BATTLE_ROYALE_STANDARD',
+    teams: Array.from({ length: 12 }, (_, i) => ({
+      id: `team-${i + 1}`,
+      name: `Team ${String.fromCharCode(65 + i)}`,
+      tag: `T${i + 1}`,
+      slotNumber: i + 1,
+      players: [
+        { id: `p-${i}-1`, name: `Player ${i + 1}A`, role: 'Captain' },
+        { id: `p-${i}-2`, name: `Player ${i + 1}B`, role: 'Rusher' },
+        { id: `p-${i}-3`, name: `Player ${i + 1}C`, role: 'Sniper' },
+        { id: `p-${i}-4`, name: `Player ${i + 1}D`, role: 'Support' }
+      ]
+    })),
+    matches: [
+      {
+        id: 'm-1',
+        matchNumber: 1,
+        map: 'Bermuda',
+        status: 'COMPLETED',
+        teamResults: Array.from({ length: 12 }, (_, i) => ({
+          teamId: `team-${i + 1}`,
+          placement: i + 1,
+          placementPoints: Math.max(12 - i, 0),
+          killPoints: Math.max(15 - i, 1),
+          totalPoints: Math.max(12 - i, 0) + Math.max(15 - i, 1),
+          playerKills: {
+            [`p-${i}-1`]: Math.max(8 - i, 1),
+            [`p-${i}-2`]: Math.max(4 - i, 0)
+          }
+        }))
+      }
+    ]
   };
 
   // Primary selected element key (first of the selected keys)
@@ -863,9 +909,14 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
               }}
               className="relative shadow-2xl rounded-2xl overflow-hidden ring-1 ring-white/10"
             >
-              <DynamicCustomTemplate
+              <MasterGraphicRenderer
                 template={activeTemplate}
-                data={renderData}
+                tournament={previewTournament}
+                options={{
+                  customTitle: renderData.tournamentTitle,
+                  organizerName: renderData.organizerName,
+                  standingsData: renderData
+                }}
                 selectedElementKeys={selectedKeys}
                 onSelectElement={handleSelectElement}
                 onDragElement={handleDragElement}
@@ -886,110 +937,149 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                   1. Target Element
                 </span>
               </div>
-              <span className="text-xs font-mono font-bold text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 px-2 py-0.5 rounded-lg border border-[var(--accent-primary)]/20 truncate max-w-[170px]">
-                {selectedPresetLabel}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">
+                  {templateType}
+                </span>
+                <span className="text-xs font-mono font-bold text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 px-2 py-0.5 rounded-lg border border-[var(--accent-primary)]/20 truncate max-w-[150px]">
+                  {selectedPresetLabel}
+                </span>
+              </div>
             </div>
 
             {/* Quick 1-Click Multi-Select Pills */}
             <div className="space-y-1.5">
               <div className="text-[11px] font-mono font-bold uppercase text-[var(--text-secondary)]">
-                Batch Quick-Select:
+                {isPointsTable ? 'Batch Quick-Select:' : 'Quick Variables:'}
               </div>
               <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => selectPreset('🛡️ All Team Names', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_teamName`))}
-                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                >
-                  🛡️ Team Names
-                </button>
+                {isPointsTable ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('🛡️ All Team Names', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_teamName`))}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🛡️ Team Names
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => selectPreset('🎯 Total Points', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_total`))}
-                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                >
-                  🎯 Total Points
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('🎯 Total Points', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_total`))}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🎯 Total Points
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => selectPreset('💥 All Kills', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_kills`))}
-                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                >
-                  💥 All Kills
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('💥 All Kills', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_kills`))}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      💥 All Kills
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => selectPreset('🔢 All Ranks', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_rank`))}
-                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                >
-                  🔢 All Ranks
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('🔢 All Ranks', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_rank`))}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🔢 All Ranks
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => selectPreset('🖼️ Team Logos', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_logo`))}
-                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                >
-                  🖼️ Team Logos
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('🖼️ Team Logos', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_logo`))}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🖼️ Team Logos
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => selectPreset('👑 All Headers', ['organizer', 'organizerLogo', 'tournamentTitle', 'tournamentLogo', 'subtitle'])}
-                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                >
-                  👑 All Headers
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('👑 All Headers', ['organizer', 'organizerLogo', 'tournamentTitle', 'tournamentLogo', 'subtitle'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      👑 All Headers
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {sectionVariables.slice(0, 6).map((v) => (
+                      <button
+                        key={v.key}
+                        type="button"
+                        onClick={() => selectPreset(v.label, [v.key])}
+                        className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-xs ${
+                          selectedKeys.includes(v.key)
+                            ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] border-[var(--accent-primary)]'
+                            : 'bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)]/20 text-[var(--text-primary)] border-[var(--border-subtle)]'
+                        }`}
+                      >
+                        {v.label}
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
 
             {/* Granular Individual Selector Dropdown */}
             <div className="pt-1">
               <label className="block text-[11px] font-mono text-[var(--text-secondary)] mb-1">
-                Or select specific element directly:
+                {isPointsTable ? 'Or select specific element directly:' : 'Select section variable:'}
               </label>
               <select
                 value={selectedKeys.length === 1 ? selectedKeys[0] : ''}
                 onChange={(e) => {
                   if (e.target.value) {
                     setSelectedKeys([e.target.value]);
-                    setSelectedPresetLabel(e.target.value.replace(/_/g, ' ').toUpperCase());
+                    const matchedVar = sectionVariables.find(v => v.key === e.target.value);
+                    setSelectedPresetLabel(matchedVar ? matchedVar.label : e.target.value.replace(/_/g, ' ').toUpperCase());
                   }
                 }}
                 className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] cursor-pointer"
               >
                 <option value="" disabled>-- Choose Granular Element --</option>
-                <optgroup label="Header Elements">
-                  <option value="tournamentTitle">Tournament Title Text</option>
-                  <option value="tournamentLogo">Tournament Logo</option>
-                  <option value="organizer">Organizer Name Text</option>
-                  <option value="organizerLogo">Organizer Logo</option>
-                  <option value="subtitle">Subtitle / Scope Badge</option>
-                </optgroup>
-                <optgroup label="Squad Slot 1 (Top Seed)">
-                  <option value="slot_1_teamName">Slot 1: Team Name</option>
-                  <option value="slot_1_logo">Slot 1: Team Logo</option>
-                  <option value="slot_1_rank">Slot 1: Rank #01</option>
-                  <option value="slot_1_total">Slot 1: Total Points</option>
-                  <option value="slot_1_kills">Slot 1: Kill Points</option>
-                  <option value="slot_1_place">Slot 1: Place Points</option>
-                  <option value="slot_1_match">Slot 1: Match Played</option>
-                  <option value="slot_1_booyah">Slot 1: Booyah Count</option>
-                </optgroup>
-                <optgroup label="Squad Slot 2">
-                  <option value="slot_2_teamName">Slot 2: Team Name</option>
-                  <option value="slot_2_total">Slot 2: Total Points</option>
-                  <option value="slot_2_kills">Slot 2: Kill Points</option>
-                </optgroup>
-                <optgroup label="Squad Slot 7 (Right Col Top)">
-                  <option value="slot_7_teamName">Slot 7: Team Name</option>
-                  <option value="slot_7_total">Slot 7: Total Points</option>
-                  <option value="slot_7_kills">Slot 7: Kill Points</option>
-                </optgroup>
+                {isPointsTable ? (
+                  <>
+                    <optgroup label="Header Elements">
+                      <option value="tournamentTitle">Tournament Title Text</option>
+                      <option value="tournamentLogo">Tournament Logo</option>
+                      <option value="organizer">Organizer Name Text</option>
+                      <option value="organizerLogo">Organizer Logo</option>
+                      <option value="subtitle">Subtitle / Scope Badge</option>
+                    </optgroup>
+                    <optgroup label="Squad Slot 1 (Top Seed)">
+                      <option value="slot_1_teamName">Slot 1: Team Name</option>
+                      <option value="slot_1_logo">Slot 1: Team Logo</option>
+                      <option value="slot_1_rank">Slot 1: Rank #01</option>
+                      <option value="slot_1_total">Slot 1: Total Points</option>
+                      <option value="slot_1_kills">Slot 1: Kill Points</option>
+                      <option value="slot_1_place">Slot 1: Place Points</option>
+                      <option value="slot_1_match">Slot 1: Match Played</option>
+                      <option value="slot_1_booyah">Slot 1: Booyah Count</option>
+                    </optgroup>
+                    <optgroup label="Squad Slot 2">
+                      <option value="slot_2_teamName">Slot 2: Team Name</option>
+                      <option value="slot_2_total">Slot 2: Total Points</option>
+                      <option value="slot_2_kills">Slot 2: Kill Points</option>
+                    </optgroup>
+                    <optgroup label="Squad Slot 7 (Right Col Top)">
+                      <option value="slot_7_teamName">Slot 7: Team Name</option>
+                      <option value="slot_7_total">Slot 7: Total Points</option>
+                      <option value="slot_7_kills">Slot 7: Kill Points</option>
+                    </optgroup>
+                  </>
+                ) : (
+                  <optgroup label={`${templateType.replace(/_/g, ' ')} Variables`}>
+                    {sectionVariables.map((v) => (
+                      <option key={v.key} value={v.key}>
+                        {v.label} ({v.variable})
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
           </div>
@@ -1753,9 +1843,14 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
               }}
               className="relative shadow-2xl rounded-2xl overflow-hidden ring-1 ring-white/20"
             >
-              <DynamicCustomTemplate
+              <MasterGraphicRenderer
                 template={activeTemplate}
-                data={renderData}
+                tournament={previewTournament}
+                options={{
+                  customTitle: renderData.tournamentTitle,
+                  organizerName: renderData.organizerName,
+                  standingsData: renderData
+                }}
                 selectedElementKeys={selectedKeys}
                 onSelectElement={handleSelectElement}
                 onDragElement={handleDragElement}
@@ -1768,42 +1863,61 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
           <div className="bg-black/80 backdrop-blur-md rounded-2xl p-2.5 border border-white/15 flex flex-wrap items-center justify-between gap-3 text-white text-xs">
             {/* Quick Batch Pills */}
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] font-mono uppercase font-bold text-white/50">Batch:</span>
-              <button
-                type="button"
-                onClick={() => selectPreset('🛡️ All Team Names', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_teamName`))}
-                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-              >
-                🛡️ Teams
-              </button>
-              <button
-                type="button"
-                onClick={() => selectPreset('🎯 Total Points', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_total`))}
-                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-              >
-                🎯 Totals
-              </button>
-              <button
-                type="button"
-                onClick={() => selectPreset('💥 All Kills', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_kills`))}
-                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-              >
-                💥 Kills
-              </button>
-              <button
-                type="button"
-                onClick={() => selectPreset('🔢 All Ranks', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_rank`))}
-                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-              >
-                🔢 Ranks
-              </button>
-              <button
-                type="button"
-                onClick={() => selectPreset('👑 All Headers', ['organizer', 'organizerLogo', 'tournamentTitle', 'tournamentLogo', 'subtitle'])}
-                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-              >
-                👑 Headers
-              </button>
+              <span className="text-[10px] font-mono uppercase font-bold text-white/50">
+                {isPointsTable ? 'Batch:' : 'Variables:'}
+              </span>
+              {isPointsTable ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('🛡️ All Team Names', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_teamName`))}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    🛡️ Teams
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('🎯 Total Points', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_total`))}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    🎯 Totals
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('💥 All Kills', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_kills`))}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    💥 Kills
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('🔢 All Ranks', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_rank`))}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    🔢 Ranks
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('👑 All Headers', ['organizer', 'organizerLogo', 'tournamentTitle', 'tournamentLogo', 'subtitle'])}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    👑 Headers
+                  </button>
+                </>
+              ) : (
+                <>
+                  {sectionVariables.slice(0, 6).map((v) => (
+                    <button
+                      key={v.key}
+                      type="button"
+                      onClick={() => selectPreset(v.label, [v.key])}
+                      className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
 
             {/* Tactile Mini Nudge Buttons */}

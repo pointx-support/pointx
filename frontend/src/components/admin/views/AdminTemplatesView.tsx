@@ -28,7 +28,9 @@ import {
   Building,
   Users
 } from 'lucide-react';
-import type { GraphicTemplateCategory } from '../../../types/customTemplate';
+import type { GraphicTemplateCategory, TemplateType } from '../../../types/customTemplate';
+import { normalizeTemplateType } from '../../../types/customTemplate';
+import { getVariablesForSection } from '../../../engine/sectionVariables';
 
 export interface AdminTemplatesViewProps {
   onOpenTemplateStudio: () => void;
@@ -67,11 +69,25 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
   // New Template Form State
   const [templateName, setTemplateName] = useState('');
   const [description, setDescription] = useState('');
+  const [targetSection, setTargetSection] = useState<TemplateType>('POINTS_TABLE');
   const [targetCategory, setTargetCategory] = useState<GraphicTemplateCategory>('standings');
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '4:5'>('4:5');
   const [imageUrl, setImageUrl] = useState('');
   const [visibility, setVisibility] = useState<'GLOBAL' | 'ORGANIZATION_RESTRICTED'>('GLOBAL');
   const [allowedOrganizationIds, setAllowedOrganizationIds] = useState<string[]>([]);
+
+  const handleSectionChange = (section: TemplateType) => {
+    setTargetSection(section);
+    if (section === 'POINTS_TABLE') setTargetCategory('standings');
+    else if (section === 'KILL_LEADER') setTargetCategory('warheads');
+    else if (section === 'TOP_FRAGGERS') setTargetCategory('fraggers');
+    else if (section === 'TEAM_POSTER') setTargetCategory('team-poster');
+    else if (section === 'SLOTS_LIST') setTargetCategory('slots-list');
+    else if (section === 'VICTORY_CERTIFICATE') {
+      setTargetCategory('certificate');
+      setAspectRatio('16:9');
+    }
+  };
 
   // Fetch organizations on mount
   useEffect(() => {
@@ -211,6 +227,7 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
         imageUrl,
         aspectRatio,
         alignment: baseAlignment,
+        templateType: targetSection,
         category: targetCategory,
         visibility,
         allowedOrganizationIds: visibility === 'ORGANIZATION_RESTRICTED' ? allowedOrganizationIds : [],
@@ -234,7 +251,7 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
       showToast({
         type: 'success',
         title: 'Template Created',
-        message: `Created ${visibility === 'ORGANIZATION_RESTRICTED' ? 'Private' : 'Global'} template.`
+        message: `Created ${visibility === 'ORGANIZATION_RESTRICTED' ? 'Private' : 'Global'} template for ${targetSection}.`
       });
 
       handleOpenStudio(newId);
@@ -251,8 +268,8 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
 
   const filteredTemplates = templates.filter((t) => {
     if (activeCategoryFilter === 'all') return true;
-    const cat = t.category || 'standings';
-    return cat === activeCategoryFilter;
+    const type = t.templateType || normalizeTemplateType(t.category);
+    return type === normalizeTemplateType(activeCategoryFilter);
   });
 
   return (
@@ -443,62 +460,100 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
           maxWidth="lg"
         >
           <form onSubmit={handleCreateTemplate} className="space-y-4 font-sans text-xs sm:text-sm">
-            {/* Target Section Selection */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
-                  Target Section Category *
-                </label>
-                <select
-                  value={targetCategory}
-                  onChange={(e) => setTargetCategory(e.target.value as GraphicTemplateCategory)}
-                  className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] font-bold text-xs text-[var(--text-primary)] cursor-pointer focus:border-[var(--accent-primary)] focus:outline-none"
-                >
-                  <option value="standings">🏆 Point Tables (Tournament Standings)</option>
-                  <option value="warheads">🔥 Warheads / Kill Leader</option>
-                  <option value="fraggers">👑 Top Fraggers / MVP</option>
-                  <option value="team-poster">🖼️ Team Poster (Squad Lineup)</option>
-                  <option value="slots-list">📋 Slots List (12-Team Schedule)</option>
-                  <option value="certificate">🎖️ Victory Certificate (Champion Diploma)</option>
-                </select>
+            {/* STEP 1: UPLOAD & METADATA */}
+            <div className="space-y-3 pb-3 border-b border-[var(--border-subtle)]">
+              <div className="text-xs font-mono font-bold text-[var(--accent-primary)] uppercase tracking-wider">
+                Step 1: Template Artwork & Metadata
               </div>
+              <Input
+                label="Template Name *"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                placeholder="e.g. Apex Predators 4K Poster"
+                required
+              />
 
-              <div>
-                <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
-                  Aspect Ratio *
-                </label>
-                <select
-                  value={aspectRatio}
-                  onChange={(e) => setAspectRatio(e.target.value as '16:9' | '4:5')}
-                  className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] font-bold text-xs text-[var(--text-primary)] cursor-pointer"
-                >
-                  <option value="4:5">4:5 Portrait Poster (1080 × 1350 — Social Media)</option>
-                  <option value="16:9">16:9 Widescreen (1920 × 1080 — Broadcast Stream)</option>
-                </select>
+              <Input
+                label="Description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="e.g. Exclusive graphic template calibrated for Official Free Fire League."
+              />
+
+              <ImageUpload
+                label="Template Background Artwork *"
+                value={imageUrl}
+                onChange={(val) => setImageUrl(val || '')}
+                helperText="Upload official 16:9 or 4:5 poster template background (PNG, JPG, WebP)."
+              />
+            </div>
+
+            {/* STEP 2: CHOOSE SECTION */}
+            <div className="space-y-3 pb-3 border-b border-[var(--border-subtle)]">
+              <div className="text-xs font-mono font-bold text-[var(--accent-primary)] uppercase tracking-wider">
+                Step 2: Choose Section ("Which section is this template for?")
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
+                    Select Template Section *
+                  </label>
+                  <select
+                    value={targetSection}
+                    onChange={(e) => handleSectionChange(e.target.value as TemplateType)}
+                    className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] font-bold text-xs text-[var(--text-primary)] cursor-pointer focus:border-[var(--accent-primary)] focus:outline-none"
+                  >
+                    <option value="POINTS_TABLE">🏆 Points Table (Full tournament standings)</option>
+                    <option value="KILL_LEADER">🔥 Warheads / Kill Leader (Highest-kill player)</option>
+                    <option value="TOP_FRAGGERS">👑 Top Fraggers / MVP (Top 3 players by kills)</option>
+                    <option value="TEAM_POSTER">🖼️ Team Poster (Single team + roster)</option>
+                    <option value="SLOTS_LIST">📋 Slots List (All teams and slots)</option>
+                    <option value="VICTORY_CERTIFICATE">🎖️ Victory Certificate (Winner/achievement certificate)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
+                    Aspect Ratio *
+                  </label>
+                  <select
+                    value={aspectRatio}
+                    onChange={(e) => setAspectRatio(e.target.value as '16:9' | '4:5')}
+                    className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] font-bold text-xs text-[var(--text-primary)] cursor-pointer"
+                  >
+                    <option value="4:5">4:5 Portrait Poster (1080 × 1350 — Social Media)</option>
+                    <option value="16:9">16:9 Widescreen (1920 × 1080 — Broadcast Stream / Certificate)</option>
+                  </select>
+                </div>
               </div>
             </div>
 
-            <Input
-              label="Template Name *"
-              value={templateName}
-              onChange={(e) => setTemplateName(e.target.value)}
-              placeholder="e.g. Apex Predators 4K Poster"
-              required
-            />
-
-            <Input
-              label="Description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g. Exclusive graphic template calibrated for Official Free Fire League."
-            />
-
-            <ImageUpload
-              label="Template Background Artwork *"
-              value={imageUrl}
-              onChange={(val) => setImageUrl(val || '')}
-              helperText="Upload official 16:9 or 4:5 poster template background (PNG, JPG, WebP)."
-            />
+            {/* STEP 3: DYNAMIC SECTION-SPECIFIC VARIABLES PREVIEW */}
+            <div className="p-3.5 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-mono font-bold text-[var(--accent-primary)] uppercase tracking-wider">
+                  Step 3: Available Template Variables for {targetSection}
+                </div>
+                <span className="text-[11px] font-mono text-[var(--text-secondary)]">
+                  {getVariablesForSection(targetSection).length} Available Placeholders
+                </span>
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)]">
+                This section only accepts the following purpose-specific variables. Irrelevant variables from other sections are strictly excluded.
+              </p>
+              <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1 custom-scrollbar">
+                {getVariablesForSection(targetSection).map((v) => (
+                  <div
+                    key={v.key}
+                    className="px-2 py-1 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-mono flex items-center gap-1.5"
+                    title={v.description}
+                  >
+                    <span className="text-[var(--accent-primary)] font-bold">{v.variable}</span>
+                    <span className="text-[var(--text-secondary)] text-[10px]">({v.label})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             {/* ORGANIZATION ACCESS GOVERNANCE (PART 20 & 21) */}
             <div className="p-3.5 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] space-y-3">

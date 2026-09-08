@@ -1,15 +1,60 @@
-import { CustomTemplate, ICustomTemplate } from '../models/CustomTemplate';
+import { CustomTemplate, ICustomTemplate, TemplateType, normalizeTemplateType, VALID_TEMPLATE_TYPES } from '../models/CustomTemplate';
 import { User } from '../models/User';
 
-export async function getTemplates(user?: { _id?: any; role?: string; organizationName?: string }): Promise<ICustomTemplate[]> {
-  // If Super Admin, return all templates
+export async function migrateExistingTemplates(): Promise<{ migrated: number; needsReview: number }> {
+  try {
+    const rawTemplates = await CustomTemplate.collection.find({}).toArray();
+    let migrated = 0;
+    let needsReview = 0;
+
+    for (const raw of rawTemplates) {
+      const hasRawType = raw.templateType && VALID_TEMPLATE_TYPES.includes(raw.templateType as TemplateType);
+      if (!hasRawType || (raw.category && raw.templateType === 'POINTS_TABLE' && raw.category !== 'standings')) {
+        const normalized = normalizeTemplateType(raw.category || raw.templateType);
+        await CustomTemplate.collection.updateOne(
+          { _id: raw._id },
+          { $set: { templateType: normalized } }
+        );
+        if (normalized === 'NEEDS_REVIEW') {
+          needsReview++;
+        } else {
+          migrated++;
+        }
+      }
+    }
+
+    return { migrated, needsReview };
+  } catch (err) {
+    console.warn('[Migration] Error migrating templates:', err);
+    return { migrated: 0, needsReview: 0 };
+  }
+}
+
+export interface GetTemplatesOptions {
+  templateType?: string;
+  category?: string;
+}
+
+export async function getTemplates(
+  user?: { _id?: any; role?: string; organizationName?: string },
+  options?: GetTemplatesOptions
+): Promise<ICustomTemplate[]> {
+  const sectionFilter: any = {};
+  if (options?.templateType) {
+    sectionFilter.templateType = normalizeTemplateType(options.templateType);
+  } else if (options?.category) {
+    sectionFilter.templateType = normalizeTemplateType(options.category);
+  }
+
+  // If Super Admin, return all templates (filtered by section if requested)
   if (user?.role === 'admin') {
-    return CustomTemplate.find().sort({ createdAt: -1 });
+    return CustomTemplate.find(sectionFilter).sort({ createdAt: -1 });
   }
 
   // If unauthenticated, return only built-in and globally published templates
   if (!user || !user._id) {
     return CustomTemplate.find({
+      ...sectionFilter,
       active: { $ne: false },
       $or: [
         { isBuiltIn: true },
@@ -28,6 +73,7 @@ export async function getTemplates(user?: { _id?: any; role?: string; organizati
   const allowedTargets = [userIdStr, orgName].filter(Boolean);
 
   const query: any = {
+    ...sectionFilter,
     active: { $ne: false },
     $or: [
       { isBuiltIn: true },
@@ -46,7 +92,8 @@ export async function getTemplates(user?: { _id?: any; role?: string; organizati
 
 export async function getTemplateById(
   templateId: string,
-  user?: { _id?: any; role?: string; organizationName?: string }
+  user?: { _id?: any; role?: string; organizationName?: string },
+  requiredSection?: string
 ): Promise<ICustomTemplate | null> {
   const query: any = {
     $or: [{ customId: templateId }],
@@ -58,8 +105,30 @@ export async function getTemplateById(
   const template = await CustomTemplate.findOne(query);
   if (!template) return null;
 
+  const isCreator = Boolean(user?._id && template.userId && template.userId.toString() === user._id.toString());
+  const isAdmin = user?.role === 'admin';
+
+  // Inactive templates are only visible to admin or creator
+  if (!template.active && !isAdmin && !isCreator) {
+    const err: any = new Error('Template is inactive or not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  // Validate required section if provided (Requirement 16)
+  if (requiredSection) {
+    const expectedType = normalizeTemplateType(requiredSection);
+    if (template.templateType !== expectedType) {
+      const err: any = new Error(
+        `Template section mismatch: requested '${requiredSection}' but template is '${template.templateType}'.`
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
   // Super Admin can access any template
-  if (user?.role === 'admin') {
+  if (isAdmin) {
     return template;
   }
 
@@ -69,7 +138,7 @@ export async function getTemplateById(
   }
 
   // Creator can always access their template
-  if (user?._id && template.userId && template.userId.toString() === user._id.toString()) {
+  if (isCreator) {
     return template;
   }
 
@@ -111,13 +180,16 @@ export async function createTemplate(userId: string, data: any, role?: string): 
     ? data.allowedOrganizationIds.map(String)
     : [];
 
+  const templateType = normalizeTemplateType(data.templateType || data.category);
+
   return CustomTemplate.create({
     ...data,
     customId,
     userId,
     visibility,
     allowedOrganizationIds,
-    templateType: data.templateType || data.category || 'standings',
+    templateType,
+    category: data.category || templateType,
     active: data.active !== undefined ? !!data.active : true,
     version: 1,
     isBuiltIn: role === 'admin' ? !!data.isBuiltIn : false,
@@ -144,9 +216,16 @@ export async function updateTemplate(
     delete (updates as any).isBuiltIn;
   }
 
+  const processedUpdates: any = { ...updates };
+  if (processedUpdates.templateType || processedUpdates.category) {
+    processedUpdates.templateType = normalizeTemplateType(
+      processedUpdates.templateType || processedUpdates.category
+    );
+  }
+
   // Increment version on update
   const safeUpdates = {
-    ...updates,
+    ...processedUpdates,
     $inc: { version: 1 },
   };
 
@@ -189,3 +268,4 @@ export async function getOrganizationsForTemplatePicker(): Promise<
     logoUrl: u.organizationLogoUrl,
   }));
 }
+

@@ -215,7 +215,7 @@ export async function getAuthoritativeBroadcastState(sessionId: string): Promise
     const bonusPoints = Number(result?.bonusPoints || 0);
 
     const calc = calculateTeamMatchScore(
-      { teamId, kills, placement, isBooyah, bonusPoints },
+      { teamId, kills, placement, booyah: isBooyah, bonusPoints },
       scoringConfig
     );
     const calculated = calc.success ? calc.data : null;

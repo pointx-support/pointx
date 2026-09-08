@@ -119,12 +119,156 @@ export interface TemplateAlignmentConfig {
 
 export type GraphicTemplateCategory = 'standings' | 'warheads' | 'fraggers' | 'team-poster' | 'slots-list' | 'certificate';
 
+export type TemplateType =
+  | 'POINTS_TABLE'
+  | 'KILL_LEADER'
+  | 'TOP_FRAGGERS'
+  | 'TEAM_POSTER'
+  | 'SLOTS_LIST'
+  | 'VICTORY_CERTIFICATE'
+  | 'NEEDS_REVIEW';
+
+export const VALID_TEMPLATE_TYPES: TemplateType[] = [
+  'POINTS_TABLE',
+  'KILL_LEADER',
+  'TOP_FRAGGERS',
+  'TEAM_POSTER',
+  'SLOTS_LIST',
+  'VICTORY_CERTIFICATE',
+  'NEEDS_REVIEW',
+];
+
+export function normalizeTemplateType(val?: string): TemplateType {
+  if (!val) return 'POINTS_TABLE';
+  const clean = val.trim();
+  if (VALID_TEMPLATE_TYPES.includes(clean as TemplateType)) {
+    return clean as TemplateType;
+  }
+  const lower = clean.toLowerCase();
+  if (lower === 'standings' || lower === 'overall-standings' || lower === 'point-table' || lower === 'point_table' || lower === 'points_table') {
+    return 'POINTS_TABLE';
+  }
+  if (lower === 'warheads' || lower === 'kill-leader' || lower === 'kill_leader') {
+    return 'KILL_LEADER';
+  }
+  if (lower === 'fraggers' || lower === 'top-fraggers' || lower === 'top_fraggers' || lower === 'mvp') {
+    return 'TOP_FRAGGERS';
+  }
+  if (lower === 'team-poster' || lower === 'team_poster' || lower === 'roster') {
+    return 'TEAM_POSTER';
+  }
+  if (lower === 'slots-list' || lower === 'slot-list' || lower === 'slots_list' || lower === 'slots') {
+    return 'SLOTS_LIST';
+  }
+  if (lower === 'certificate' || lower === 'victory-certificate' || lower === 'victory_certificate' || lower === 'winner') {
+    return 'VICTORY_CERTIFICATE';
+  }
+  return 'NEEDS_REVIEW';
+}
+
+// ==========================================
+// SECTION-SPECIFIC RENDER DATA INTERFACES
+// ==========================================
+
+export interface KillLeaderRenderData {
+  tournamentTitle: string;
+  tournamentLogo?: string;
+  organizerName: string;
+  organizerLogo?: string;
+  player: {
+    id: string;
+    name: string;
+    avatarUrl?: string;
+    teamId: string;
+    teamName: string;
+    teamTag?: string;
+    teamLogo?: string;
+    totalKills: number;
+    damage: number;
+    avgKills: number;
+    matchesPlayed: number;
+    rank?: number;
+  };
+}
+
+export interface TopFraggersRenderData {
+  tournamentTitle: string;
+  tournamentLogo?: string;
+  organizerName: string;
+  organizerLogo?: string;
+  players: Array<{
+    rank: number;
+    id: string;
+    name: string;
+    avatarUrl?: string;
+    teamId: string;
+    teamName: string;
+    teamTag?: string;
+    teamLogo?: string;
+    totalKills: number;
+    damage: number;
+    avgKills?: number;
+  }>;
+}
+
+export interface TeamPosterRenderData {
+  tournamentTitle: string;
+  tournamentLogo?: string;
+  organizerName: string;
+  organizerLogo?: string;
+  team: {
+    id: string;
+    name: string;
+    tag: string;
+    logoUrl?: string;
+    slogan?: string;
+    players: Array<{
+      id: string;
+      name: string;
+      role?: string;
+      photoUrl?: string;
+    }>;
+  };
+}
+
+export interface SlotsListRenderData {
+  tournamentTitle: string;
+  tournamentLogo?: string;
+  organizerName: string;
+  organizerLogo?: string;
+  slots: Array<{
+    slotNumber: number;
+    teamId?: string;
+    teamName: string;
+    teamTag?: string;
+    logoUrl?: string;
+    isConfirmed: boolean;
+  }>;
+}
+
+export interface VictoryCertificateRenderData {
+  tournamentTitle: string;
+  tournamentDate: string;
+  organizerName: string;
+  organizerLogo?: string;
+  organizerSignature?: string;
+  winner: {
+    teamId: string;
+    teamName: string;
+    teamTag?: string;
+    logoUrl?: string;
+  };
+  awardTitle: string;
+  awardSubtitle?: string;
+  certificateId?: string;
+}
+
 export interface CustomGraphicsTemplate {
   id: string;
   name: string;
   description: string;
   category?: GraphicTemplateCategory;
-  templateType?: string;
+  templateType?: TemplateType;
   imageUrl: string;
   aspectRatio: '16:9' | '4:5' | '1:1' | '9:16';
   alignment: TemplateAlignmentConfig;

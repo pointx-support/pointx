@@ -1,5 +1,52 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
+export type TemplateType =
+  | 'POINTS_TABLE'
+  | 'KILL_LEADER'
+  | 'TOP_FRAGGERS'
+  | 'TEAM_POSTER'
+  | 'SLOTS_LIST'
+  | 'VICTORY_CERTIFICATE'
+  | 'NEEDS_REVIEW';
+
+export const VALID_TEMPLATE_TYPES: TemplateType[] = [
+  'POINTS_TABLE',
+  'KILL_LEADER',
+  'TOP_FRAGGERS',
+  'TEAM_POSTER',
+  'SLOTS_LIST',
+  'VICTORY_CERTIFICATE',
+  'NEEDS_REVIEW',
+];
+
+export function normalizeTemplateType(val?: string): TemplateType {
+  if (!val) return 'POINTS_TABLE';
+  const clean = val.trim();
+  if (VALID_TEMPLATE_TYPES.includes(clean as TemplateType)) {
+    return clean as TemplateType;
+  }
+  const lower = clean.toLowerCase();
+  if (lower === 'standings' || lower === 'overall-standings' || lower === 'point-table' || lower === 'point_table' || lower === 'points_table') {
+    return 'POINTS_TABLE';
+  }
+  if (lower === 'warheads' || lower === 'kill-leader' || lower === 'kill_leader') {
+    return 'KILL_LEADER';
+  }
+  if (lower === 'fraggers' || lower === 'top-fraggers' || lower === 'top_fraggers' || lower === 'mvp') {
+    return 'TOP_FRAGGERS';
+  }
+  if (lower === 'team-poster' || lower === 'team_poster' || lower === 'roster') {
+    return 'TEAM_POSTER';
+  }
+  if (lower === 'slots-list' || lower === 'slot-list' || lower === 'slots_list' || lower === 'slots') {
+    return 'SLOTS_LIST';
+  }
+  if (lower === 'certificate' || lower === 'victory-certificate' || lower === 'victory_certificate' || lower === 'winner') {
+    return 'VICTORY_CERTIFICATE';
+  }
+  return 'NEEDS_REVIEW';
+}
+
 export interface ICustomTemplate extends Document {
   customId: string;
   userId?: mongoose.Types.ObjectId;
@@ -15,7 +62,8 @@ export interface ICustomTemplate extends Document {
   allowedOrganizationIds: string[];
   active: boolean;
   version: number;
-  templateType: string;
+  templateType: TemplateType;
+  category?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -49,7 +97,13 @@ const CustomTemplateSchema = new Schema<ICustomTemplate>(
     },
     active: { type: Boolean, default: true, index: true },
     version: { type: Number, default: 1 },
-    templateType: { type: String, default: 'standings', maxlength: 50 },
+    templateType: {
+      type: String,
+      enum: VALID_TEMPLATE_TYPES,
+      default: 'POINTS_TABLE',
+      index: true,
+    },
+    category: { type: String, maxlength: 50 },
   },
   {
     timestamps: true,
@@ -65,3 +119,4 @@ const CustomTemplateSchema = new Schema<ICustomTemplate>(
 );
 
 export const CustomTemplate = mongoose.model<ICustomTemplate>('CustomTemplate', CustomTemplateSchema);
+

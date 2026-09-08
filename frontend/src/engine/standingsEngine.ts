@@ -378,6 +378,32 @@ export function calculatePlayerLeaderboard(
             player.headshots = (player.headshots || 0) + (Number(ps.headshots) || 0);
             player.damage = (player.damage || 0) + (Number(ps.damage) || 0);
           });
+        } else if (r && (r as any).playerKills) {
+          Object.entries((r as any).playerKills).forEach(([pId, kVal]) => {
+            if (!pId) return;
+            let player = playerMap.get(pId);
+            if (!player) {
+              const team = teams?.find((t) => t.id === r.teamId);
+              player = {
+                playerId: pId,
+                playerName: pId,
+                teamId: r.teamId,
+                teamName: team?.name || r.teamId,
+                teamTag: team?.tag || 'TEAM',
+                totalKills: 0,
+                matchesPlayed: 0,
+                bestMatchKills: 0,
+                headshots: 0,
+                damage: 0
+              };
+              playerMap.set(pId, player);
+            }
+            const kills = Math.max(0, Number(kVal) || 0);
+            player.totalKills += kills;
+            player.matchesPlayed += 1;
+            player.bestMatchKills = Math.max(player.bestMatchKills, kills);
+            player.damage = (player.damage || 0) + kills * 185;
+          });
         }
       });
     }

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CustomGraphicsTemplate, TemplateAlignmentConfig, GraphicTemplateCategory } from '../types/customTemplate';
+import { normalizeTemplateType } from '../types/customTemplate';
 
 export const DEFAULT_LEGIT_ALIGNMENT: TemplateAlignmentConfig = {
   aspectRatio: '16:9',
@@ -826,11 +827,13 @@ export const useTemplateStore = create<TemplateStoreState>()(
 
       createCustomTemplate: (name: string, imageUrl: string, baseAlignment, category = 'standings') => {
         const id = `custom-tmpl-${Date.now()}`;
+        const templateType = normalizeTemplateType(category);
         const newTemplate: CustomGraphicsTemplate = {
           id,
           name: name.trim() || 'Custom Tournament Template',
           description: 'Custom tournament background calibrated by Admin.',
           category,
+          templateType,
           imageUrl,
           aspectRatio: baseAlignment?.aspectRatio || '16:9',
           alignment: baseAlignment || { ...DEFAULT_LEGIT_ALIGNMENT },
@@ -855,6 +858,7 @@ export const useTemplateStore = create<TemplateStoreState>()(
           ...target,
           id: newId,
           name: `${target.name} (Copy)`,
+          templateType: target.templateType || normalizeTemplateType(target.category),
           isBuiltIn: false,
           isPublished: true,
           createdAt: new Date().toISOString(),
@@ -904,6 +908,9 @@ export const useTemplateStore = create<TemplateStoreState>()(
               ? {
                   ...t,
                   ...metadata,
+                  templateType: metadata.category
+                    ? normalizeTemplateType(metadata.category)
+                    : t.templateType || normalizeTemplateType(t.category),
                   updatedAt: new Date().toISOString()
                 }
               : t
@@ -964,7 +971,11 @@ export const useTemplateStore = create<TemplateStoreState>()(
 
       getActiveTemplate: () => {
         const { templates, activeTemplateId } = get();
-        return templates.find((t) => t.id === activeTemplateId) || templates[0] || BUILTIN_TEMPLATES[0];
+        const active = templates.find((t) => t.id === activeTemplateId) || templates[0] || BUILTIN_TEMPLATES[0];
+        if (active && !active.templateType) {
+          active.templateType = normalizeTemplateType(active.category);
+        }
+        return active;
       }
     }),
     {
