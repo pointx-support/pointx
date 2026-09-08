@@ -4,6 +4,7 @@ import { subscribeToLiveSquadUpdates } from '../../services/broadcastSync';
 import { Flame, Crosshair } from 'lucide-react';
 
 export interface BroadcastFreeFireLiveOverlayProps {
+  subscriptionId?: string;
   tournament: Tournament;
   standings: CalculatedStanding[];
   isTransparent?: boolean;
@@ -20,17 +21,21 @@ export interface SquadLiveStatus {
 }
 
 export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlayProps> = ({
+  subscriptionId,
   tournament,
   standings,
   isTransparent = true,
   isOverlayVisible: propIsOverlayVisible,
   activeMatchNumber
 }) => {
+  const effectiveSubId = subscriptionId || (tournament as any)?.customId || tournament?.id || 'default';
+
   const [isOverlayVisible, setIsOverlayVisible] = useState<boolean>(() => {
     if (propIsOverlayVisible !== undefined) return propIsOverlayVisible;
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         const stored =
+          window.localStorage.getItem(`pointx_squads_${effectiveSubId}`) ||
           window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
           window.localStorage.getItem('pointx_squads_default');
         if (stored) {
@@ -47,6 +52,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         const stored =
+          window.localStorage.getItem(`pointx_squads_${effectiveSubId}`) ||
           window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
           window.localStorage.getItem('pointx_squads_default');
         if (stored) {
@@ -67,6 +73,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         const stored =
+          window.localStorage.getItem(`pointx_squads_${effectiveSubId}`) ||
           window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
           window.localStorage.getItem('pointx_squads_default');
         if (stored) {
@@ -83,6 +90,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         const stored =
+          window.localStorage.getItem(`pointx_squads_${effectiveSubId}`) ||
           window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
           window.localStorage.getItem('pointx_squads_default');
         if (stored) {
@@ -99,6 +107,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         const stored =
+          window.localStorage.getItem(`pointx_squads_${effectiveSubId}`) ||
           window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
           window.localStorage.getItem('pointx_squads_default');
         if (stored) {
@@ -114,6 +123,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         const stored =
+          window.localStorage.getItem(`pointx_squads_${effectiveSubId}`) ||
           window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
           window.localStorage.getItem('pointx_squads_default');
         if (stored) {
@@ -132,7 +142,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
   }, [propIsOverlayVisible]);
 
   React.useEffect(() => {
-    const unsubscribe = subscribeToLiveSquadUpdates(tournament.id, (data) => {
+    const unsubscribe = subscribeToLiveSquadUpdates(effectiveSubId, (data) => {
       if (data.squads) {
         setLiveSquads(data.squads as any);
       }
@@ -153,7 +163,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
       }
     });
     return () => unsubscribe();
-  }, [tournament.id]);
+  }, [effectiveSubId]);
 
   const togglePlayerState = (teamId: string, playerIndex: number) => {
     setLiveSquads((prev) => {

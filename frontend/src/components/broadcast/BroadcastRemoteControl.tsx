@@ -652,17 +652,6 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
     updateMatchResults(tournament.id, activeMatch.id, updatedResults as any);
 
-    updatedResults.forEach((r) => {
-      sendMatchScoreUpdate(tournament.id, activeMatch.id, {
-        teamId: r.teamId,
-        kills: r.kills,
-        placement: r.placement,
-        isBooyah: r.isBooyah,
-        bonusPoints: r.bonusPoints,
-        penaltyPoints: r.penaltyPoints
-      });
-    });
-
     const matchesList = tournament.matches && tournament.matches.length > 0
       ? tournament.matches.map((m) =>
           m.id === activeMatch.id ? { ...m, results: updatedResults as any } : m

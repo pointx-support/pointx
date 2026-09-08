@@ -242,6 +242,7 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
       {/* Flagship Free Fire Live Squads Overlay (Supports internal horizontal slide) */}
       {(currentLayout === 'live-squads' || currentLayout === 'pro' || currentLayout === 'live') && (
         <BroadcastFreeFireLiveOverlay
+          subscriptionId={effectiveTourId}
           tournament={tournament}
           standings={standings}
           isTransparent={resolvedTransparent}

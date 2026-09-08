@@ -484,23 +484,36 @@ export class RealtimeSyncClient {
       this.notifyScoreDelta(delta);
 
       const currentTour = this.getCachedTournament(this.currentTournamentId);
-      if (currentTour && Array.isArray(currentTour.matches)) {
-        const match = currentTour.matches.find((m) => m.id === delta.matchId || (m as any).customId === delta.matchId);
-        if (match && Array.isArray(match.results)) {
-          const res = match.results.find((r: any) => r.teamId === delta.teamId);
-          if (res) {
-            res.kills = delta.kills;
-            res.placement = delta.placement;
-            res.placementPoints = delta.placementPoints;
-            res.killPoints = delta.killPoints;
-            res.totalPoints = delta.totalPoints;
-            res.isBooyah = delta.isBooyah;
-          } else {
-            match.results.push(delta);
-          }
-          this.cacheTournament(this.currentTournamentId, currentTour);
-          this.notifyTournament(currentTour, this.currentRevision);
+      if (currentTour) {
+        if (!Array.isArray(currentTour.matches)) currentTour.matches = [];
+        let match = currentTour.matches.find((m) => m.id === delta.matchId || (m as any).customId === delta.matchId);
+        if (!match) {
+          match = {
+            id: delta.matchId,
+            tournamentId: this.currentTournamentId,
+            matchNumber: 1,
+            mapName: 'Bermuda',
+            status: 'Live',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            results: [],
+          };
+          currentTour.matches.push(match);
         }
+        if (!Array.isArray(match.results)) match.results = [];
+        const res = match.results.find((r: any) => r.teamId === delta.teamId);
+        if (res) {
+          res.kills = delta.kills;
+          res.placement = delta.placement;
+          res.placementPoints = delta.placementPoints;
+          res.killPoints = delta.killPoints;
+          res.totalPoints = delta.totalPoints;
+          res.isBooyah = delta.isBooyah;
+        } else {
+          match.results.push(delta);
+        }
+        this.cacheTournament(this.currentTournamentId, currentTour);
+        this.notifyTournament(currentTour, this.currentRevision);
       }
       this.notifyHeartbeat();
       return;
