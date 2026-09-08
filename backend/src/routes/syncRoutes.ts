@@ -24,6 +24,14 @@ router.get('/state', optionalAuthenticate, async (req: AuthenticatedRequest, res
   const tournamentId = (req.query.tournamentId as string) || 'default';
   const state = await getOrCreateAuthoritativeState(tournamentId);
 
+  if (!state.tournament && !state.isExplicitlyInitialized && tournamentId !== 'default') {
+    return res.status(404).json({
+      success: false,
+      error: 'TOURNAMENT_NOT_FOUND',
+      message: `Tournament "${tournamentId}" not found.`,
+    });
+  }
+
   const now = Date.now();
   state.connectedDevices = state.connectedDevices.filter(
     (d) => now - d.lastActive < 5 * 60 * 1000

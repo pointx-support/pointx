@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import type { Tournament, TeamMatchResult, Match } from '../../types/tournament';
-import { useTournamentStore, SEED_TEAMS } from '../../store/tournamentStore';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { useAuthStore } from '../../store/authStore';
 import { calculateTeamMatchScore, getPlacementPoints } from '../../engine/scoringEngine';
 import {
   broadcastFullSync,
   subscribeToLiveSquadUpdates,
   subscribeToTournamentLiveUpdates,
+  subscribeToScoreDelta,
   setClientSyncRole,
   setClientSyncAuth,
   sendMatchScoreUpdate,
@@ -84,20 +85,22 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const urlToken = urlParams?.get('token') || '';
   const targetTournamentId = propTournamentId || urlParams?.get('tournamentId') || urlParams?.get('tournament') || store.currentTournament.id || 'default';
 
+  const [tournamentNotFound, setTournamentNotFound] = useState<boolean>(false);
+
   const resolvedInitialTournament = React.useMemo(() => {
     if (targetTournamentId && targetTournamentId !== store.currentTournament.id) {
       const match = store.tournaments.find((t) => t.id === targetTournamentId);
       if (match && Array.isArray(match.teams) && match.teams.length > 0) return match;
     }
-    if (Array.isArray(store.currentTournament.teams) && store.currentTournament.teams.length > 0) {
+    if (Array.isArray(store.currentTournament.teams) && store.currentTournament.teams.length > 0 && store.currentTournament.id === targetTournamentId) {
       return store.currentTournament;
     }
-    // Fallback: If current tournament has no teams (e.g. mobile remote or fresh DB), attach standard SEED_TEAMS
     return {
       ...store.currentTournament,
-      id: targetTournamentId || store.currentTournament.id || 'tour-live-ff',
-      title: store.currentTournament.title || 'PointX Live Championship',
-      teams: SEED_TEAMS,
+      id: targetTournamentId || 'tour-live-ff',
+      title: 'Tournament Remote Controller',
+      teams: [],
+      matches: [],
     };
   }, [targetTournamentId, store.currentTournament, store.tournaments]);
 
@@ -154,13 +157,14 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
         const syncUrl = `/api/sync/state?tournamentId=${encodeURIComponent(targetTournamentId)}${storedToken ? `&token=${encodeURIComponent(storedToken)}` : ''}`;
         const syncRes = await fetch(syncUrl);
         const syncJson = await syncRes.json();
-        if (isMounted && syncJson?.data?.tournament && Array.isArray(syncJson.data.tournament.teams) && syncJson.data.tournament.teams.length > 0) {
+        if (isMounted && syncJson?.success && syncJson?.data?.tournament) {
           setTournament(syncJson.data.tournament);
+          setTournamentNotFound(false);
           if (syncJson.data.squads && Object.keys(syncJson.data.squads).length > 0) {
             setSquadStates(syncJson.data.squads);
           } else {
             const initial: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]> = {};
-            syncJson.data.tournament.teams.slice(0, 12).forEach((t: any) => {
+            (syncJson.data.tournament.teams || []).slice(0, 12).forEach((t: any) => {
               initial[t.id] = ['alive', 'alive', 'alive', 'alive'];
             });
             setSquadStates(initial);
@@ -176,11 +180,12 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
         // 2. Second attempt: tournament REST API
         if (targetTournamentId && targetTournamentId !== 'default') {
           const tourRes = await fetch(`/api/tournaments/${encodeURIComponent(targetTournamentId)}`);
-          const tourJson = await tourRes.json();
-          if (isMounted && tourJson?.data && Array.isArray(tourJson.data.teams) && tourJson.data.teams.length > 0) {
-            setTournament(tourJson.data);
+          const tourData = await tourRes.json();
+          if (isMounted && tourData?.success && tourData?.data) {
+            setTournament(tourData.data);
+            setTournamentNotFound(false);
             const initial: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]> = {};
-            tourJson.data.teams.slice(0, 12).forEach((t: any) => {
+            (tourData.data.teams || []).slice(0, 12).forEach((t: any) => {
               initial[t.id] = ['alive', 'alive', 'alive', 'alive'];
             });
             setSquadStates((prev) => (Object.keys(prev).length > 0 ? prev : initial));
@@ -188,22 +193,13 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
           }
         }
 
-        // 3. Third attempt: all tournaments
-        const listRes = await fetch('/api/tournaments');
-        const listJson = await listRes.json();
-        if (isMounted && Array.isArray(listJson?.data) && listJson.data.length > 0) {
-          const found = listJson.data.find((t: any) => Array.isArray(t.teams) && t.teams.length > 0) || listJson.data[0];
-          if (found && Array.isArray(found.teams) && found.teams.length > 0) {
-            setTournament(found);
-            const initial: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]> = {};
-            (found.teams || []).slice(0, 12).forEach((t: any) => {
-              initial[t.id] = ['alive', 'alive', 'alive', 'alive'];
-            });
-            setSquadStates((prev) => (Object.keys(prev).length > 0 ? prev : initial));
-          }
+        if (isMounted && targetTournamentId && targetTournamentId !== 'default') {
+          setTournamentNotFound(true);
         }
       } catch (err) {
-        console.warn('[BroadcastRemoteControl] Initial tournament load error:', err);
+        if (isMounted && targetTournamentId && targetTournamentId !== 'default') {
+          setTournamentNotFound(true);
+        }
       }
     };
 
@@ -344,9 +340,43 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       setLastSyncTime(Date.now());
     });
 
+    const unsubScore = subscribeToScoreDelta((delta) => {
+      if (!delta || (delta.tournamentId && delta.tournamentId !== targetTournamentId)) return;
+      setTournament((prev) => {
+        if (!prev) return prev;
+        const matches = Array.isArray(prev.matches)
+          ? prev.matches.map((m) => {
+              if (m.id !== delta.matchId && (m as any).customId !== delta.matchId) return m;
+              const results = Array.isArray(m.results) ? m.results.map((r: any) => ({ ...r })) : [];
+              const idx = results.findIndex((r: any) => r.teamId === delta.teamId);
+              if (idx >= 0) {
+                results[idx] = {
+                  ...results[idx],
+                  kills: delta.kills,
+                  placement: delta.placement,
+                  placementPoints: delta.placementPoints,
+                  killPoints: delta.killPoints,
+                  totalPoints: delta.totalPoints,
+                  isBooyah: delta.isBooyah,
+                  bonusPoints: delta.bonusPoints !== undefined ? delta.bonusPoints : results[idx].bonusPoints,
+                  penaltyPoints: delta.penaltyPoints !== undefined ? delta.penaltyPoints : results[idx].penaltyPoints,
+                };
+              } else {
+                results.push({ ...delta });
+              }
+              return { ...m, results };
+            })
+          : [];
+        return { ...prev, matches };
+      });
+      setIsConnected(true);
+      setLastSyncTime(Date.now());
+    });
+
     return () => {
       unsubTour();
       unsubSquad();
+      unsubScore();
     };
   }, [targetTournamentId]);
 
@@ -383,9 +413,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const [squadStates, setSquadStates] = useState<Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]>>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        const stored =
-          window.localStorage.getItem(`pointx_squads_${targetTournamentId}`) ||
-          window.localStorage.getItem('pointx_squads_default');
+        const stored = window.localStorage.getItem(`pointx_squads_${targetTournamentId}`);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed?.squads) return parsed.squads;
@@ -403,9 +431,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const [highlightedTeamId, setHighlightedTeamId] = useState<string | null>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        const stored =
-          window.localStorage.getItem(`pointx_squads_${targetTournamentId}`) ||
-          window.localStorage.getItem('pointx_squads_default');
+        const stored = window.localStorage.getItem(`pointx_squads_${targetTournamentId}`);
         if (stored) {
           const parsed = JSON.parse(stored);
           return parsed?.highlightedTeamId || null;
@@ -419,9 +445,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const [fireTeamIds, setFireTeamIds] = useState<string[]>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        const stored =
-          window.localStorage.getItem(`pointx_squads_${targetTournamentId}`) ||
-          window.localStorage.getItem('pointx_squads_default');
+        const stored = window.localStorage.getItem(`pointx_squads_${targetTournamentId}`);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed?.fireTeamIds)) return parsed.fireTeamIds;
@@ -435,9 +459,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const [pointRushTeamIds, setPointRushTeamIds] = useState<string[]>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        const stored =
-          window.localStorage.getItem(`pointx_squads_${targetTournamentId}`) ||
-          window.localStorage.getItem('pointx_squads_default');
+        const stored = window.localStorage.getItem(`pointx_squads_${targetTournamentId}`);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed?.pointRushTeamIds)) return parsed.pointRushTeamIds;
@@ -450,9 +472,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const [isPointRushActive, setIsPointRushActive] = useState<boolean>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        const stored =
-          window.localStorage.getItem(`pointx_squads_${targetTournamentId}`) ||
-          window.localStorage.getItem('pointx_squads_default');
+        const stored = window.localStorage.getItem(`pointx_squads_${targetTournamentId}`);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed?.isPointRushActive !== undefined) return Boolean(parsed.isPointRushActive);
@@ -473,7 +493,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       return tournament.matches[tournament.matches.length - 1] || tournament.matches[0];
     }
     const now = new Date().toISOString();
-    const effectiveTeams = tournament.teams && tournament.teams.length > 0 ? tournament.teams : SEED_TEAMS;
+    const effectiveTeams = Array.isArray(tournament.teams) ? tournament.teams : [];
     return {
       id: `m_${tournament.id}_1`,
       tournamentId: tournament.id,
@@ -834,7 +854,6 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       matches: matchesList
     };
     setTournament(updatedTour);
-    syncToBroadcast(squadStates, highlightedTeamId, isOverlayVisible, updatedTour);
   };
 
   // 2-Step Confirmation Point Boost Action
@@ -1014,7 +1033,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const liveObsUrl = `${origin}/?mode=broadcast&tournamentId=${tournament.id}&layout=live-squads${tokenQuery}`;
 
   // ALIVE TEAMS AT TOP, ELIMINATED TEAMS SINK TO BOTTOM:
-  const effectiveTeams = tournament.teams && tournament.teams.length > 0 ? tournament.teams : SEED_TEAMS;
+  const effectiveTeams = Array.isArray(tournament.teams) ? tournament.teams : [];
   const sortedTeamsBySlot = [...effectiveTeams].sort((a, b) => (a.slotNumber || 0) - (b.slotNumber || 0));
 
   const activeAliveTeams = sortedTeamsBySlot.filter((team) => {
@@ -1033,6 +1052,25 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
   // Calculate Booyah team from editable report
   const reportBooyahTeam = effectiveTeams.find((t) => editedReportResults[t.id]?.placement === 1) || effectiveTeams[0];
+
+  // 0. TOURNAMENT NOT FOUND SCREEN
+  if (tournamentNotFound) {
+    return (
+      <div className="min-h-screen bg-[#0e0c14] text-white flex items-center justify-center p-4 font-sans select-none">
+        <div className="w-full max-w-md p-8 rounded-3xl bg-[#171424] border border-red-500/40 shadow-2xl text-center space-y-4">
+          <div className="h-16 w-16 mx-auto rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-500">
+            <AlertTriangle className="h-8 w-8" />
+          </div>
+          <h2 className="text-xl font-bold font-display uppercase tracking-wide text-red-400">
+            Tournament Not Found
+          </h2>
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            The requested tournament ID <code className="text-red-300 font-mono">{targetTournamentId}</code> could not be found on the server.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // 1. BLOCKED DEVICE SCREEN
   if (isDeviceBlocked) {
@@ -1280,6 +1318,14 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
             </Button>
           </div>
         </div>
+
+        {/* Empty State if Tournament Has No Teams */}
+        {effectiveTeams.length === 0 && (
+          <div className="p-12 text-center text-xs font-mono text-zinc-500 bg-[#171424]/60 rounded-3xl border border-white/5 space-y-2 my-4">
+            <p className="text-sm font-bold text-zinc-400 uppercase tracking-wider">No Teams Registered</p>
+            <p className="text-zinc-500">This tournament does not have any teams configured yet. Add teams in the organizer dashboard.</p>
+          </div>
+        )}
 
         {/* ================= 1. ACTIVE SQUADS IN BATTLE (TOP) ================= */}
         {activeAliveTeams.length > 0 && (

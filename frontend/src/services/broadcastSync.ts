@@ -483,14 +483,24 @@ export class RealtimeSyncClient {
       const delta = msg.data;
       this.notifyScoreDelta(delta);
 
-      const currentTour = this.getCachedTournament(this.currentTournamentId);
+      const targetTourId = delta.tournamentId || this.currentTournamentId;
+      let currentTour = this.getCachedTournament(targetTourId);
+      if (!currentTour && targetTourId !== this.currentTournamentId) {
+        currentTour = this.getCachedTournament(this.currentTournamentId);
+      }
+
       if (currentTour) {
-        if (!Array.isArray(currentTour.matches)) currentTour.matches = [];
-        let match = currentTour.matches.find((m) => m.id === delta.matchId || (m as any).customId === delta.matchId);
+        const matches = Array.isArray(currentTour.matches)
+          ? currentTour.matches.map((m) => ({
+              ...m,
+              results: Array.isArray(m.results) ? m.results.map((r: any) => ({ ...r })) : [],
+            }))
+          : [];
+        let match = matches.find((m) => m.id === delta.matchId || (m as any).customId === delta.matchId);
         if (!match) {
           match = {
             id: delta.matchId,
-            tournamentId: this.currentTournamentId,
+            tournamentId: targetTourId,
             matchNumber: 1,
             mapName: 'Bermuda',
             status: 'Live',
@@ -498,7 +508,7 @@ export class RealtimeSyncClient {
             updatedAt: new Date().toISOString(),
             results: [],
           };
-          currentTour.matches.push(match);
+          matches.push(match);
         }
         if (!Array.isArray(match.results)) match.results = [];
         const res = match.results.find((r: any) => r.teamId === delta.teamId);
@@ -509,11 +519,20 @@ export class RealtimeSyncClient {
           res.killPoints = delta.killPoints;
           res.totalPoints = delta.totalPoints;
           res.isBooyah = delta.isBooyah;
+          if (delta.bonusPoints !== undefined) res.bonusPoints = delta.bonusPoints;
+          if (delta.penaltyPoints !== undefined) res.penaltyPoints = delta.penaltyPoints;
         } else {
-          match.results.push(delta);
+          match.results.push({ ...delta });
         }
-        this.cacheTournament(this.currentTournamentId, currentTour);
-        this.notifyTournament(currentTour, this.currentRevision);
+        const updatedTour: Tournament = {
+          ...currentTour,
+          matches,
+          updatedAt: new Date().toISOString(),
+        };
+        this.cacheTournament(targetTourId, updatedTour);
+        this.notifyTournament(updatedTour, this.currentRevision);
+      } else {
+        this.fetchAuthoritativeSnapshot();
       }
       this.notifyHeartbeat();
       return;
@@ -865,9 +884,19 @@ export class RealtimeSyncClient {
 
   private notifyTournament(tour: Tournament, revision?: number): void {
     const cleanTour = this.purgeDeletedMatches(tour);
+    const freshTour: Tournament = {
+      ...cleanTour,
+      matches: Array.isArray(cleanTour.matches)
+        ? cleanTour.matches.map((m) => ({
+            ...m,
+            results: Array.isArray(m.results) ? m.results.map((r: any) => ({ ...r })) : [],
+          }))
+        : [],
+      teams: Array.isArray(cleanTour.teams) ? cleanTour.teams.map((t) => ({ ...t })) : [],
+    };
     for (const listener of this.tournamentListeners) {
       try {
-        listener(cleanTour, revision);
+        listener(freshTour, revision);
       } catch {}
     }
   }
@@ -888,12 +917,15 @@ export class RealtimeSyncClient {
     }
   }
 
+  public cacheAuthoritativeTournament(tournamentId: string, tour: Tournament): void {
+    this.cacheTournament(tournamentId, tour);
+  }
+
   private cacheTournament(tournamentId: string, tour: Tournament): void {
     const cleanTour = this.purgeDeletedMatches(tour);
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         window.localStorage.setItem(`pointx_live_${tournamentId}`, JSON.stringify(cleanTour));
-        window.localStorage.setItem('pointx_live_default', JSON.stringify(cleanTour));
         window.localStorage.setItem('pointx_live_ping', String(Date.now()));
       } catch {}
     } else {
@@ -905,7 +937,6 @@ export class RealtimeSyncClient {
     if (typeof window !== 'undefined' && window.localStorage) {
       const raw =
         window.localStorage.getItem(`pointx_live_${tournamentId}`) ||
-        window.localStorage.getItem('pointx_live_default') ||
         window.localStorage.getItem(`strikz_live_${tournamentId}`);
       if (raw) {
         try {
@@ -928,7 +959,6 @@ export class RealtimeSyncClient {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         window.localStorage.setItem(`pointx_squads_${tournamentId}`, JSON.stringify(data));
-        window.localStorage.setItem('pointx_squads_default', JSON.stringify(data));
         window.localStorage.setItem('pointx_squads_ping', String(Date.now()));
       } catch {}
     } else {
@@ -940,7 +970,6 @@ export class RealtimeSyncClient {
     if (typeof window !== 'undefined' && window.localStorage) {
       const raw =
         window.localStorage.getItem(`pointx_squads_${tournamentId}`) ||
-        window.localStorage.getItem('pointx_squads_default') ||
         window.localStorage.getItem(`strikz_squads_${tournamentId}`);
       if (raw) {
         try {
@@ -961,7 +990,6 @@ export class RealtimeSyncClient {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         window.localStorage.setItem(`pointx_display_${tournamentId}`, JSON.stringify(data));
-        window.localStorage.setItem('pointx_display_default', JSON.stringify(data));
         window.localStorage.setItem('pointx_display_ping', String(Date.now()));
       } catch {}
     } else {
@@ -971,9 +999,7 @@ export class RealtimeSyncClient {
 
   private getCachedDisplayState(tournamentId: string): BroadcastDisplayState | null {
     if (typeof window !== 'undefined' && window.localStorage) {
-      const raw =
-        window.localStorage.getItem(`pointx_display_${tournamentId}`) ||
-        window.localStorage.getItem('pointx_display_default');
+      const raw = window.localStorage.getItem(`pointx_display_${tournamentId}`);
       if (raw) {
         try {
           return JSON.parse(raw);
@@ -1120,6 +1146,10 @@ export function sendMatchScoreUpdate(
 
 export function subscribeToScoreDelta(cb: (delta: any) => void): () => void {
   return RealtimeSyncClient.getInstance().subscribeScoreDelta(cb);
+}
+
+export function cacheAuthoritativeTournament(tournamentId: string, tour: Tournament): void {
+  RealtimeSyncClient.getInstance().cacheAuthoritativeTournament(tournamentId, tour);
 }
 
 

@@ -289,8 +289,16 @@ function loadStoredTournaments(): { tournaments: Tournament[]; activeTournamentI
   }
 
   const userId = getActiveUserId();
+  if (!userId || userId === 'guest') {
+    return {
+      tournaments: [],
+      activeTournamentId: '',
+      currentTournament: blank
+    };
+  }
+
   try {
-    const raw = window.localStorage.getItem(`${STORAGE_KEY_PREFIX}${userId}`) || window.localStorage.getItem('pointx_tournaments_state');
+    const raw = window.localStorage.getItem(`${STORAGE_KEY_PREFIX}${userId}`);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -303,7 +311,6 @@ function loadStoredTournaments(): { tournaments: Tournament[]; activeTournamentI
             !t.id.startsWith('tour-demo-')
         );
         if (nonDemo.length > 0) {
-          // Do NOT auto-select a tournament before the user chooses one
           return {
             tournaments: nonDemo,
             activeTournamentId: '',
@@ -325,8 +332,9 @@ function persistTournaments(tournaments: Tournament[]) {
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
       const userId = getActiveUserId();
-      window.localStorage.setItem(`${STORAGE_KEY_PREFIX}${userId}`, JSON.stringify(tournaments));
-      window.localStorage.setItem('pointx_tournaments_state', JSON.stringify(tournaments));
+      if (userId && userId !== 'guest') {
+        window.localStorage.setItem(`${STORAGE_KEY_PREFIX}${userId}`, JSON.stringify(tournaments));
+      }
     } catch {}
   }
 }
@@ -376,8 +384,8 @@ export const useTournamentStore = create<AppState>((set, get) => ({
   },
 
   setCurrentTournamentId: (id) => {
-    const tour = get().tournaments.find((t) => t.id === id) || DEMO_TOURNAMENTS.find((t) => t.id === id) || get().tournaments[0] || get().currentTournament;
-    if (tour) {
+    const tour = get().tournaments.find((t) => t.id === id) || get().tournaments[0] || get().currentTournament;
+    if (tour && tour.id) {
       set({
         activeTournamentId: tour.id,
         currentTournament: tour
@@ -392,17 +400,10 @@ export const useTournamentStore = create<AppState>((set, get) => ({
       const res = await tournamentsApi.getAll();
       if (res.success && Array.isArray(res.data)) {
         const loadedTournaments = res.data;
-        const currentTournaments = get().tournaments;
-
-        // If backend returned empty array, but we have local/demo tournaments, preserve them
-        if (loadedTournaments.length === 0 && currentTournaments.length > 0) {
-          set({ isLoadingTournaments: false, hasLoadedFromDatabase: true });
-          return;
-        }
 
         const currentActiveId = get().activeTournamentId;
         const matching = currentActiveId ? loadedTournaments.find((t) => t.id === currentActiveId) : null;
-        const active = matching || (loadedTournaments.length > 0 ? loadedTournaments[0] : (currentActiveId ? get().currentTournament : createBlankTournament()));
+        const active = matching || (loadedTournaments.length > 0 ? loadedTournaments[0] : createBlankTournament());
 
         persistTournaments(loadedTournaments);
 
@@ -426,39 +427,70 @@ export const useTournamentStore = create<AppState>((set, get) => ({
   },
 
   createTournament: async (newTour) => {
+    const effectiveTeams = Array.isArray(newTour.teams) ? newTour.teams : [];
+    const effectiveMatches = newTour.matches !== undefined
+      ? newTour.matches
+      : [{
+          id: `match-${newTour.id}-1`,
+          tournamentId: newTour.id,
+          matchNumber: 1,
+          customLabel: 'Match 01 — Bermuda',
+          mapName: 'Bermuda',
+          status: 'Live' as const,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          scoringConfigId: newTour.scoringPreset?.id || 'preset-ff-official-v1',
+          scoringVersion: newTour.scoringPreset?.version || 1,
+          results: effectiveTeams.map((t, idx) => ({
+            teamId: t.id,
+            placement: Math.max(1, (effectiveTeams.length || 12) - idx),
+            kills: 0,
+            placementPoints: 0,
+            killPoints: 0,
+            totalPoints: 0,
+            isBooyah: false,
+          })),
+        }];
+
+    const tourWithMatch: Tournament = {
+      ...newTour,
+      teams: effectiveTeams,
+      matches: effectiveMatches,
+    };
+
     // 1. Optimistic local update
     set((state) => {
-      const updatedTournaments = [newTour, ...state.tournaments];
-      broadcastTournamentUpdate(newTour);
+      const updatedTournaments = [tourWithMatch, ...state.tournaments];
+      broadcastTournamentUpdate(tourWithMatch);
       persistTournaments(updatedTournaments);
       return {
         tournaments: updatedTournaments,
-        activeTournamentId: newTour.id,
-        currentTournament: newTour
+        activeTournamentId: tourWithMatch.id,
+        currentTournament: tourWithMatch
       };
     });
 
     // 2. Persist to MongoDB database
     try {
-      const res = await tournamentsApi.create(newTour);
+      const res = await tournamentsApi.create(tourWithMatch);
       if (res.success && res.data) {
         const savedTour = res.data;
         set((state) => {
           const reconciled = state.tournaments.map((t) =>
-            t.id === newTour.id ? { ...t, ...savedTour } : t
+            t.id === tourWithMatch.id ? { ...t, ...savedTour } : t
           );
           persistTournaments(reconciled);
           return {
             tournaments: reconciled,
-            activeTournamentId: savedTour.id || newTour.id,
-            currentTournament: { ...newTour, ...savedTour }
+            activeTournamentId: savedTour.id || tourWithMatch.id,
+            currentTournament: { ...tourWithMatch, ...savedTour }
           };
         });
-        return { ...newTour, ...savedTour };
+        return { ...tourWithMatch, ...savedTour };
       }
     } catch {}
 
-    return newTour;
+    return tourWithMatch;
   },
 
   updateTournament: async (tournamentId, data) => {
@@ -845,8 +877,6 @@ export const useTournamentStore = create<AppState>((set, get) => ({
 
   updateMatchResults: (tournamentId, matchId, rawResults, status = 'Completed', customLabel, mapName) => {
     const targetTournament = get().tournaments.find((t) => t.id === tournamentId) || get().currentTournament;
-    const targetMatch = targetTournament.matches.find((m) => m.id === matchId);
-    if (!targetMatch) return;
 
     // Execute raw results strictly through normalized scoring engine
     const normalizedPreset = normalizeScoringConfig(targetTournament.scoringPreset);
@@ -889,20 +919,41 @@ export const useTournamentStore = create<AppState>((set, get) => ({
       };
     });
 
-    const updatedMatches = targetTournament.matches.map((m) =>
-      m.id === matchId
-        ? {
-            ...m,
-            customLabel: customLabel !== undefined ? customLabel : m.customLabel,
-            mapName: mapName !== undefined ? mapName : m.mapName,
-            status,
-            results: calculatedTeamResults,
-            scoringConfigId: normalizedPreset.id,
-            scoringVersion: normalizedPreset.version,
-            updatedAt: new Date().toISOString()
-          }
-        : m
-    );
+    const matchExists = targetTournament.matches.some((m) => m.id === matchId || (m as any).customId === matchId);
+    let updatedMatches: Match[];
+
+    if (matchExists) {
+      updatedMatches = targetTournament.matches.map((m) =>
+        (m.id === matchId || (m as any).customId === matchId)
+          ? {
+              ...m,
+              customLabel: customLabel !== undefined ? customLabel : m.customLabel,
+              mapName: mapName !== undefined ? mapName : m.mapName,
+              status,
+              results: calculatedTeamResults,
+              scoringConfigId: normalizedPreset.id,
+              scoringVersion: normalizedPreset.version,
+              updatedAt: new Date().toISOString()
+            }
+          : m
+      );
+    } else {
+      const nextNum = targetTournament.matches.length + 1;
+      const newM: Match = {
+        id: matchId,
+        tournamentId,
+        matchNumber: nextNum,
+        customLabel: customLabel || `Match ${nextNum}`,
+        mapName: mapName || 'Bermuda',
+        status,
+        results: calculatedTeamResults,
+        scoringConfigId: normalizedPreset.id,
+        scoringVersion: normalizedPreset.version,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      updatedMatches = [...targetTournament.matches, newM];
+    }
 
     get().updateTournament(tournamentId, { matches: updatedMatches });
   },
@@ -984,23 +1035,12 @@ export const useTournamentStore = create<AppState>((set, get) => ({
 
   getStandings: (options) => {
     const current = get().currentTournament;
-    const standings = calculateTournamentStandings(current, options);
-    if (standings.length > 0) return standings;
-    // Fallback: If tournament has no teams yet, compute standings from SEED_TEAMS
-    if (!current.teams || current.teams.length === 0) {
-      return calculateTournamentStandings({ ...current, teams: SEED_TEAMS }, options);
-    }
-    return standings;
+    return calculateTournamentStandings(current, options);
   },
 
   getTopFraggers: (options) => {
     const current = get().currentTournament;
-    const fraggers = calculateTopFraggers(current, options);
-    if (fraggers.length > 0) return fraggers;
-    if (!current.teams || current.teams.length === 0) {
-      return calculateTopFraggers({ ...current, teams: SEED_TEAMS, matches: SEED_MATCHES }, options);
-    }
-    return fraggers;
+    return calculateTopFraggers(current, options);
   },
 
   getTournamentSummary: () => {

@@ -36,8 +36,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
       try {
         const stored =
           window.localStorage.getItem(`pointx_squads_${effectiveSubId}`) ||
-          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
-          window.localStorage.getItem('pointx_squads_default');
+          window.localStorage.getItem(`pointx_squads_${tournament.id}`);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed.isVisible !== undefined) return parsed.isVisible;
@@ -53,8 +52,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
       try {
         const stored =
           window.localStorage.getItem(`pointx_squads_${effectiveSubId}`) ||
-          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
-          window.localStorage.getItem('pointx_squads_default');
+          window.localStorage.getItem(`pointx_squads_${tournament.id}`);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed?.squads) return parsed.squads;
@@ -74,8 +72,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
       try {
         const stored =
           window.localStorage.getItem(`pointx_squads_${effectiveSubId}`) ||
-          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
-          window.localStorage.getItem('pointx_squads_default');
+          window.localStorage.getItem(`pointx_squads_${tournament.id}`);
         if (stored) {
           const parsed = JSON.parse(stored);
           return parsed?.highlightedTeamId || null;
@@ -91,8 +88,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
       try {
         const stored =
           window.localStorage.getItem(`pointx_squads_${effectiveSubId}`) ||
-          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
-          window.localStorage.getItem('pointx_squads_default');
+          window.localStorage.getItem(`pointx_squads_${tournament.id}`);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed?.fireTeamIds)) return parsed.fireTeamIds;
@@ -108,8 +104,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
       try {
         const stored =
           window.localStorage.getItem(`pointx_squads_${effectiveSubId}`) ||
-          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
-          window.localStorage.getItem('pointx_squads_default');
+          window.localStorage.getItem(`pointx_squads_${tournament.id}`);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed?.pointRushTeamIds)) return parsed.pointRushTeamIds;
@@ -124,8 +119,7 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
       try {
         const stored =
           window.localStorage.getItem(`pointx_squads_${effectiveSubId}`) ||
-          window.localStorage.getItem(`pointx_squads_${tournament.id}`) ||
-          window.localStorage.getItem('pointx_squads_default');
+          window.localStorage.getItem(`pointx_squads_${tournament.id}`);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed?.isPointRushActive !== undefined) return Boolean(parsed.isPointRushActive);
@@ -243,6 +237,11 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
 
         {/* ================= 2. ROWS 1 TO 12 ================= */}
         <div className="flex flex-col divide-y divide-[#cfb99f]">
+          {displayTeams.length === 0 && (
+            <div className="p-8 text-center text-xs font-mono text-slate-400 bg-[#1b0d33]/90">
+              WAITING FOR MATCH DATA
+            </div>
+          )}
           {displayTeams.map((teamStanding, index) => {
             const team = tournament.teams.find(
               (t) => t.id === teamStanding.teamId || (t as any)._id === teamStanding.teamId
@@ -256,7 +255,9 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
             const isHighlighted = highlightedTeamId === teamStanding.teamId;
 
             // Live Match / Standings Kills & Points (Authoritative 0-kill fix)
-            const matchResult = activeMatch?.results?.find((r) => r.teamId === teamStanding.teamId);
+            const matchResult = activeMatch?.results?.find(
+              (r) => r.teamId === teamStanding.teamId || (team && (r.teamId === team.id || r.teamId === (team as any)._id))
+            );
             const currentKills =
               matchResult?.kills !== undefined
                 ? matchResult.kills

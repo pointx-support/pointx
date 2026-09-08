@@ -178,26 +178,9 @@ export async function getOrCreateAuthoritativeState(tournamentId: string): Promi
     }
   }
 
-  // If still no tournament found in database (fresh empty MongoDB), provide standard default tournament
+  // If still no tournament found in database, do NOT synthesize demo tournament
   if (!state.tournament) {
-    state.tournament = {
-      id: tourId === 'default' ? 'tour-default-live' : tourId,
-      name: 'PointX Esports Championship 2026',
-      game: 'Free Fire',
-      status: 'Live',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      teams: DEFAULT_SEED_TEAMS,
-      matches: [],
-      scoringPreset: {
-        id: 'preset-ff-official-v1',
-        name: 'Free Fire Official (12-9-8)',
-        version: 1,
-        killPointsMultiplier: 1,
-        placementPoints: { 1: 12, 2: 9, 3: 8, 4: 7, 5: 6, 6: 5, 7: 4, 8: 3, 9: 2, 10: 1, 11: 0, 12: 0 },
-        tieBreakOrder: ['totalPoints', 'totalKills', 'booyahs', 'highestPlacement']
-      }
-    };
+    state.tournament = null;
   }
 
   // Ensure initial squad states exist for tournament teams if empty
@@ -256,6 +239,7 @@ export async function updateAuthoritativeState(
   // Monotonic revision increment
   state.revision = (state.revision || 0) + 1;
   state.timestamp = Date.now();
+  state.isExplicitlyInitialized = true;
 
   // Apply updates
   if (updates.tournament !== undefined) {
@@ -373,7 +357,13 @@ export async function updateMatchScoreServer(
   const state = await getOrCreateAuthoritativeState(tourId);
 
   if (!state.tournament) {
-    throw new Error('Tournament not found');
+    throw new Error(`Tournament "${tourId}" not found`);
+  }
+
+  const teamExists = Array.isArray(state.tournament.teams) &&
+    state.tournament.teams.some((t: any) => (t.id || t.customId || String(t._id)) === rawResult.teamId);
+  if (!teamExists) {
+    throw new Error(`Team "${rawResult.teamId}" not found in tournament "${tourId}"`);
   }
 
   if (!Array.isArray(state.tournament.matches)) {
@@ -406,7 +396,7 @@ export async function updateMatchScoreServer(
           createdAt: now,
           updatedAt: now,
           results: effectiveTeams.map((t: any, idx: number) => ({
-            teamId: t.id,
+            teamId: t.id || t.customId || (t._id ? String(t._id) : `team-${idx + 1}`),
             placement: Math.max(1, (effectiveTeams.length || 12) - idx),
             kills: 0,
             placementPoints: 0,
@@ -508,6 +498,7 @@ export async function updateMatchScoreServer(
     tournamentId: tourId,
     revision: updatedState.revision,
     data: {
+      tournamentId: tourId,
       matchId: effectiveMatchId,
       teamId: rawResult.teamId,
       kills: d.kills,

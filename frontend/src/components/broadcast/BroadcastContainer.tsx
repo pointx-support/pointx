@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { FC } from 'react';
+import type { Tournament } from '../../types/tournament';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { calculateTournamentStandings } from '../../engine/standingsEngine';
 import {
@@ -7,6 +8,8 @@ import {
   subscribeToLiveSquadUpdates,
   subscribeToBroadcastDisplayUpdates,
   subscribeToConnectionState,
+  subscribeToScoreDelta,
+  cacheAuthoritativeTournament,
   type ConnectionState
 } from '../../services/broadcastSync';
 import { BroadcastStandings } from './BroadcastStandings';
@@ -35,16 +38,25 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
 
   const requestedTourId = urlParams?.get('tournamentId') || urlParams?.get('tournament') || '';
   const effectiveTourId = requestedTourId || store.currentTournament.id || 'default';
+  const [tournamentNotFound, setTournamentNotFound] = useState<boolean>(false);
 
-  const initialTournament = useMemo(() => {
-    if (requestedTourId && requestedTourId !== store.currentTournament.id) {
+  const initialTournament: Tournament = useMemo(() => {
+    if (requestedTourId) {
       const match = store.tournaments.find((t) => t.id === requestedTourId);
       if (match) return match;
+      return {
+        ...store.currentTournament,
+        id: requestedTourId,
+        title: 'Tournament Live Stream',
+        teams: [],
+        matches: [],
+        updatedAt: new Date().toISOString(),
+      };
     }
     return store.currentTournament;
   }, [requestedTourId, store.currentTournament, store.tournaments]);
 
-  const [tournament, setTournament] = useState(initialTournament);
+  const [tournament, setTournament] = useState<Tournament>(initialTournament);
   const [lastSyncTime, setLastSyncTime] = useState<number>(() => Date.now());
   const [connectionStatus, setConnectionStatus] = useState<ConnectionState>('CONNECTING');
   const [isOverlayVisible, setIsOverlayVisible] = useState<boolean>(true);
@@ -69,11 +81,13 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
     // Initial fetch from backend sync & tournament API
     const loadInitialState = async () => {
       try {
-        const res = await fetch(`/api/sync/state?tournamentId=${effectiveTourId}`);
+        const res = await fetch(`/api/sync/state?tournamentId=${encodeURIComponent(effectiveTourId)}`);
         const data = await res.json();
-        if (data?.data) {
+        if (data?.success && data?.data) {
           if (data.data.tournament) {
             setTournament(data.data.tournament);
+            cacheAuthoritativeTournament(effectiveTourId, data.data.tournament);
+            setTournamentNotFound(false);
           }
           if (data.data.activeLayout && !layoutType) {
             setCurrentLayout(data.data.activeLayout);
@@ -88,16 +102,30 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
           if (data.data.isVisible !== undefined) setIsOverlayVisible(data.data.isVisible);
           setLastSyncTime(Date.now());
           setConnectionStatus('CONNECTED');
-        } else if (effectiveTourId && effectiveTourId !== 'default') {
-          const tourRes = await fetch(`/api/tournaments/${effectiveTourId}`);
+          return;
+        }
+
+        if (effectiveTourId && effectiveTourId !== 'default') {
+          const tourRes = await fetch(`/api/tournaments/${encodeURIComponent(effectiveTourId)}`);
           const tourData = await tourRes.json();
-          if (tourData?.data) {
+          if (tourData?.success && tourData?.data) {
             setTournament(tourData.data);
+            cacheAuthoritativeTournament(effectiveTourId, tourData.data);
+            setTournamentNotFound(false);
             setLastSyncTime(Date.now());
             setConnectionStatus('CONNECTED');
+            return;
           }
         }
-      } catch {}
+
+        if (requestedTourId) {
+          setTournamentNotFound(true);
+        }
+      } catch {
+        if (requestedTourId) {
+          setTournamentNotFound(true);
+        }
+      }
     };
 
     loadInitialState();
@@ -108,11 +136,59 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
       if (state === 'CONNECTED') setLastSyncTime(Date.now());
     });
 
+    // Subscribe to authoritative score deltas (for immediate OBS kill/point reactivity)
+    const unsubScoreDelta = subscribeToScoreDelta((delta) => {
+      if (!delta || (delta.tournamentId && delta.tournamentId !== effectiveTourId)) return;
+      setTournament((prev) => {
+        if (!prev) return prev;
+        const matches = Array.isArray(prev.matches)
+          ? prev.matches.map((m) => {
+              if (m.id !== delta.matchId && (m as any).customId !== delta.matchId) {
+                return m;
+              }
+              const results = Array.isArray(m.results)
+                ? m.results.map((r: any) => ({ ...r }))
+                : [];
+              const resIndex = results.findIndex((r: any) => r.teamId === delta.teamId);
+              if (resIndex >= 0) {
+                results[resIndex] = {
+                  ...results[resIndex],
+                  kills: delta.kills,
+                  placement: delta.placement,
+                  placementPoints: delta.placementPoints,
+                  killPoints: delta.killPoints,
+                  totalPoints: delta.totalPoints,
+                  isBooyah: delta.isBooyah,
+                  bonusPoints: delta.bonusPoints !== undefined ? delta.bonusPoints : results[resIndex].bonusPoints,
+                  penaltyPoints: delta.penaltyPoints !== undefined ? delta.penaltyPoints : results[resIndex].penaltyPoints,
+                };
+              } else {
+                results.push({ ...delta });
+              }
+              return {
+                ...m,
+                results,
+                updatedAt: new Date().toISOString(),
+              };
+            })
+          : [];
+
+        return {
+          ...prev,
+          matches,
+          updatedAt: new Date().toISOString(),
+        };
+      });
+      setLastSyncTime(Date.now());
+      setConnectionStatus('CONNECTED');
+    });
+
     // Subscribe to tournament data updates
     const unsubTournament = subscribeToTournamentLiveUpdates(
       effectiveTourId,
       (updatedTournament) => {
         setTournament(updatedTournament);
+        setTournamentNotFound(false);
         setLastSyncTime(Date.now());
         setConnectionStatus('CONNECTED');
       },
@@ -149,11 +225,12 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
 
     return () => {
       unsubConnection();
+      unsubScoreDelta();
       unsubTournament();
       unsubSquads();
       unsubDisplay();
     };
-  }, [effectiveTourId, layoutType]);
+  }, [effectiveTourId, layoutType, requestedTourId]);
 
   const standings = calculateTournamentStandings(tournament);
 
@@ -170,6 +247,17 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
         boxSizing: 'border-box'
       }}
     >
+      {/* Tournament Not Found Error Display */}
+      {tournamentNotFound && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 font-mono text-red-500 p-6">
+          <div className="p-8 rounded-2xl bg-zinc-950 border border-red-500/40 text-center space-y-3 max-w-md shadow-2xl">
+            <p className="text-xl font-bold tracking-wider text-red-400">TOURNAMENT NOT FOUND</p>
+            <p className="text-xs text-zinc-400">ID: {requestedTourId}</p>
+            <p className="text-[11px] text-zinc-500">The requested tournament could not be located on the authoritative server. Please check the tournament ID in your OBS Browser Source URL.</p>
+          </div>
+        </div>
+      )}
+
       {/* Optional Debug HUD for OBS operators */}
       {isDebugMode && (
         <div className="fixed top-2 right-2 z-50 rounded-xl bg-black/90 border border-[#2ea66e]/40 p-2.5 text-[10px] font-mono text-slate-300 shadow-2xl flex items-center gap-3">

@@ -9,14 +9,7 @@ export async function getTournamentsByUser(userId: string): Promise<ITournament[
     ? { $or: [{ userId: userObjectId }, { userId: userId }] }
     : { userId };
 
-  const query = {
-    $or: [
-      userCondition,
-      { customId: { $in: ['tour-ff-champ-2026', 'tour-ff-night-scrims', 'tour-ff-summer-finals'] } },
-    ],
-  };
-
-  return Tournament.find(query).sort({ createdAt: -1 });
+  return Tournament.find(userCondition).sort({ createdAt: -1 });
 }
 
 export async function getTournamentsForOrganizer(organizerUserId: string): Promise<ITournament[]> {
@@ -61,10 +54,38 @@ export async function createTournament(userId: string, data: any): Promise<ITour
   const customId = data.id || `tour-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
   const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
   
+  const effectiveTeams = Array.isArray(data.teams) ? data.teams : [];
+  const initialMatches = data.matches !== undefined
+    ? data.matches
+    : [{
+        id: `match-${customId}-1`,
+        customId: `match-${customId}-1`,
+        tournamentId: customId,
+        matchNumber: 1,
+        customLabel: 'Match 01 — Bermuda',
+        mapName: 'Bermuda',
+        status: 'Live',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        scoringConfigId: data.scoringPreset?.id || 'preset-ff-official-v1',
+        scoringVersion: data.scoringPreset?.version || 1,
+        results: effectiveTeams.map((t: any, idx: number) => ({
+          teamId: t.id || t.customId || (t._id ? String(t._id) : `team-${idx + 1}`),
+          placement: Math.max(1, (effectiveTeams.length || 12) - idx),
+          kills: 0,
+          placementPoints: 0,
+          killPoints: 0,
+          totalPoints: 0,
+          isBooyah: false,
+        })),
+      }];
+
   const tournament = await Tournament.create({
     ...data,
     customId,
     userId: userObjectId,
+    teams: effectiveTeams,
+    matches: initialMatches,
   });
 
   await AuditActivity.create({
@@ -95,7 +116,7 @@ export async function updateTournament(tournamentId: string, userId: string, dat
 
   const query: any = { $or: idQueries };
 
-  if (role !== 'admin' && !isDemoTournamentId(tournamentId)) {
+  if (role !== 'admin') {
     const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
     query.$and = [userObjectId ? { $or: [{ userId: userObjectId }, { userId: userId }] } : { userId }];
   }
@@ -122,7 +143,7 @@ export async function deleteMatchFromTournament(
 
   const query: any = { $or: idQueries };
 
-  if (role !== 'admin' && !isDemoTournamentId(tournamentId)) {
+  if (role !== 'admin') {
     const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
     query.$and = [userObjectId ? { $or: [{ userId: userObjectId }, { userId: userId }] } : { userId }];
   }
