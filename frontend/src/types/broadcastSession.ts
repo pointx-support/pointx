@@ -60,6 +60,9 @@ export interface AuthoritativeBroadcastState {
   teams: BroadcastSquadTeam[];
   availableMatches: BroadcastMatchInfo[];
   aliveSquadsCount: number;
+  isMatchFinished?: boolean;
+  isSubmittedToWebsite?: boolean;
+  eliminatedTeamOrder?: string[];
 }
 
 export type BroadcastSyncStatus = 'CONNECTING' | 'LIVE' | 'RECONNECTING' | 'DISCONNECTED';

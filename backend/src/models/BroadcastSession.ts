@@ -17,6 +17,10 @@ export interface IBroadcastSession extends Document {
   fireTeamIds: string[];
   pointRushTeamIds: string[];
   squads: Record<string, [PlayerState, PlayerState, PlayerState, PlayerState]>;
+  teamStats: Record<string, { kills: number; bonusPoints?: number; isBooyah?: boolean; manualPlacement?: number }>;
+  eliminatedTeamOrder: string[];
+  isMatchFinished: boolean;
+  isSubmittedToWebsite: boolean;
   revision: number;
   active: boolean;
   createdAt: Date;
@@ -42,6 +46,10 @@ const BroadcastSessionSchema = new Schema<IBroadcastSession>(
     fireTeamIds: { type: [String], default: [] },
     pointRushTeamIds: { type: [String], default: [] },
     squads: { type: Schema.Types.Mixed, default: {} },
+    teamStats: { type: Schema.Types.Mixed, default: {} },
+    eliminatedTeamOrder: { type: [String], default: [] },
+    isMatchFinished: { type: Boolean, default: false },
+    isSubmittedToWebsite: { type: Boolean, default: false },
     revision: { type: Number, default: 1, index: true },
     active: { type: Boolean, default: true, index: true },
   },

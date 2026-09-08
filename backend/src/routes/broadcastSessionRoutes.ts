@@ -3,6 +3,7 @@ import {
   createOrGetSession,
   getSessionAuthoritativeState,
   postSessionCommand,
+  submitReport,
 } from '../controllers/broadcastSessionController';
 import { optionalAuthenticate } from '../middleware/auth';
 
@@ -16,5 +17,8 @@ router.get('/:sessionId', optionalAuthenticate, getSessionAuthoritativeState);
 
 // 3. Post authoritative operator commands (+1 Kill, - Kill, Wipe Squad, Revive, Set Mode, etc.)
 router.post('/:sessionId/commands', optionalAuthenticate, postSessionCommand);
+
+// 4. Submit verified match report from Remote Control to website tournament results
+router.post('/:sessionId/submit-report', optionalAuthenticate, submitReport);
 
 export default router;

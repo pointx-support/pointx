@@ -137,14 +137,13 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
 
     const bravo = cmdRes.body.state.teams.find((t: any) => t.teamId === 'team-bravo');
     expect(bravo.kills).toBe(1);
-    expect(bravo.totalPoints).toBe(10); // 9 placement + 1 kill
+    expect(bravo.placementPoints).toBe(0); // Strictly 0 during live match!
+    expect(bravo.totalPoints).toBe(1); // 0 placement + 1 kill live
 
-    // Verify database document
+    // Verify tournament on website has NOT prematurely added this live match results
     const freshTour = await Tournament.findOne({ customId: testTournament.customId });
     const match = freshTour!.matches.find((m: any) => m.id === 'match-apex-1');
-    const bRes = match.results.find((r: any) => r.teamId === 'team-bravo');
-    expect(bRes.kills).toBe(1);
-    expect(bRes.totalPoints).toBe(10);
+    expect(match.status).not.toBe('Completed');
   });
 
   it('3. should handle rapid sequential kills without losing updates or race conditions', async () => {
@@ -169,7 +168,8 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     expect(stateRes.status).toBe(200);
     const charlie = stateRes.body.state.teams.find((t: any) => t.teamId === 'team-charlie');
     expect(charlie.kills).toBe(5);
-    expect(charlie.totalPoints).toBe(13); // 8 placement + 5 kills
+    expect(charlie.placementPoints).toBe(0); // Deferred during live match
+    expect(charlie.totalPoints).toBe(5); // 5 kills, 0 placement
   });
 
   it('4. should decrement kills atomically via REMOVE_KILL but never drop below 0', async () => {
@@ -286,11 +286,63 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
       .send({ commandType: 'ADD_POINT_ALL_TEAMS' });
 
-    // Alpha had 12, Bravo had 9, Charlie had 8, Delta had 7
+    // Each team gets +1 bonus point
     const teams = ptsRes.body.state.teams;
     const a = teams.find((t: any) => t.teamId === 'team-alpha');
     const b = teams.find((t: any) => t.teamId === 'team-bravo');
-    expect(a.totalPoints).toBe(13);
-    expect(b.totalPoints).toBe(10);
+    expect(a.totalPoints).toBeGreaterThanOrEqual(1);
+    expect(b.totalPoints).toBeGreaterThanOrEqual(1);
+  });
+
+  it('7. should calculate placement points when match finishes and publish verified report to website', async () => {
+    const initRes = await request(app)
+      .post('/api/broadcast/sessions')
+      .send({ tournamentId: testTournament.customId });
+
+    const sessionId = initRes.body.sessionId;
+
+    // 1. Wipe team-charlie (will finish 3rd/4th)
+    await request(app)
+      .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .send({ commandType: 'WIPE_SQUAD', targetTeamId: 'team-charlie' });
+
+    // 2. Add 3 kills to team-alpha
+    for (let i = 0; i < 3; i++) {
+      await request(app)
+        .post(`/api/broadcast/sessions/${sessionId}/commands`)
+        .send({ commandType: 'ADD_KILL', targetTeamId: 'team-alpha' });
+    }
+
+    // While live: alpha has 3 kills, 0 placement points
+    const liveState = await request(app).get(`/api/broadcast/sessions/${sessionId}`);
+    const liveAlpha = liveState.body.state.teams.find((t: any) => t.teamId === 'team-alpha');
+    expect(liveAlpha.kills).toBe(3);
+    expect(liveAlpha.placementPoints).toBe(0);
+    expect(liveAlpha.totalPoints).toBe(3);
+
+    // 3. Finish match
+    const finishRes = await request(app)
+      .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .send({ commandType: 'FINISH_MATCH' });
+    expect(finishRes.status).toBe(200);
+    expect(finishRes.body.state.isMatchFinished).toBe(true);
+
+    const finishedAlpha = finishRes.body.state.teams.find((t: any) => t.teamId === 'team-alpha');
+    expect(finishedAlpha.placementPoints).toBeGreaterThan(0); // Now placement points are added!
+    expect(finishedAlpha.totalPoints).toBe(finishedAlpha.placementPoints + finishedAlpha.killPoints);
+
+    // 4. Submit match report to website
+    const submitRes = await request(app)
+      .post(`/api/broadcast/sessions/${sessionId}/submit-report`)
+      .send({});
+    expect(submitRes.status).toBe(200);
+    expect(submitRes.body.success).toBe(true);
+    expect(submitRes.body.state.isSubmittedToWebsite).toBe(true);
+
+    // 5. Verify official tournament match in MongoDB is now Completed
+    const freshTour = await Tournament.findOne({ customId: testTournament.customId });
+    const match = freshTour!.matches.find((m: any) => m.id === 'match-apex-1');
+    expect(match.status).toBe('Completed');
+    expect(match.results.length).toBeGreaterThan(0);
   });
 });

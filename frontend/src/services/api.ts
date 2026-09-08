@@ -434,5 +434,16 @@ export const broadcastSessionApi = {
       method: 'POST',
       body: JSON.stringify(command),
     }),
+  submitMatchReport: (
+    sessionId: string,
+    payload?: { results?: any[]; overrides?: any[] }
+  ) =>
+    request<{ success: boolean; message: string; revision: number; state: any }>(
+      `/broadcast/sessions/${sessionId}/submit-report`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload || {}),
+      }
+    ),
 };
 

@@ -13,6 +13,9 @@ export interface BroadcastSessionConnection {
     targetTeamId?: string,
     payload?: any
   ) => Promise<{ revision: number; state: AuthoritativeBroadcastState }>;
+  submitMatchReport: (
+    overrides?: any[]
+  ) => Promise<{ success: boolean; state: AuthoritativeBroadcastState }>;
   fetchAuthoritativeSnapshot: () => Promise<AuthoritativeBroadcastState>;
   getRevision: () => number;
 }
@@ -205,6 +208,16 @@ export function connectBroadcastSession(
       currentRevision = res.revision;
       callbacks.onState(resolvedState);
       return { revision: res.revision, state: resolvedState };
+    },
+    submitMatchReport: async (overrides?: any[]) => {
+      const res = await broadcastSessionApi.submitMatchReport(sessionId, { overrides });
+      const resolvedState = res.state || (res.data as any)?.state;
+      if (!res.success || !resolvedState) {
+        throw new Error(res.error || 'Failed to submit match report');
+      }
+      currentRevision = res.revision;
+      callbacks.onState(resolvedState);
+      return { success: true, state: resolvedState };
     },
     fetchAuthoritativeSnapshot: syncAuthoritativeSnapshot as any,
     getRevision: () => currentRevision,

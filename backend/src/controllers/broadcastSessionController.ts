@@ -4,6 +4,7 @@ import {
   getOrCreateBroadcastSession,
   getAuthoritativeBroadcastState,
   executeBroadcastCommand,
+  submitMatchReportToWebsite,
 } from '../services/broadcastSessionService';
 
 export async function createOrGetSession(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -77,5 +78,35 @@ export async function postSessionCommand(req: AuthenticatedRequest, res: Respons
       return res.status(404).json({ success: false, error: error.message });
     }
     return res.status(400).json({ success: false, error: error.message || 'Command execution failed.' });
+  }
+}
+
+export async function submitReport(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const sessionId = req.params.sessionId as string;
+    const { results, overrides } = req.body || {};
+
+    if (!sessionId) {
+      return res.status(400).json({
+        success: false,
+        error: 'sessionId is required.',
+      });
+    }
+
+    const result = await submitMatchReportToWebsite(
+      sessionId,
+      results || overrides,
+      req.user
+    );
+
+    return res.status(200).json(result);
+  } catch (error: any) {
+    if (error.statusCode === 403) {
+      return res.status(403).json({ success: false, error: error.message });
+    }
+    if (error.statusCode === 404) {
+      return res.status(404).json({ success: false, error: error.message });
+    }
+    return res.status(400).json({ success: false, error: error.message || 'Report submission failed.' });
   }
 }
