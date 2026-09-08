@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTemplateStore } from '../../../store/templateStore';
 import { templatesApi } from '../../../services/api';
+import { OrganizationSuggestPicker } from '../OrganizationSuggestPicker';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
@@ -22,8 +23,6 @@ import {
   ListOrdered,
   Award,
   Shield,
-  Search,
-  Check,
   Trash2,
   Building,
   Users
@@ -64,7 +63,6 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
   // Registered Organizations for Access Control Picker
   const [organizations, setOrganizations] = useState<Array<{ id: string; name: string; email: string; logoUrl?: string }>>([]);
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
-  const [orgSearchQuery, setOrgSearchQuery] = useState('');
 
   // New Template Form State
   const [templateName, setTemplateName] = useState('');
@@ -132,30 +130,6 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
         showToast({ type: 'error', title: 'Delete Failed', message: err?.message || 'Could not delete template.' });
       }
     }
-  };
-
-  const handleToggleOrgSelection = (orgId: string) => {
-    setAllowedOrganizationIds((prev) =>
-      prev.includes(orgId) ? prev.filter((id) => id !== orgId) : [...prev, orgId]
-    );
-  };
-
-  const filteredOrgs = useMemo(() => {
-    if (!orgSearchQuery.trim()) return organizations;
-    const q = orgSearchQuery.toLowerCase();
-    return organizations.filter(
-      (o) => o.name.toLowerCase().includes(q) || o.email.toLowerCase().includes(q)
-    );
-  }, [organizations, orgSearchQuery]);
-
-  const handleSelectAllFilteredOrgs = () => {
-    const idsToAdd = filteredOrgs.map((o) => o.id);
-    setAllowedOrganizationIds((prev) => Array.from(new Set([...prev, ...idsToAdd])));
-  };
-
-  const handleClearFilteredOrgs = () => {
-    const idsToRemove = new Set(filteredOrgs.map((o) => o.id));
-    setAllowedOrganizationIds((prev) => prev.filter((id) => !idsToRemove.has(id)));
   };
 
   const handleCreateTemplate = async (e: React.FormEvent) => {
@@ -604,85 +578,19 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
                 </div>
               </div>
 
-              {/* SEARCHABLE ORGANIZATION PICKER FOR 500+ ORGANIZATIONS (PART 23) */}
+              {/* INTERACTIVE AUTOCOMPLETE ORGANIZATION SUGGESTION PICKER */}
               {visibility === 'ORGANIZATION_RESTRICTED' && (
-                <div className="pt-2 border-t border-[var(--border-subtle)] space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[var(--text-primary)] font-mono">
-                      Select Allowed Organizations ({allowedOrganizationIds.length} selected)
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleSelectAllFilteredOrgs}
-                        className="text-[11px] font-bold text-[var(--accent-primary)] hover:underline cursor-pointer"
-                      >
-                        Select Filtered ({filteredOrgs.length})
-                      </button>
-                      <span className="text-[var(--text-muted)]">|</span>
-                      <button
-                        type="button"
-                        onClick={handleClearFilteredOrgs}
-                        className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
-                      >
-                        Clear Filtered
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Search Bar */}
-                  <div className="relative">
-                    <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                    <input
-                      type="text"
-                      value={orgSearchQuery}
-                      onChange={(e) => setOrgSearchQuery(e.target.value)}
-                      placeholder="Search organizations by name or email..."
-                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
-                    />
-                  </div>
-
-                  {/* Scrollable Organization Selection List */}
-                  <div className="max-h-48 overflow-y-auto space-y-1 pr-1 custom-scrollbar border border-[var(--border-subtle)] rounded-xl p-1 bg-[var(--bg-surface)]">
-                    {isLoadingOrgs ? (
-                      <div className="p-4 text-center text-xs text-[var(--text-muted)]">
-                        Loading organizations...
-                      </div>
-                    ) : filteredOrgs.length === 0 ? (
-                      <div className="p-4 text-center text-xs text-[var(--text-muted)]">
-                        No organizations match "{orgSearchQuery}".
-                      </div>
-                    ) : (
-                      filteredOrgs.map((org) => {
-                        const isSelected = allowedOrganizationIds.includes(org.id);
-                        return (
-                          <div
-                            key={org.id}
-                            onClick={() => handleToggleOrgSelection(org.id)}
-                            className={`flex items-center justify-between p-2 rounded-lg text-xs cursor-pointer transition-colors ${
-                              isSelected
-                                ? 'bg-purple-500/20 text-white font-bold'
-                                : 'hover:bg-[var(--bg-surface-hover)] text-[var(--text-secondary)]'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 truncate">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => {}} // Handled by parent div
-                                className="rounded accent-purple-500 cursor-pointer"
-                              />
-                              <span className="truncate">{org.name}</span>
-                              <span className="text-[10px] text-[var(--text-muted)] font-mono truncate">
-                                ({org.email})
-                              </span>
-                            </div>
-                            {isSelected && <Check className="h-3.5 w-3.5 text-purple-400 shrink-0" />}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
+                <div className="pt-2 border-t border-[var(--border-subtle)]">
+                  <OrganizationSuggestPicker
+                    selectedOrgIds={allowedOrganizationIds}
+                    onChange={setAllowedOrganizationIds}
+                    organizations={organizations}
+                    isLoading={isLoadingOrgs}
+                    onSearchServer={async (q) => {
+                      const res = await templatesApi.getOrganizations(q);
+                      return res.data || [];
+                    }}
+                  />
                 </div>
               )}
             </div>

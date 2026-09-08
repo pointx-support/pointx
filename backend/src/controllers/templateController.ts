@@ -47,7 +47,8 @@ export async function getSingleTemplate(req: Request, res: Response, next: NextF
 
 export async function listOrganizationsForTemplatePicker(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
-    const orgs = await getOrganizationsForTemplatePicker();
+    const q = (req.query.q || req.query.search) as string | undefined;
+    const orgs = await getOrganizationsForTemplatePicker(q);
     return res.status(200).json({ success: true, data: orgs });
   } catch (error) {
     next(error);

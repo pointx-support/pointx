@@ -248,10 +248,13 @@ export const teamsApi = {
 
 export const templatesApi = {
   getAll: () => request<CustomGraphicsTemplate[]>('/templates', { method: 'GET' }),
-  getOrganizations: () =>
-    request<Array<{ id: string; name: string; email: string; logoUrl?: string }>>('/templates/organizations', {
-      method: 'GET',
-    }),
+  getOrganizations: (search?: string) =>
+    request<Array<{ id: string; name: string; email: string; logoUrl?: string }>>(
+      search && search.trim() ? `/templates/organizations?q=${encodeURIComponent(search.trim())}` : '/templates/organizations',
+      {
+        method: 'GET',
+      }
+    ),
   create: (template: any) =>
     request<CustomGraphicsTemplate>('/templates', {
       method: 'POST',

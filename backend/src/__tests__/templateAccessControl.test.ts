@@ -208,4 +208,38 @@ describe('Custom Organization Template Access Control & IDOR Prevention', () => 
     expect(orgNames).toContain('Total Gaming Arena');
     expect(orgNames).toContain('GodLike Esports Org');
   });
+
+  it('5. should allow Super Admin to filter organizations by name and by email via search query', async () => {
+    // Search by email
+    const emailRes = await request(app)
+      .get('/api/templates/organizations?q=leader@orga.gg')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(emailRes.status).toBe(200);
+    expect(emailRes.body.success).toBe(true);
+    expect(emailRes.body.data.length).toBe(1);
+    expect(emailRes.body.data[0].email).toBe('leader@orga.gg');
+    expect(emailRes.body.data[0].name).toBe('Total Gaming Arena');
+
+    // Search by name (case insensitive partial match)
+    const nameRes = await request(app)
+      .get('/api/templates/organizations?q=godlike')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(nameRes.status).toBe(200);
+    expect(nameRes.body.success).toBe(true);
+    expect(nameRes.body.data.length).toBe(1);
+    expect(nameRes.body.data[0].email).toBe('leader@orgb.gg');
+    expect(nameRes.body.data[0].name).toBe('GodLike Esports Org');
+
+    // Search with no matches
+    const noneRes = await request(app)
+      .get('/api/templates/organizations?q=nonexistent-org@nobody.com')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(noneRes.status).toBe(200);
+    expect(noneRes.body.success).toBe(true);
+    expect(noneRes.body.data.length).toBe(0);
+  });
 });
+

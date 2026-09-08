@@ -253,12 +253,34 @@ export async function deleteTemplate(
   return res.deletedCount > 0;
 }
 
-export async function getOrganizationsForTemplatePicker(): Promise<
-  Array<{ id: string; name: string; email: string; logoUrl?: string }>
-> {
-  const users = await User.find({ role: 'organizer' })
+export async function getOrganizationsForTemplatePicker(
+  searchQuery?: string
+): Promise<Array<{ id: string; name: string; email: string; logoUrl?: string }>> {
+  const query: any = {
+    $or: [
+      { role: 'organizer' },
+      { organizationName: { $exists: true, $ne: '' } }
+    ]
+  };
+
+  if (searchQuery && searchQuery.trim()) {
+    const escaped = searchQuery.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, 'i');
+    query.$and = [
+      {
+        $or: [
+          { organizationName: regex },
+          { name: regex },
+          { email: regex }
+        ]
+      }
+    ];
+  }
+
+  const users = await User.find(query)
     .select('_id name email organizationName organizationLogoUrl')
     .sort({ organizationName: 1, name: 1 })
+    .limit(100)
     .lean();
 
   return users.map((u: any) => ({
