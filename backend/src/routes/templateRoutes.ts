@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   listTemplates,
   getSingleTemplate,
+  getTemplateSectionData,
   listOrganizationsForTemplatePicker,
   createNewTemplate,
   updateExistingTemplate,
@@ -13,6 +14,7 @@ const router = Router();
 
 router.get('/', optionalAuthenticate, listTemplates);
 router.get('/organizations', authenticate, listOrganizationsForTemplatePicker);
+router.get('/:id/data', optionalAuthenticate, getTemplateSectionData);
 router.get('/:id', optionalAuthenticate, getSingleTemplate);
 router.post('/', authenticate, requireOnboarded, createNewTemplate);
 router.put('/:id', authenticate, requireOnboarded, updateExistingTemplate);

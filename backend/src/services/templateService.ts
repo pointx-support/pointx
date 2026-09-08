@@ -1,5 +1,7 @@
 import { CustomTemplate, ICustomTemplate, TemplateType, normalizeTemplateType, VALID_TEMPLATE_TYPES } from '../models/CustomTemplate';
 import { User } from '../models/User';
+import { getTournamentById } from './tournamentService';
+import { calculateStandings } from './scoringEngine';
 
 export async function migrateExistingTemplates(): Promise<{ migrated: number; needsReview: number }> {
   try {
@@ -290,4 +292,252 @@ export async function getOrganizationsForTemplatePicker(
     logoUrl: u.organizationLogoUrl,
   }));
 }
+
+/**
+ * Builds strictly section-specific data for a template and tournament.
+ * Prevents universal points table data from leaking into non-points-table templates.
+ */
+export async function buildSectionDataForTemplate(
+  templateId: string,
+  tournamentId: string,
+  options?: {
+    user?: { _id?: any; role?: string; organizationName?: string };
+    teamId?: string;
+    recipientId?: string;
+    awardTitle?: string;
+  }
+): Promise<{ templateType: TemplateType; [key: string]: any }> {
+  // 1. Retrieve template with authorization check
+  const template = await getTemplateById(templateId, options?.user);
+  if (!template) {
+    const err: any = new Error('Template not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const templateType = template.templateType;
+  if (!templateType || templateType === 'NEEDS_REVIEW' || !VALID_TEMPLATE_TYPES.includes(templateType)) {
+    const err: any = new Error(`Unsupported or unreviewed template type: ${templateType || 'UNKNOWN'}`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // 2. Retrieve tournament
+  const tournament = await getTournamentById(tournamentId, options?.user?._id?.toString(), options?.user?.role);
+  if (!tournament) {
+    const err: any = new Error('Tournament not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const teams = Array.isArray(tournament.teams) ? tournament.teams : [];
+  const matches = Array.isArray(tournament.matches) ? tournament.matches : [];
+
+  // Helper to extract players with their total kills across tournament matches
+  const getPlayersWithKills = () => {
+    const playerStatsMap = new Map<string, { id: string; name: string; teamId: string; teamName: string; teamTag?: string; teamLogo?: string; kills: number }>();
+
+    // Seed from team rosters
+    for (const team of teams) {
+      const roster = Array.isArray(team.players) ? team.players : [];
+      for (const p of roster) {
+        playerStatsMap.set(p.id, {
+          id: p.id,
+          name: p.name || 'Player',
+          teamId: team.id,
+          teamName: team.name,
+          teamTag: team.tag,
+          teamLogo: team.logoUrl,
+          kills: 0,
+        });
+      }
+    }
+
+    // Accumulate kills from match player stats / eliminations
+    for (const match of matches) {
+      const eliminations = Array.isArray((match as any).eliminations) ? (match as any).eliminations : [];
+      for (const elim of eliminations) {
+        const killerId = elim.killerPlayerId || elim.killerId;
+        if (killerId && playerStatsMap.has(killerId)) {
+          playerStatsMap.get(killerId)!.kills += 1;
+        }
+      }
+
+      // Check playerStats logged in match results
+      const results = Array.isArray(match.results) ? match.results : [];
+      for (const res of results) {
+        const pStats = Array.isArray((res as any).playerStats) ? (res as any).playerStats : [];
+        for (const ps of pStats) {
+          if (ps.playerId && playerStatsMap.has(ps.playerId)) {
+            playerStatsMap.get(ps.playerId)!.kills += Number(ps.kills) || 0;
+          }
+        }
+      }
+    }
+
+    const list = Array.from(playerStatsMap.values());
+    list.sort((a, b) => b.kills - a.kills);
+    return list;
+  };
+
+  switch (templateType) {
+    case 'POINTS_TABLE': {
+      const standings = calculateStandings(teams, matches, (tournament as any).scoringRules || (tournament as any).scoringPreset);
+      return {
+        templateType: 'POINTS_TABLE',
+        templateId: template.customId,
+        tournamentTitle: tournament.title,
+        tournamentLogo: tournament.logoUrl,
+        organizerName: tournament.organizer,
+        organizerLogo: tournament.organizerLogoUrl,
+        rows: standings,
+        totalMatchesCount: matches.length,
+      };
+    }
+
+    case 'KILL_LEADER': {
+      const rankedPlayers = getPlayersWithKills();
+      const topPlayer = rankedPlayers[0] || {
+        id: teams[0]?.players?.[0]?.id || 'demo-p1',
+        name: teams[0]?.players?.[0]?.name || 'Kill Leader',
+        teamId: teams[0]?.id || 't1',
+        teamName: teams[0]?.name || 'Squad',
+        teamTag: teams[0]?.tag,
+        teamLogo: teams[0]?.logoUrl,
+        kills: 0,
+      };
+
+      return {
+        templateType: 'KILL_LEADER',
+        templateId: template.customId,
+        tournamentTitle: tournament.title,
+        tournamentLogo: tournament.logoUrl,
+        organizerName: tournament.organizer,
+        organizerLogo: tournament.organizerLogoUrl,
+        player: {
+          id: topPlayer.id,
+          name: topPlayer.name,
+          teamId: topPlayer.teamId,
+          teamName: topPlayer.teamName,
+          teamTag: topPlayer.teamTag,
+          teamLogo: topPlayer.teamLogo,
+          kills: topPlayer.kills,
+          tournamentName: tournament.title,
+          rank: 1,
+        },
+      };
+    }
+
+    case 'TOP_FRAGGERS': {
+      const rankedPlayers = getPlayersWithKills();
+      const top3 = rankedPlayers.slice(0, 3);
+      const players = (top3.length > 0 ? top3 : teams.slice(0, 3).map((t: any, i: number) => ({
+        id: t.players?.[0]?.id || `p-${i + 1}`,
+        name: t.players?.[0]?.name || `Fragger ${i + 1}`,
+        teamId: t.id,
+        teamName: t.name,
+        teamTag: t.tag,
+        teamLogo: t.logoUrl,
+        kills: 0,
+      }))).map((p, idx) => ({
+        rank: idx + 1,
+        playerName: p.name,
+        teamName: p.teamName,
+        teamTag: p.teamTag,
+        teamLogo: p.teamLogo,
+        kills: p.kills,
+      }));
+
+      return {
+        templateType: 'TOP_FRAGGERS',
+        templateId: template.customId,
+        tournamentTitle: tournament.title,
+        tournamentLogo: tournament.logoUrl,
+        organizerName: tournament.organizer,
+        organizerLogo: tournament.organizerLogoUrl,
+        players,
+        tournamentName: tournament.title,
+      };
+    }
+
+    case 'TEAM_POSTER': {
+      const selectedTeam = (options?.teamId ? teams.find((t: any) => t.id === options.teamId) : null) || teams[0] || {
+        id: 'team-fallback',
+        name: 'Team Alpha',
+        tag: 'ALP',
+        players: [],
+      };
+
+      const roster = Array.isArray(selectedTeam.players) ? selectedTeam.players : [];
+      const players = roster.slice(0, 4).map((p: any) => (typeof p === 'string' ? p : p.name || 'Player'));
+
+      return {
+        templateType: 'TEAM_POSTER',
+        templateId: template.customId,
+        tournamentTitle: tournament.title,
+        tournamentLogo: tournament.logoUrl,
+        organizerName: tournament.organizer,
+        organizerLogo: tournament.organizerLogoUrl,
+        teamName: selectedTeam.name,
+        teamLogo: selectedTeam.logoUrl,
+        shortName: selectedTeam.tag || selectedTeam.name,
+        players,
+        tournamentName: tournament.title,
+      };
+    }
+
+    case 'SLOTS_LIST': {
+      const slots = teams.map((team: any, idx: number) => ({
+        slot: idx + 1,
+        teamName: team.name,
+        shortName: team.tag || '',
+        logo: team.logoUrl,
+      }));
+
+      return {
+        templateType: 'SLOTS_LIST',
+        templateId: template.customId,
+        tournamentTitle: tournament.title,
+        tournamentLogo: tournament.logoUrl,
+        organizerName: tournament.organizer,
+        organizerLogo: tournament.organizerLogoUrl,
+        teams: slots,
+      };
+    }
+
+    case 'VICTORY_CERTIFICATE': {
+      const standings = calculateStandings(teams, matches, (tournament as any).scoringRules || (tournament as any).scoringPreset);
+      let winnerTeam = options?.recipientId ? teams.find((t: any) => t.id === options.recipientId) : null;
+      if (!winnerTeam && standings.length > 0) {
+        winnerTeam = teams.find((t: any) => t.id === standings[0].teamId);
+      }
+      if (!winnerTeam) {
+        winnerTeam = teams[0] || { id: 'w1', name: 'Champion Squad', tag: 'CHAMP' };
+      }
+
+      return {
+        templateType: 'VICTORY_CERTIFICATE',
+        templateId: template.customId,
+        recipientName: winnerTeam.name,
+        recipientLogo: winnerTeam.logoUrl,
+        teamName: winnerTeam.name,
+        awardTitle: options?.awardTitle?.trim() || 'CHAMPION',
+        position: '1ST PLACE',
+        tournamentName: tournament.title,
+        tournamentDate: new Date().toISOString().split('T')[0],
+        organizationName: tournament.organizer || 'PointX Arena',
+        organizationLogo: tournament.organizerLogoUrl,
+        certificateId: `CERT-${tournament.customId || tournament._id}-${winnerTeam.id || '1'}`,
+        signature: tournament.organizer || 'PointX Official',
+      };
+    }
+
+    default: {
+      const err: any = new Error(`Unsupported template type: ${templateType}`);
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+}
+
 

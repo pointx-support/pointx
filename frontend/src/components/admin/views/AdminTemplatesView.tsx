@@ -52,7 +52,9 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
     unpublishTemplate,
     setActiveTemplateId,
     createCustomTemplate,
-    deleteTemplate
+    deleteTemplate,
+    addTemplate,
+    syncTemplates
   } = useTemplateStore();
   const { showToast } = useToast();
 
@@ -87,23 +89,33 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
     }
   };
 
-  // Fetch organizations on mount
+  // Fetch organizations and sync server templates on mount
   useEffect(() => {
-    async function loadOrgs() {
+    let isMounted = true;
+    async function loadInitialData() {
       setIsLoadingOrgs(true);
       try {
-        const res = await templatesApi.getOrganizations();
-        if (res.success && Array.isArray(res.data)) {
-          setOrganizations(res.data);
+        const [orgsRes, tmplRes] = await Promise.allSettled([
+          templatesApi.getOrganizations(),
+          templatesApi.getAll(),
+        ]);
+        if (isMounted && orgsRes.status === 'fulfilled' && orgsRes.value.success && Array.isArray(orgsRes.value.data)) {
+          setOrganizations(orgsRes.value.data);
+        }
+        if (isMounted && tmplRes.status === 'fulfilled' && tmplRes.value.success && Array.isArray(tmplRes.value.data)) {
+          syncTemplates(tmplRes.value.data as any);
         }
       } catch (err) {
-        console.warn('Failed to load organizations for template picker:', err);
+        console.warn('Failed to load initial data for AdminTemplatesView:', err);
       } finally {
-        setIsLoadingOrgs(false);
+        if (isMounted) setIsLoadingOrgs(false);
       }
     }
-    loadOrgs();
-  }, []);
+    loadInitialData();
+    return () => {
+      isMounted = false;
+    };
+  }, [syncTemplates]);
 
   const handleTogglePublish = (id: string, currentlyPublished: boolean) => {
     if (currentlyPublished) {
@@ -208,12 +220,19 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
         isPublished: true,
       });
 
-      const newId = res.success && res.data ? res.data.id : createCustomTemplate(
-        templateName.trim(),
-        imageUrl,
-        baseAlignment,
-        targetCategory
-      );
+      let newId: string;
+      if (res.success && res.data) {
+        addTemplate(res.data as any);
+        newId = res.data.id || (res.data as any)._id;
+      } else {
+        newId = createCustomTemplate(
+          templateName.trim(),
+          imageUrl,
+          baseAlignment,
+          targetCategory,
+          targetSection
+        );
+      }
 
       setIsAddModalOpen(false);
       setTemplateName('');

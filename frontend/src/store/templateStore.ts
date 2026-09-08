@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { CustomGraphicsTemplate, TemplateAlignmentConfig, GraphicTemplateCategory } from '../types/customTemplate';
-import { normalizeTemplateType } from '../types/customTemplate';
+import type { CustomGraphicsTemplate, TemplateAlignmentConfig, GraphicTemplateCategory, TemplateType } from '../types/customTemplate';
+import { normalizeTemplateType, VALID_TEMPLATE_TYPES } from '../types/customTemplate';
 
 export const DEFAULT_LEGIT_ALIGNMENT: TemplateAlignmentConfig = {
   aspectRatio: '16:9',
@@ -544,6 +544,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Legit Showdown Pro (16:9)',
     description: 'Official Legit Showdown cyberpunk theme with neon cyan gradients (16:9 Full HD & 4K).',
     category: 'standings',
+    templateType: 'POINTS_TABLE',
     imageUrl: '/templates/legit_standings.jpg',
     aspectRatio: '16:9',
     alignment: DEFAULT_LEGIT_ALIGNMENT,
@@ -557,6 +558,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'PointX Scrims (Orange Gold 16:9)',
     description: 'Official PointX Scrims gold & orange theme with white team plates (16:9 Full HD & 4K).',
     category: 'standings',
+    templateType: 'POINTS_TABLE',
     imageUrl: '/templates/strikz_standings.jpg',
     aspectRatio: '16:9',
     alignment: DEFAULT_POINTX_ALIGNMENT,
@@ -570,6 +572,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Emerald Crystal Dark Scrims (4:5 Poster)',
     description: 'Emerald green crystal battle royale layout with top 1 champion spotlight and 11 team standings.',
     category: 'standings',
+    templateType: 'POINTS_TABLE',
     imageUrl: '/templates/emerald_crystal_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_EMERALD_CRYSTAL_ALIGNMENT,
@@ -583,6 +586,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Royal Cyber Purple & Gold (4:5 Poster)',
     description: 'Deep royal purple esports poster with bold gold event typography and clean 12-row standings.',
     category: 'standings',
+    templateType: 'POINTS_TABLE',
     imageUrl: '/templates/royal_purple_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_ROYAL_PURPLE_ALIGNMENT,
@@ -596,6 +600,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Neon Cyber Purple Scrims (4:5 Poster)',
     description: 'Free Fire purple cyber glow poster format with top 3 podium & 12 squad standings.',
     category: 'standings',
+    templateType: 'POINTS_TABLE',
     imageUrl: '/templates/neon_purple_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_NEON_PURPLE_ALIGNMENT,
@@ -609,6 +614,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Dark Mint Tactical Scrims (4:5 Poster)',
     description: 'Dark obsidian & emerald tactical military scrims poster with top 3 champion cards.',
     category: 'standings',
+    templateType: 'POINTS_TABLE',
     imageUrl: '/templates/dark_mint_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_DARK_MINT_ALIGNMENT,
@@ -622,6 +628,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Glacier Frost Scrims (4:5 Poster)',
     description: 'Ice blue winter battle royale poster layout with clean single-column standings.',
     category: 'standings',
+    templateType: 'POINTS_TABLE',
     imageUrl: '/templates/glacier_frost_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_GLACIER_FROST_ALIGNMENT,
@@ -635,6 +642,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Red Samurai Dual-Column (4:5 Poster)',
     description: 'Free Fire MAX crimson samurai theme with yellow rank tags and dual 6-row columns.',
     category: 'standings',
+    templateType: 'POINTS_TABLE',
     imageUrl: '/templates/red_samurai_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_RED_SAMURAI_ALIGNMENT,
@@ -648,6 +656,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Red Thunder Scrims (4:5 Poster)',
     description: 'Free Fire MAX thunder theme with central torn paper strips for all 12 teams.',
     category: 'standings',
+    templateType: 'POINTS_TABLE',
     imageUrl: '/templates/red_thunder_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_RED_THUNDER_ALIGNMENT,
@@ -663,6 +672,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Warheads Cyber Predator (4:5 Poster)',
     description: 'Neon orange & crimson kill leader highlight with dynamic MVP portraits.',
     category: 'warheads',
+    templateType: 'KILL_LEADER',
     imageUrl: '/templates/emerald_crystal_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_EMERALD_CRYSTAL_ALIGNMENT,
@@ -676,6 +686,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Warheads Stream Overlord (16:9 Broadcast)',
     description: 'Widescreen broadcast kill leader banner with match telemetry and frag counts.',
     category: 'warheads',
+    templateType: 'KILL_LEADER',
     imageUrl: '/templates/legit_standings.jpg',
     aspectRatio: '16:9',
     alignment: DEFAULT_LEGIT_ALIGNMENT,
@@ -691,6 +702,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Top Fraggers / MVP Elite (4:5 Poster)',
     description: 'Gold champion spotlight featuring top 5 kill fraggers with K/D ratio.',
     category: 'fraggers',
+    templateType: 'TOP_FRAGGERS',
     imageUrl: '/templates/royal_purple_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_ROYAL_PURPLE_ALIGNMENT,
@@ -704,6 +716,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'MVP Stage Champion (16:9 Broadcast)',
     description: 'Broadcast stage MVP banner with high impact damage and survival time telemetry.',
     category: 'fraggers',
+    templateType: 'TOP_FRAGGERS',
     imageUrl: '/templates/strikz_standings.jpg',
     aspectRatio: '16:9',
     alignment: DEFAULT_POINTX_ALIGNMENT,
@@ -719,6 +732,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Team Battle Lineup (4:5 Poster)',
     description: 'Full team 4-man roster poster with official team crest and jersey badges.',
     category: 'team-poster',
+    templateType: 'TEAM_POSTER',
     imageUrl: '/templates/red_samurai_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_RED_SAMURAI_ALIGNMENT,
@@ -732,6 +746,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Squad Roster Banner (16:9 Broadcast)',
     description: 'Widescreen squad roster card with captain badge and player IDs.',
     category: 'team-poster',
+    templateType: 'TEAM_POSTER',
     imageUrl: '/templates/strikz_standings.jpg',
     aspectRatio: '16:9',
     alignment: DEFAULT_POINTX_ALIGNMENT,
@@ -747,6 +762,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Official 12-Slot Schedule (4:5 Poster)',
     description: 'Complete 12-team slot allocation matrix with group tags and seed numbers.',
     category: 'slots-list',
+    templateType: 'SLOTS_LIST',
     imageUrl: '/templates/glacier_frost_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_GLACIER_FROST_ALIGNMENT,
@@ -760,6 +776,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Broadcast Slots Grid (16:9 Broadcast)',
     description: 'Clean widescreen broadcast table displaying 12 slot teams and lobby passwords.',
     category: 'slots-list',
+    templateType: 'SLOTS_LIST',
     imageUrl: '/templates/legit_standings.jpg',
     aspectRatio: '16:9',
     alignment: DEFAULT_LEGIT_ALIGNMENT,
@@ -775,6 +792,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Champion Victory Certificate (16:9 Landscape)',
     description: 'Official tournament champion diploma with gold seal, signatures, and Booyah insignia.',
     category: 'certificate',
+    templateType: 'VICTORY_CERTIFICATE',
     imageUrl: '/templates/legit_standings.jpg',
     aspectRatio: '16:9',
     alignment: DEFAULT_LEGIT_ALIGNMENT,
@@ -788,6 +806,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
     name: 'Booyah Master Certificate (4:5 Portrait)',
     description: 'Vertical presentation certificate with high-res gold borders and custom MVP title.',
     category: 'certificate',
+    templateType: 'VICTORY_CERTIFICATE',
     imageUrl: '/templates/royal_purple_poster.jpg',
     aspectRatio: '4:5',
     alignment: DEFAULT_ROYAL_PURPLE_ALIGNMENT,
@@ -804,7 +823,9 @@ export interface TemplateStoreState {
 
   // Actions
   setActiveTemplateId: (id: string) => void;
-  createCustomTemplate: (name: string, imageUrl: string, baseAlignment?: TemplateAlignmentConfig, category?: GraphicTemplateCategory) => string;
+  addTemplate: (template: CustomGraphicsTemplate) => void;
+  syncTemplates: (incoming: CustomGraphicsTemplate[]) => void;
+  createCustomTemplate: (name: string, imageUrl: string, baseAlignment?: TemplateAlignmentConfig, category?: GraphicTemplateCategory, templateType?: TemplateType) => string;
   updateTemplateAlignment: (id: string, alignment: Partial<TemplateAlignmentConfig>) => void;
   updateTemplateMetadata: (id: string, metadata: { name?: string; description?: string; imageUrl?: string; aspectRatio?: '16:9' | '4:5' | '1:1' | '9:16'; category?: GraphicTemplateCategory }) => void;
   publishTemplate: (id: string) => void;
@@ -825,15 +846,59 @@ export const useTemplateStore = create<TemplateStoreState>()(
 
       setActiveTemplateId: (id: string) => set({ activeTemplateId: id }),
 
-      createCustomTemplate: (name: string, imageUrl: string, baseAlignment, category = 'standings') => {
+      addTemplate: (template: CustomGraphicsTemplate) => {
+        const id = (template as any).id || (template as any)._id || (template as any).customId;
+        const safeType = template.templateType || normalizeTemplateType(template.category);
+        const normalizedTemplate: CustomGraphicsTemplate = {
+          ...template,
+          id,
+          templateType: safeType,
+        };
+        set((state) => {
+          const exists = state.templates.some((t) => t.id === normalizedTemplate.id);
+          return {
+            templates: exists
+              ? state.templates.map((t) => (t.id === normalizedTemplate.id ? normalizedTemplate : t))
+              : [...state.templates, normalizedTemplate],
+            activeTemplateId: normalizedTemplate.id,
+          };
+        });
+      },
+
+      syncTemplates: (incoming: CustomGraphicsTemplate[]) => {
+        if (!Array.isArray(incoming) || incoming.length === 0) return;
+        set((state) => {
+          const incomingMap = new Map<string, CustomGraphicsTemplate>();
+          incoming.forEach((t) => {
+            const id = (t as any)._id || (t as any).customId || t.id;
+            const safeType = t.templateType || normalizeTemplateType(t.category);
+            incomingMap.set(id, { ...t, id, templateType: safeType });
+          });
+
+          const updated = state.templates.map((t) => {
+            if (incomingMap.has(t.id)) {
+              const match = incomingMap.get(t.id)!;
+              incomingMap.delete(t.id);
+              return match;
+            }
+            return t;
+          });
+
+          return {
+            templates: [...updated, ...Array.from(incomingMap.values())],
+          };
+        });
+      },
+
+      createCustomTemplate: (name: string, imageUrl: string, baseAlignment?: TemplateAlignmentConfig, category: GraphicTemplateCategory = 'standings', templateType?: TemplateType) => {
         const id = `custom-tmpl-${Date.now()}`;
-        const templateType = normalizeTemplateType(category);
+        const resolvedType = templateType || normalizeTemplateType(category);
         const newTemplate: CustomGraphicsTemplate = {
           id,
           name: name.trim() || 'Custom Tournament Template',
           description: 'Custom tournament background calibrated by Admin.',
           category,
-          templateType,
+          templateType: resolvedType,
           imageUrl,
           aspectRatio: baseAlignment?.aspectRatio || '16:9',
           alignment: baseAlignment || { ...DEFAULT_LEGIT_ALIGNMENT },
@@ -979,7 +1044,19 @@ export const useTemplateStore = create<TemplateStoreState>()(
       }
     }),
     {
-      name: 'pointx_custom_templates_v5'
+      name: 'pointx_custom_templates_v6',
+      onRehydrateStorage: () => (state) => {
+        if (state && Array.isArray(state.templates)) {
+          state.templates = state.templates.map((t) => {
+            const rawType = t.templateType;
+            const valid = rawType && rawType !== 'NEEDS_REVIEW' && (VALID_TEMPLATE_TYPES as string[]).includes(rawType);
+            return {
+              ...t,
+              templateType: valid ? rawType : (t.category ? normalizeTemplateType(t.category) : 'NEEDS_REVIEW')
+            };
+          });
+        }
+      }
     }
   )
 );

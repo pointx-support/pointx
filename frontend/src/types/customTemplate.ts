@@ -139,7 +139,7 @@ export const VALID_TEMPLATE_TYPES: TemplateType[] = [
 ];
 
 export function normalizeTemplateType(val?: string): TemplateType {
-  if (!val) return 'POINTS_TABLE';
+  if (!val || !val.trim()) return 'NEEDS_REVIEW';
   const clean = val.trim();
   if (VALID_TEMPLATE_TYPES.includes(clean as TemplateType)) {
     return clean as TemplateType;

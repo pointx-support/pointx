@@ -42,7 +42,7 @@ import {
   X
 } from 'lucide-react';
 import type { GraphicsRenderData } from '../../types/graphics';
-import type { TemplateAlignmentConfig, TextElementStyle, GraphicTemplateCategory } from '../../types/customTemplate';
+import { normalizeTemplateType, type TemplateAlignmentConfig, type TextElementStyle, type GraphicTemplateCategory } from '../../types/customTemplate';
 
 export interface AdminTemplateStudioProps {
   onClose: () => void;
@@ -151,7 +151,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
     subtitle: 'OVERALL'
   };
 
-  const templateType = activeTemplate?.templateType || 'POINTS_TABLE';
+  const templateType = activeTemplate?.templateType || normalizeTemplateType(activeTemplate?.category);
   const isPointsTable = templateType === 'POINTS_TABLE';
   const sectionVariables = getVariablesForSection(templateType);
 
@@ -915,7 +915,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                 options={{
                   customTitle: renderData.tournamentTitle,
                   organizerName: renderData.organizerName,
-                  standingsData: renderData
+                  standingsData: isPointsTable ? renderData : undefined
                 }}
                 selectedElementKeys={selectedKeys}
                 onSelectElement={handleSelectElement}
@@ -1849,7 +1849,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                 options={{
                   customTitle: renderData.tournamentTitle,
                   organizerName: renderData.organizerName,
-                  standingsData: renderData
+                  standingsData: isPointsTable ? renderData : undefined
                 }}
                 selectedElementKeys={selectedKeys}
                 onSelectElement={handleSelectElement}

@@ -7,6 +7,7 @@ import {
   updateTemplate,
   deleteTemplate,
   getOrganizationsForTemplatePicker,
+  buildSectionDataForTemplate,
 } from '../services/templateService';
 import { updateAuthoritativeState } from '../services/realtimeSync';
 
@@ -40,6 +41,35 @@ export async function getSingleTemplate(req: Request, res: Response, next: NextF
     }
     if (error.statusCode === 404) {
       return res.status(404).json({ success: false, error: error.message });
+    }
+    next(error);
+  }
+}
+
+export async function getTemplateSectionData(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = req.params.id as string;
+    const tournamentId = (req.query.tournamentId || req.query.tournament) as string;
+    if (!tournamentId) {
+      return res.status(400).json({ success: false, error: 'tournamentId query parameter is required.' });
+    }
+
+    const user = (req as AuthenticatedRequest).user;
+    const teamId = req.query.teamId as string | undefined;
+    const recipientId = (req.query.recipientId || req.query.winnerTeamId) as string | undefined;
+    const awardTitle = req.query.awardTitle as string | undefined;
+
+    const data = await buildSectionDataForTemplate(id, tournamentId, {
+      user,
+      teamId,
+      recipientId,
+      awardTitle,
+    });
+
+    return res.status(200).json({ success: true, data });
+  } catch (error: any) {
+    if (error.statusCode === 400 || error.statusCode === 403 || error.statusCode === 404) {
+      return res.status(error.statusCode).json({ success: false, error: error.message });
     }
     next(error);
   }

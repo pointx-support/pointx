@@ -11,6 +11,7 @@ import { Input } from '../ui/Input';
 import { useToast } from '../ui/Toast';
 import { getOrdinalSuffix } from '../../utils/format';
 import { broadcastTemplateLiveUpdate } from '../../services/broadcastSync';
+import { templatesApi } from '../../services/api';
 import {
   Sparkles,
   Download,
@@ -60,7 +61,7 @@ export const GraphicsStudioView: React.FC = () => {
     activeGraphicsCategory,
     setActiveGraphicsCategory
   } = useTournamentStore();
-  const { templates, activeTemplateId, setActiveTemplateId, getActiveTemplate } = useTemplateStore();
+  const { templates, activeTemplateId, setActiveTemplateId, syncTemplates } = useTemplateStore();
   const { user } = useAuthStore();
   const { showToast } = useToast();
   const isAdmin = user?.role === 'admin';
@@ -68,6 +69,25 @@ export const GraphicsStudioView: React.FC = () => {
   const activeCategory = activeGraphicsCategory || 'standings';
   const setActiveCategory = setActiveGraphicsCategory;
   const activeTemplateType = normalizeTemplateType(activeCategory);
+
+  // Sync templates from backend API on mount to ensure newly added templates appear immediately
+  useEffect(() => {
+    let isMounted = true;
+    async function loadServerTemplates() {
+      try {
+        const res = await templatesApi.getAll();
+        if (isMounted && res.success && Array.isArray(res.data)) {
+          syncTemplates(res.data as any);
+        }
+      } catch (err) {
+        console.warn('[GraphicsStudioView] Server template sync failed:', err);
+      }
+    }
+    loadServerTemplates();
+    return () => {
+      isMounted = false;
+    };
+  }, [syncTemplates]);
 
   const [selectedTeamId, setSelectedTeamId] = useState<string>(currentTournament.teams[0]?.id || '');
   const [winnerTeamId, setWinnerTeamId] = useState<string>(currentTournament.teams[0]?.id || '');
@@ -105,7 +125,11 @@ export const GraphicsStudioView: React.FC = () => {
     return tmplType === activeTemplateType;
   });
 
-  const currentCategoryTemplate = categoryTemplates.find((t) => t.id === activeTemplateId) || categoryTemplates[0] || getActiveTemplate();
+  const currentCategoryTemplate =
+    categoryTemplates.find((t) => t.id === activeTemplateId) ||
+    categoryTemplates[0] ||
+    templates.find((t) => (t.templateType ? t.templateType : normalizeTemplateType(t.category)) === activeTemplateType) ||
+    categoryTemplates[0];
 
   const publishedTemplates = categoryTemplates.filter((t) => {
     if (!t.isPublished) return false;
@@ -165,6 +189,10 @@ export const GraphicsStudioView: React.FC = () => {
     totalMatchesCount: isOverall ? currentTournament.matches.length : 1,
     subtitle: graphicSubtitle
   };
+
+  // Only pass standingsData when the template is actually a Points Table.
+  // Never pass points table data to Kill Leader, Top Fraggers, Team Poster, Slots List, or Victory Certificate!
+  const standingsData = activeTemplateType === 'POINTS_TABLE' ? renderData : undefined;
 
   const isPortrait = currentCategoryTemplate.aspectRatio === '4:5';
   const baseExportWidth = isPortrait ? 1080 : 1920;
@@ -654,7 +682,7 @@ export const GraphicsStudioView: React.FC = () => {
                     winnerTeamId,
                     awardTitle,
                     awardSubtitle,
-                    standingsData: renderData,
+                    standingsData,
                   }}
                   hueRotate={hueRotate}
                   svgRef={svgRef}
@@ -948,7 +976,7 @@ export const GraphicsStudioView: React.FC = () => {
                   winnerTeamId,
                   awardTitle,
                   awardSubtitle,
-                  standingsData: renderData,
+                  standingsData,
                 }}
                 hueRotate={hueRotate}
                 svgRef={fullScreenSvgRef}
