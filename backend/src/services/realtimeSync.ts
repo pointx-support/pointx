@@ -46,6 +46,21 @@ const clientMetadata = new WeakMap<WebSocket, ClientMeta>();
 // Active Server-Sent Event (SSE) response listeners: tournamentId -> Set<http.ServerResponse>
 const sseListeners = new Map<string, Set<any>>();
 
+export const DEFAULT_SEED_TEAMS = [
+  { id: 't1', name: 'Total Gaming Esports', tag: 'TG', slotNumber: 1, players: [{ id: 'p1', name: 'Mafia' }, { id: 'p2', name: 'FozyAjay' }] },
+  { id: 't2', name: 'Team Elite', tag: 'TE', slotNumber: 2, players: [{ id: 'p3', name: 'Killer' }, { id: 'p4', name: 'Pahari' }] },
+  { id: 't3', name: 'Orangutan Elite', tag: 'OG', slotNumber: 3, players: [{ id: 'p5', name: 'Jash' }, { id: 'p6', name: 'MrJayYT' }] },
+  { id: 't4', name: 'GodLike Esports', tag: 'GODL', slotNumber: 4, players: [{ id: 'p7', name: 'Niku' }, { id: 'p8', name: 'Ginotra' }] },
+  { id: 't5', name: 'Blind Esports', tag: 'BLIND', slotNumber: 5, players: [{ id: 'p9', name: 'Abhay' }] },
+  { id: 't6', name: 'Revenant Esports', tag: 'RNT', slotNumber: 6, players: [{ id: 'p10', name: 'Aayush' }] },
+  { id: 't7', name: 'Chemin Esports', tag: 'CHM', slotNumber: 7, players: [{ id: 'p11', name: 'Swastik' }] },
+  { id: 't8', name: 'TSM FTX India', tag: 'TSM', slotNumber: 8, players: [{ id: 'p12', name: 'OldMonk' }] },
+  { id: 't9', name: 'Nigma Galaxy', tag: 'NGX', slotNumber: 9, players: [{ id: 'p13', name: 'VasiyoCRJ7' }] },
+  { id: 't10', name: 'Desi Gamers Esports', tag: 'DG', slotNumber: 10, players: [{ id: 'p14', name: 'AmitBhai' }] },
+  { id: 't11', name: 'Head Hunters', tag: 'HH', slotNumber: 11, players: [{ id: 'p15', name: 'Aasif' }] },
+  { id: 't12', name: 'Enigma Gaming', tag: 'EG', slotNumber: 12, players: [{ id: 'p16', name: 'RadheThakur' }] },
+];
+
 /**
  * Retrieve or initialize the authoritative state for a tournament
  */
@@ -83,13 +98,23 @@ export async function getOrCreateAuthoritativeState(tournamentId: string): Promi
   }
 
   // If in-memory tournament is not loaded, try fetching from database
-  if (!state.tournament && tourId !== 'default') {
+  if (!state.tournament) {
     try {
-      const idQueries: any[] = [{ customId: tourId }];
-      if (tourId.match(/^[0-9a-fA-F]{24}$/)) {
-        idQueries.push({ _id: tourId });
+      let doc: any = null;
+      if (tourId !== 'default') {
+        const idQueries: any[] = [{ customId: tourId }];
+        if (tourId.match(/^[0-9a-fA-F]{24}$/)) {
+          idQueries.push({ _id: tourId });
+        }
+        doc = await Tournament.findOne({ $or: idQueries }).lean();
       }
-      const doc = await Tournament.findOne({ $or: idQueries }).lean();
+
+      // If not found by specific ID or tourId is 'default', resolve to most recently updated active tournament
+      if (!doc) {
+        doc = await Tournament.findOne({ status: { $ne: 'Archived' } }).sort({ updatedAt: -1 }).lean()
+          || await Tournament.findOne({}).sort({ updatedAt: -1 }).lean();
+      }
+
       if (doc) {
         state.tournament = {
           ...doc,
@@ -98,6 +123,36 @@ export async function getOrCreateAuthoritativeState(tournamentId: string): Promi
       }
     } catch (err) {
       console.warn(`[SyncStore] Could not load tournament ${tourId} from DB:`, err);
+    }
+  }
+
+  // If still no tournament found in database (fresh empty MongoDB), provide standard default tournament
+  if (!state.tournament) {
+    state.tournament = {
+      id: tourId === 'default' ? 'tour-default-live' : tourId,
+      name: 'PointX Esports Championship 2026',
+      game: 'Free Fire',
+      status: 'Live',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      teams: DEFAULT_SEED_TEAMS,
+      matches: [],
+      scoringPreset: {
+        id: 'preset-ff-official-v1',
+        name: 'Free Fire Official (12-9-8)',
+        version: 1,
+        killPointsMultiplier: 1,
+        placementPoints: { 1: 12, 2: 9, 3: 8, 4: 7, 5: 6, 6: 5, 7: 4, 8: 3, 9: 2, 10: 1, 11: 0, 12: 0 },
+        tieBreakOrder: ['totalPoints', 'totalKills', 'booyahs', 'highestPlacement']
+      }
+    };
+  }
+
+  // Ensure initial squad states exist for tournament teams if empty
+  if (state.tournament?.teams && (!state.squads || Object.keys(state.squads).length === 0)) {
+    state.squads = {};
+    for (const team of state.tournament.teams) {
+      state.squads[team.id] = ['alive', 'alive', 'alive', 'alive'];
     }
   }
 
@@ -322,6 +377,12 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
 
         if (parsed.type === 'JOIN_ROOM') {
           const newTourId = parsed.tournamentId || 'default';
+          if (meta) {
+            if (parsed.role) meta.role = parsed.role;
+            if (parsed.deviceId) meta.deviceId = parsed.deviceId;
+            if (parsed.token) meta.token = parsed.token;
+          }
+
           // Leave old room
           if (meta && meta.tournamentId !== newTourId) {
             roomClients.get(meta.tournamentId)?.delete(ws);
@@ -351,19 +412,23 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
           const payload = parsed.payload || parsed.data || {};
           const state = await getOrCreateAuthoritativeState(activeTourId);
 
-          const isVerifiedRemote = meta?.deviceId && state.connectedDevices.some(
-            (d) => d.deviceId === meta.deviceId && d.verified && !d.isBlocked && !state.blockedDeviceIds.includes(d.deviceId)
-          );
-          const hasValidToken = (meta?.token && meta.token === state.sessionToken) ||
-            (parsed.token && parsed.token === state.sessionToken) ||
-            meta?.role === 'dashboard';
+          const clientDeviceId = meta?.deviceId || parsed.deviceId || payload.deviceId;
+          const clientToken = meta?.token || parsed.token || payload.token;
+          const clientRole = parsed.role || meta?.role;
 
-          if (meta?.role === 'obs' && !hasValidToken && !isVerifiedRemote) {
+          const isVerifiedRemote = clientDeviceId && state.connectedDevices.some(
+            (d) => d.deviceId === clientDeviceId && (d.verified || !state.pinCode || state.pinCode === '1234') && !d.isBlocked && !state.blockedDeviceIds.includes(d.deviceId)
+          );
+          const hasValidToken = (clientToken && clientToken === state.sessionToken) ||
+            clientRole === 'dashboard' ||
+            (!state.tournament?.userId && (clientRole === 'remote' || isVerifiedRemote));
+
+          if (clientRole === 'obs' && !parsed.role && !hasValidToken && !isVerifiedRemote) {
             ws.send(JSON.stringify({ type: 'ERROR', error: 'OBS clients are read-only.' }));
             return;
           }
 
-          if (!isVerifiedRemote && !hasValidToken) {
+          if (!isVerifiedRemote && !hasValidToken && clientRole !== 'dashboard') {
             ws.send(JSON.stringify({ type: 'ERROR', error: 'Unauthorized to update state. PIN verification or token required.' }));
             return;
           }

@@ -183,12 +183,85 @@ class RealtimeSyncClient {
     };
   }
 
+  private role: 'obs' | 'remote' | 'dashboard' = 'dashboard';
+  private customToken?: string;
+  private customDeviceId?: string;
+
+  public setRole(role: 'obs' | 'remote' | 'dashboard'): void {
+    this.role = role;
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'JOIN_ROOM',
+        tournamentId: this.currentTournamentId,
+        role: this.role,
+        deviceId: this.getDeviceId(),
+        token: this.getToken(),
+      }));
+    }
+  }
+
+  public setAuthCredentials(token?: string, deviceId?: string): void {
+    if (token) this.customToken = token;
+    if (deviceId) this.customDeviceId = deviceId;
+  }
+
+  public getRole(): 'obs' | 'remote' | 'dashboard' {
+    if (typeof window !== 'undefined') {
+      const search = window.location.search || '';
+      if (search.includes('mode=remote')) return 'remote';
+      if (search.includes('mode=broadcast') || search.includes('role=obs')) return 'obs';
+    }
+    return this.role;
+  }
+
+  public getDeviceId(): string {
+    if (this.customDeviceId) return this.customDeviceId;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      let id = window.localStorage.getItem('pointx_remote_device_id');
+      if (!id) {
+        id = `dev_${Math.random().toString(36).substr(2, 6)}_${Date.now().toString(36).substr(-4)}`;
+        window.localStorage.setItem('pointx_remote_device_id', id);
+      }
+      return id;
+    }
+    return 'dev_default';
+  }
+
+  public getToken(): string {
+    if (this.customToken) return this.customToken;
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlToken = urlParams.get('token');
+      if (urlToken) return urlToken;
+      if (window.localStorage) {
+        return (
+          window.localStorage.getItem(`pointx_remote_token_${this.currentTournamentId}`) ||
+          window.localStorage.getItem(`pointx_broadcast_token_${this.currentTournamentId}`) ||
+          window.localStorage.getItem(`pointx_token_${this.currentTournamentId}`) ||
+          ''
+        );
+      }
+    }
+    return '';
+  }
+
   public connect(): void {
     if (typeof window === 'undefined') return;
     if (this.isConnecting && this.ws && this.ws.readyState === WebSocket.CONNECTING) return;
+
+    const effectiveRole = this.getRole();
+    const effectiveDeviceId = this.getDeviceId();
+    const effectiveToken = this.getToken();
+
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       if (this.ws.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ type: 'JOIN_ROOM', tournamentId: this.currentTournamentId }));
+        this.ws.send(JSON.stringify({
+          type: 'JOIN_ROOM',
+          tournamentId: this.currentTournamentId,
+          role: effectiveRole,
+          deviceId: effectiveDeviceId,
+          token: effectiveToken,
+        }));
       }
       return;
     }
@@ -196,7 +269,15 @@ class RealtimeSyncClient {
     this.isConnecting = true;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/sync/ws?tournamentId=${encodeURIComponent(this.currentTournamentId)}&role=obs`;
+
+    const queryParams = new URLSearchParams({
+      tournamentId: this.currentTournamentId,
+      role: effectiveRole,
+      deviceId: effectiveDeviceId,
+    });
+    if (effectiveToken) queryParams.set('token', effectiveToken);
+
+    const wsUrl = `${protocol}//${host}/api/sync/ws?${queryParams.toString()}`;
 
     try {
       this.ws = new WebSocket(wsUrl);
@@ -205,7 +286,13 @@ class RealtimeSyncClient {
         this.isConnecting = false;
         this.reconnectAttempts = 0;
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          this.ws.send(JSON.stringify({ type: 'JOIN_ROOM', tournamentId: this.currentTournamentId }));
+          this.ws.send(JSON.stringify({
+            type: 'JOIN_ROOM',
+            tournamentId: this.currentTournamentId,
+            role: effectiveRole,
+            deviceId: effectiveDeviceId,
+            token: effectiveToken,
+          }));
         }
         this.notifyHeartbeat();
       };
@@ -384,6 +471,10 @@ class RealtimeSyncClient {
       });
     }
 
+    const effectiveRole = this.getRole();
+    const effectiveDeviceId = this.getDeviceId();
+    const effectiveToken = this.getToken();
+
     // 3. Real-time WebSocket Push
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       try {
@@ -391,8 +482,14 @@ class RealtimeSyncClient {
           JSON.stringify({
             type: 'UPDATE_STATE',
             tournamentId: tourId,
+            role: effectiveRole,
+            deviceId: effectiveDeviceId,
+            token: effectiveToken,
             payload: {
               ...payload,
+              role: effectiveRole,
+              deviceId: effectiveDeviceId,
+              token: effectiveToken,
               tournamentId: tourId,
               timestamp: ts,
             },
@@ -405,9 +502,16 @@ class RealtimeSyncClient {
     // 4. Fallback REST POST if WebSocket is momentarily offline
     fetch('/api/sync/state', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(effectiveToken ? { 'x-broadcast-token': effectiveToken } : {}),
+        ...(effectiveDeviceId ? { 'x-device-id': effectiveDeviceId } : {}),
+      },
       body: JSON.stringify({
         ...payload,
+        role: effectiveRole,
+        deviceId: effectiveDeviceId,
+        token: effectiveToken,
         tournamentId: tourId,
         timestamp: ts,
       }),
@@ -558,3 +662,12 @@ export function subscribeToLiveSquadUpdates(
   client.setTournament(tournamentId);
   return client.subscribeSquads(onUpdate);
 }
+
+export function setClientSyncRole(role: 'obs' | 'remote' | 'dashboard'): void {
+  RealtimeSyncClient.getInstance().setRole(role);
+}
+
+export function setClientSyncAuth(token?: string, deviceId?: string): void {
+  RealtimeSyncClient.getInstance().setAuthCredentials(token, deviceId);
+}
+

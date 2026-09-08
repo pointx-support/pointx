@@ -394,20 +394,20 @@ export const useTournamentStore = create<AppState>((set, get) => ({
         const loadedTournaments = res.data;
         const currentActiveId = get().activeTournamentId;
         const matching = currentActiveId ? loadedTournaments.find((t) => t.id === currentActiveId) : null;
-        const active = matching || (currentActiveId ? get().currentTournament : createBlankTournament());
+        const active = matching || (loadedTournaments.length > 0 ? loadedTournaments[0] : (currentActiveId ? get().currentTournament : createBlankTournament()));
 
         persistTournaments(loadedTournaments);
 
         set({
           tournaments: loadedTournaments,
-          activeTournamentId: matching ? matching.id : '',
+          activeTournamentId: active.id || '',
           currentTournament: active,
           isLoadingTournaments: false,
           hasLoadedFromDatabase: true
         });
 
-        if (matching) {
-          broadcastTournamentUpdate(matching);
+        if (active.id) {
+          broadcastTournamentUpdate(active);
         }
       } else {
         set({ isLoadingTournaments: false, hasLoadedFromDatabase: true });
@@ -971,12 +971,23 @@ export const useTournamentStore = create<AppState>((set, get) => ({
 
   getStandings: (options) => {
     const current = get().currentTournament;
-    return calculateTournamentStandings(current, options);
+    const standings = calculateTournamentStandings(current, options);
+    if (standings.length > 0) return standings;
+    // Fallback: If tournament has no teams yet, compute standings from SEED_TEAMS
+    if (!current.teams || current.teams.length === 0) {
+      return calculateTournamentStandings({ ...current, teams: SEED_TEAMS }, options);
+    }
+    return standings;
   },
 
   getTopFraggers: (options) => {
     const current = get().currentTournament;
-    return calculateTopFraggers(current, options);
+    const fraggers = calculateTopFraggers(current, options);
+    if (fraggers.length > 0) return fraggers;
+    if (!current.teams || current.teams.length === 0) {
+      return calculateTopFraggers({ ...current, teams: SEED_TEAMS, matches: SEED_MATCHES }, options);
+    }
+    return fraggers;
   },
 
   getTournamentSummary: () => {

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import type { Tournament, TeamMatchResult, Match } from '../../types/tournament';
-import { useTournamentStore } from '../../store/tournamentStore';
+import { useTournamentStore, SEED_TEAMS } from '../../store/tournamentStore';
 import { useAuthStore } from '../../store/authStore';
 import {
   broadcastFullSync,
   subscribeToLiveSquadUpdates,
   subscribeToTournamentLiveUpdates,
+  setClientSyncRole,
+  setClientSyncAuth,
   type LivePlayerState
 } from '../../services/broadcastSync';
 import { tournamentsApi } from '../../services/api';
@@ -92,14 +94,24 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const { showToast } = useToast();
 
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const targetTournamentId = propTournamentId || urlParams?.get('tournamentId') || urlParams?.get('tournament') || store.currentTournament.id;
+  const urlToken = urlParams?.get('token') || '';
+  const targetTournamentId = propTournamentId || urlParams?.get('tournamentId') || urlParams?.get('tournament') || store.currentTournament.id || 'default';
 
   const resolvedInitialTournament = React.useMemo(() => {
     if (targetTournamentId && targetTournamentId !== store.currentTournament.id) {
       const match = store.tournaments.find((t) => t.id === targetTournamentId);
-      if (match) return match;
+      if (match && Array.isArray(match.teams) && match.teams.length > 0) return match;
     }
-    return store.currentTournament;
+    if (Array.isArray(store.currentTournament.teams) && store.currentTournament.teams.length > 0) {
+      return store.currentTournament;
+    }
+    // Fallback: If current tournament has no teams (e.g. mobile remote or fresh DB), attach standard SEED_TEAMS
+    return {
+      ...store.currentTournament,
+      id: targetTournamentId || store.currentTournament.id || 'tour-live-ff',
+      title: store.currentTournament.title || 'PointX Live Championship',
+      teams: SEED_TEAMS,
+    };
   }, [targetTournamentId, store.currentTournament, store.tournaments]);
 
   const [tournament, setTournament] = useState<Tournament>(resolvedInitialTournament);
@@ -115,6 +127,11 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
   const [isPinVerified, setIsPinVerified] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
+      if (urlToken) {
+        window.localStorage.setItem(`pointx_remote_token_${targetTournamentId}`, urlToken);
+        window.localStorage.setItem(`pointx_broadcast_token_${targetTournamentId}`, urlToken);
+        return true;
+      }
       const verified = window.localStorage.getItem(pinStorageKey) === 'true';
       const expiry = Number(window.localStorage.getItem(pinExpiryKey)) || 0;
       return verified && (expiry === 0 || expiry > Date.now());
@@ -125,6 +142,85 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const [pinError, setPinError] = useState<string>('');
   const [isCheckingPin, setIsCheckingPin] = useState<boolean>(false);
   const [isDeviceBlocked, setIsDeviceBlocked] = useState<boolean>(false);
+
+  // Set remote role and credentials for real-time sync
+  useEffect(() => {
+    setClientSyncRole('remote');
+    const devId = getOrCreateDeviceId();
+    const tok = urlToken || (typeof window !== 'undefined' ? window.localStorage.getItem(`pointx_remote_token_${targetTournamentId}`) || window.localStorage.getItem(`pointx_broadcast_token_${targetTournamentId}`) : '');
+    setClientSyncAuth(tok || undefined, devId);
+  }, [targetTournamentId, urlToken]);
+
+  // Load authoritative tournament state & squads on mount (essential for phones/remote devices)
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadTournamentState = async () => {
+      try {
+        const storedToken = urlToken || (typeof window !== 'undefined' ? window.localStorage.getItem(`pointx_remote_token_${targetTournamentId}`) || window.localStorage.getItem(`pointx_broadcast_token_${targetTournamentId}`) : '');
+
+        // 1. First attempt: authoritative live sync state
+        const syncUrl = `/api/sync/state?tournamentId=${encodeURIComponent(targetTournamentId)}${storedToken ? `&token=${encodeURIComponent(storedToken)}` : ''}`;
+        const syncRes = await fetch(syncUrl);
+        const syncJson = await syncRes.json();
+        if (isMounted && syncJson?.data?.tournament && Array.isArray(syncJson.data.tournament.teams) && syncJson.data.tournament.teams.length > 0) {
+          setTournament(syncJson.data.tournament);
+          if (syncJson.data.squads && Object.keys(syncJson.data.squads).length > 0) {
+            setSquadStates(syncJson.data.squads);
+          } else {
+            const initial: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]> = {};
+            syncJson.data.tournament.teams.slice(0, 12).forEach((t: any) => {
+              initial[t.id] = ['alive', 'alive', 'alive', 'alive'];
+            });
+            setSquadStates(initial);
+          }
+          if (syncJson.data.isVisible !== undefined) setIsOverlayVisible(syncJson.data.isVisible);
+          if (syncJson.data.sessionToken) {
+            window.localStorage.setItem(`pointx_remote_token_${targetTournamentId}`, syncJson.data.sessionToken);
+            setClientSyncAuth(syncJson.data.sessionToken, getOrCreateDeviceId());
+          }
+          return;
+        }
+
+        // 2. Second attempt: tournament REST API
+        if (targetTournamentId && targetTournamentId !== 'default') {
+          const tourRes = await fetch(`/api/tournaments/${encodeURIComponent(targetTournamentId)}`);
+          const tourJson = await tourRes.json();
+          if (isMounted && tourJson?.data && Array.isArray(tourJson.data.teams) && tourJson.data.teams.length > 0) {
+            setTournament(tourJson.data);
+            const initial: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]> = {};
+            tourJson.data.teams.slice(0, 12).forEach((t: any) => {
+              initial[t.id] = ['alive', 'alive', 'alive', 'alive'];
+            });
+            setSquadStates((prev) => (Object.keys(prev).length > 0 ? prev : initial));
+            return;
+          }
+        }
+
+        // 3. Third attempt: all tournaments
+        const listRes = await fetch('/api/tournaments');
+        const listJson = await listRes.json();
+        if (isMounted && Array.isArray(listJson?.data) && listJson.data.length > 0) {
+          const found = listJson.data.find((t: any) => Array.isArray(t.teams) && t.teams.length > 0) || listJson.data[0];
+          if (found && Array.isArray(found.teams) && found.teams.length > 0) {
+            setTournament(found);
+            const initial: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]> = {};
+            (found.teams || []).slice(0, 12).forEach((t: any) => {
+              initial[t.id] = ['alive', 'alive', 'alive', 'alive'];
+            });
+            setSquadStates((prev) => (Object.keys(prev).length > 0 ? prev : initial));
+          }
+        }
+      } catch (err) {
+        console.warn('[BroadcastRemoteControl] Initial tournament load error:', err);
+      }
+    };
+
+    loadTournamentState();
+    return () => {
+      isMounted = false;
+    };
+  }, [targetTournamentId, urlToken]);
 
   // Send periodic heartbeats across networks
   useEffect(() => {
@@ -201,6 +297,10 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
         if (typeof window !== 'undefined') {
           window.localStorage.setItem(pinStorageKey, 'true');
           window.localStorage.setItem(pinExpiryKey, String(Date.now() + PIN_TTL_MS));
+          if (data.sessionToken) {
+            window.localStorage.setItem(`pointx_remote_token_${targetTournamentId}`, data.sessionToken);
+            setClientSyncAuth(data.sessionToken, deviceId);
+          }
         }
         setIsPinVerified(true);
         showToast({
@@ -376,6 +476,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       return tournament.matches[0];
     }
     const now = new Date().toISOString();
+    const effectiveTeams = tournament.teams && tournament.teams.length > 0 ? tournament.teams : SEED_TEAMS;
     return {
       id: `m_${tournament.id}_1`,
       tournamentId: tournament.id,
@@ -384,9 +485,9 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       status: 'Live' as const,
       createdAt: now,
       updatedAt: now,
-      results: tournament.teams.map((t, idx) => ({
+      results: effectiveTeams.map((t, idx) => ({
         teamId: t.id,
-        placement: (tournament.teams.length || 12) - idx,
+        placement: (effectiveTeams.length || 12) - idx,
         kills: 0,
         placementPoints: 0,
         killPoints: 0,
@@ -850,7 +951,8 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const liveObsUrl = `${origin}/?mode=broadcast&tournamentId=${tournament.id}&layout=live-squads${tokenQuery}`;
 
   // ALIVE TEAMS AT TOP, ELIMINATED TEAMS SINK TO BOTTOM:
-  const sortedTeamsBySlot = [...tournament.teams].sort((a, b) => (a.slotNumber || 0) - (b.slotNumber || 0));
+  const effectiveTeams = tournament.teams && tournament.teams.length > 0 ? tournament.teams : SEED_TEAMS;
+  const sortedTeamsBySlot = [...effectiveTeams].sort((a, b) => (a.slotNumber || 0) - (b.slotNumber || 0));
 
   const activeAliveTeams = sortedTeamsBySlot.filter((team) => {
     const sq = squadStates[team.id] || ['alive', 'alive', 'alive', 'alive'];
@@ -867,7 +969,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   });
 
   // Calculate Booyah team from editable report
-  const reportBooyahTeam = tournament.teams.find((t) => editedReportResults[t.id]?.placement === 1) || tournament.teams[0];
+  const reportBooyahTeam = effectiveTeams.find((t) => editedReportResults[t.id]?.placement === 1) || effectiveTeams[0];
 
   // 1. BLOCKED DEVICE SCREEN
   if (isDeviceBlocked) {

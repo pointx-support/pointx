@@ -68,7 +68,7 @@ export const StrikzStandingsTemplate: React.FC<StrikzStandingsTemplateProps> = (
           fontSize="24"
           letterSpacing="0.5"
         >
-          {row ? row.teamName.slice(0, 18) : '—'}
+          {row ? row.teamName.slice(0, 18) : `Slot ${rank}`}
         </text>
 
         {/* MATCH PLAYED */}
@@ -81,7 +81,7 @@ export const StrikzStandingsTemplate: React.FC<StrikzStandingsTemplateProps> = (
           fontWeight="700"
           fontSize="30"
         >
-          {row ? row.matchesPlayed : '—'}
+          {row ? row.matchesPlayed : 0}
         </text>
 
         {/* BOOYAH */}
@@ -94,7 +94,7 @@ export const StrikzStandingsTemplate: React.FC<StrikzStandingsTemplateProps> = (
           fontWeight="700"
           fontSize="30"
         >
-          {row ? row.booyahs : '—'}
+          {row ? row.booyahs : 0}
         </text>
 
         {/* KILLS */}
@@ -107,7 +107,7 @@ export const StrikzStandingsTemplate: React.FC<StrikzStandingsTemplateProps> = (
           fontWeight="700"
           fontSize="30"
         >
-          {row ? row.totalKills : '—'}
+          {row ? row.totalKills : 0}
         </text>
 
         {/* PLACE PTS */}
@@ -120,7 +120,7 @@ export const StrikzStandingsTemplate: React.FC<StrikzStandingsTemplateProps> = (
           fontWeight="700"
           fontSize="30"
         >
-          {row ? row.placementPoints : '—'}
+          {row ? row.placementPoints : 0}
         </text>
 
         {/* TOTAL PTS (White Text in Red/Gold Tab) */}
@@ -133,7 +133,7 @@ export const StrikzStandingsTemplate: React.FC<StrikzStandingsTemplateProps> = (
           fontWeight="700"
           fontSize="32"
         >
-          {row ? row.totalPoints : '—'}
+          {row ? row.totalPoints : 0}
         </text>
       </g>
     );
