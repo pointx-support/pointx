@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { Tournament, TournamentStatus, TournamentType } from '../../types/tournament';
 import type { ScoringPreset, PlacementRule } from '../../types/scoring';
 import {
@@ -12,19 +12,25 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ImageUpload } from '../ui/ImageUpload';
+import { tournamentsApi } from '../../services/api';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { useToast } from '../ui/Toast';
 import {
   Save,
   Trophy,
   Sliders,
   Swords,
-  ImageIcon
+  ImageIcon,
+  Loader2,
+  AlertTriangle
 } from 'lucide-react';
 
 export interface EditTournamentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  tournament: Tournament;
-  onSave: (tournamentId: string, updatedFields: Partial<Tournament>) => void;
+  tournament?: Tournament | null;
+  tournamentId?: string;
+  onSave?: (tournamentId: string, updatedFields: Partial<Tournament>) => void;
 }
 
 type TabKey = 'general' | 'structure' | 'scoring' | 'branding';
@@ -33,40 +39,100 @@ export const EditTournamentModal: React.FC<EditTournamentModalProps> = ({
   isOpen,
   onClose,
   tournament,
+  tournamentId: propTournamentId,
   onSave
 }) => {
+  const { showToast } = useToast();
+  const targetId = propTournamentId || tournament?.id || (tournament as any)?._id || (tournament as any)?.customId || '';
+
   const [activeTab, setActiveTab] = useState<TabKey>('general');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   // General & Identity
-  const [title, setTitle] = useState(tournament.title);
-  const [organizer, setOrganizer] = useState(tournament.organizer);
-  const [description, setDescription] = useState(tournament.description || '');
-  const [status, setStatus] = useState<TournamentStatus>(tournament.status);
-  const [tournamentType, setTournamentType] = useState<TournamentType>(tournament.tournamentType || 'Battle Royale');
-  const [game] = useState(tournament.game || 'Free Fire');
+  const [title, setTitle] = useState('');
+  const [organizer, setOrganizer] = useState('');
+  const [description, setDescription] = useState('');
+  const [status, setStatus] = useState<TournamentStatus>('Upcoming');
+  const [tournamentType, setTournamentType] = useState<TournamentType>('Battle Royale');
+  const [game, setGame] = useState('Free Fire');
 
   // Branding
-  const [logoUrl, setLogoUrl] = useState<string | undefined>(tournament.logoUrl);
-  const [organizerLogoUrl, setOrganizerLogoUrl] = useState<string | undefined>(tournament.organizerLogoUrl);
-  const [bannerUrl, setBannerUrl] = useState<string | undefined>(tournament.bannerUrl);
+  const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
+  const [organizerLogoUrl, setOrganizerLogoUrl] = useState<string | undefined>(undefined);
+  const [bannerUrl, setBannerUrl] = useState<string | undefined>(undefined);
 
   // Structure
-  const [teamCount, setTeamCount] = useState<number>(tournament.structure?.teamCount || tournament.teams.length || 12);
-  const [matchCount, setMatchCount] = useState<number>(tournament.structure?.matchCount || 6);
-  const [roundRobin, setRoundRobin] = useState<boolean>(tournament.structure?.roundRobin || false);
-  const [groupsCount, setGroupsCount] = useState<number>(tournament.structure?.groupsCount || 2);
+  const [teamCount, setTeamCount] = useState<number>(12);
+  const [matchCount, setMatchCount] = useState<number>(6);
+  const [roundRobin, setRoundRobin] = useState<boolean>(false);
+  const [groupsCount, setGroupsCount] = useState<number>(2);
 
   // Scoring Rules
-  const [scoringPreset, setScoringPreset] = useState<ScoringPreset>(() =>
-    normalizeScoringConfig(tournament.scoringPreset)
-  );
+  const [scoringPreset, setScoringPreset] = useState<ScoringPreset>(() => ({ ...DEFAULT_FREE_FIRE_SCORING }));
   const [activePresetTemplateId, setActivePresetTemplateId] = useState<string>('current');
 
-  React.useEffect(() => {
-    if (tournament.scoringPreset) {
-      setScoringPreset(normalizeScoringConfig(tournament.scoringPreset));
+  const populateFromData = useCallback((data: Tournament) => {
+    setTitle(data.title || '');
+    setOrganizer(data.organizer || '');
+    setDescription(data.description || '');
+    setStatus(data.status || 'Upcoming');
+    setTournamentType(data.tournamentType || 'Battle Royale');
+    setGame(data.game || 'Free Fire');
+
+    setLogoUrl(data.logoUrl);
+    setOrganizerLogoUrl(data.organizerLogoUrl);
+    setBannerUrl(data.bannerUrl);
+
+    setTeamCount(data.structure?.teamCount || data.teams?.length || 12);
+    setMatchCount(data.structure?.matchCount || 6);
+    setRoundRobin(data.structure?.roundRobin || false);
+    setGroupsCount(data.structure?.groupsCount || 2);
+
+    if (data.scoringPreset) {
+      setScoringPreset(normalizeScoringConfig(data.scoringPreset));
     }
-  }, [tournament.id, tournament.scoringPreset]);
+  }, []);
+
+  const loadAuthoritativeTournament = useCallback(async () => {
+    if (!targetId) {
+      setLoadError('Tournament ID is required to load configuration.');
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadError(null);
+
+    try {
+      const res = await tournamentsApi.getById(targetId);
+      if (res.success && res.data) {
+        populateFromData(res.data);
+        setIsLoading(false);
+      } else {
+        const errMsg = res.error === 'TOURNAMENT_NOT_FOUND'
+          ? 'Tournament not found'
+          : (res.error || 'Failed to load tournament');
+        setLoadError(errMsg);
+        setIsLoading(false);
+      }
+    } catch (err: any) {
+      if (tournament && tournament.title) {
+        populateFromData(tournament);
+        setIsLoading(false);
+      } else {
+        setLoadError(err?.message || 'Failed to load tournament');
+        setIsLoading(false);
+      }
+    }
+  }, [targetId, tournament, populateFromData]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadAuthoritativeTournament();
+    }
+  }, [isOpen, loadAuthoritativeTournament]);
 
   const placementRules: PlacementRule[] = Array.isArray(scoringPreset?.placementTable) && scoringPreset.placementTable.length > 0
     ? scoringPreset.placementTable
@@ -152,11 +218,12 @@ export const EditTournamentModal: React.FC<EditTournamentModalProps> = ({
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || !targetId) return;
 
-    onSave(tournament.id, {
+    setIsSaving(true);
+    const updatedPayload: Partial<Tournament> = {
       title: title.trim(),
       organizer: organizer.trim() || 'PointX Arena',
       description: description.trim(),
@@ -175,9 +242,37 @@ export const EditTournamentModal: React.FC<EditTournamentModalProps> = ({
       },
       scoringPreset,
       updatedAt: new Date().toISOString()
-    });
+    };
 
-    onClose();
+    try {
+      const res = await tournamentsApi.update(targetId, updatedPayload);
+      if (res.success && res.data) {
+        useTournamentStore.getState().updateTournament(targetId, res.data);
+        if (onSave) {
+          onSave(targetId, res.data);
+        }
+        showToast({
+          type: 'success',
+          title: 'Tournament Updated',
+          message: 'Tournament details and branding have been saved.'
+        });
+        onClose();
+      } else {
+        showToast({
+          type: 'error',
+          title: 'Update Failed',
+          message: res.error || 'Failed to save tournament changes.'
+        });
+      }
+    } catch (err: any) {
+      showToast({
+        type: 'error',
+        title: 'Network Error',
+        message: err?.message || 'Could not connect to server to update tournament.'
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -188,7 +283,35 @@ export const EditTournamentModal: React.FC<EditTournamentModalProps> = ({
       description="Modify tournament details, branding, structure, and official scoring rules."
       maxWidth="2xl"
     >
-      <form onSubmit={handleSubmit} className="space-y-4 font-sans">
+      {isLoading ? (
+        <div className="py-16 flex flex-col items-center justify-center space-y-3 text-center">
+          <Loader2 className="h-10 w-10 animate-spin text-[var(--accent-primary)]" />
+          <p className="text-sm font-medium text-[var(--text-secondary)] font-mono">
+            Loading tournament data...
+          </p>
+        </div>
+      ) : loadError ? (
+        <div className="py-12 flex flex-col items-center justify-center space-y-3 text-center">
+          <div className="p-3 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            <AlertTriangle className="h-8 w-8" />
+          </div>
+          <h3 className="text-base font-bold text-[var(--text-primary)]">
+            {loadError}
+          </h3>
+          <p className="text-xs text-[var(--text-muted)] max-w-sm">
+            Could not fetch existing tournament data from server. Please verify your connection or try again.
+          </p>
+          <div className="flex items-center gap-3 mt-4">
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Close
+            </Button>
+            <Button variant="primary" size="sm" onClick={loadAuthoritativeTournament}>
+              Retry
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4 font-sans">
         
         {/* Navigation Tabs */}
         <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] overflow-x-auto no-scrollbar">
@@ -508,7 +631,7 @@ export const EditTournamentModal: React.FC<EditTournamentModalProps> = ({
 
         {/* Modal Actions Footer */}
         <div className="flex items-center justify-between gap-3 pt-3 border-t border-[var(--border-subtle)]">
-          <Button variant="outline" size="sm" onClick={onClose}>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>
 
@@ -516,12 +639,14 @@ export const EditTournamentModal: React.FC<EditTournamentModalProps> = ({
             variant="primary"
             size="md"
             type="submit"
-            leftIcon={<Save className="h-4 w-4" />}
+            disabled={isSaving}
+            leftIcon={isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           >
-            Save All Changes
+            {isSaving ? 'Saving Changes...' : 'Save All Changes'}
           </Button>
         </div>
       </form>
+      )}
     </Modal>
   );
 };

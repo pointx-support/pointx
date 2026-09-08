@@ -2,16 +2,45 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth';
 import {
   getTemplates,
+  getTemplateById,
   createTemplate,
   updateTemplate,
   deleteTemplate,
+  getOrganizationsForTemplatePicker,
 } from '../services/templateService';
 import { updateAuthoritativeState } from '../services/realtimeSync';
 
 export async function listTemplates(req: Request, res: Response, next: NextFunction) {
   try {
-    const templates = await getTemplates((req as any).user?._id?.toString());
+    const user = (req as AuthenticatedRequest).user;
+    const templates = await getTemplates(user);
     return res.status(200).json({ success: true, data: templates.map((t) => t.toJSON()) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getSingleTemplate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = req.params.id as string;
+    const user = (req as AuthenticatedRequest).user;
+    const template = await getTemplateById(id, user);
+    if (!template) {
+      return res.status(404).json({ success: false, error: 'Template not found.' });
+    }
+    return res.status(200).json({ success: true, data: template.toJSON() });
+  } catch (error: any) {
+    if (error.statusCode === 403) {
+      return res.status(403).json({ success: false, error: error.message });
+    }
+    next(error);
+  }
+}
+
+export async function listOrganizationsForTemplatePicker(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const orgs = await getOrganizationsForTemplatePicker();
+    return res.status(200).json({ success: true, data: orgs });
   } catch (error) {
     next(error);
   }
@@ -20,7 +49,7 @@ export async function listTemplates(req: Request, res: Response, next: NextFunct
 export async function createNewTemplate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
-    const template = await createTemplate(req.user._id.toString(), req.body);
+    const template = await createTemplate(req.user._id.toString(), req.body, req.user.role);
     return res.status(201).json({ success: true, data: template.toJSON() });
   } catch (error) {
     next(error);

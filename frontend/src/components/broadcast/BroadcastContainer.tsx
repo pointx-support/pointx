@@ -16,7 +16,7 @@ import { BroadcastStandings } from './BroadcastStandings';
 import { BroadcastMatchResult } from './BroadcastMatchResult';
 import { BroadcastTopFraggers } from './BroadcastTopFraggers';
 import { BroadcastLowerThird } from './BroadcastLowerThird';
-import { BroadcastFreeFireLiveOverlay } from './BroadcastFreeFireLiveOverlay';
+import { ObsLiveOverlay } from './ObsLiveOverlay';
 import { BroadcastGraphicPoster } from './BroadcastGraphicPoster';
 import { Activity, Wifi } from 'lucide-react';
 
@@ -327,15 +327,12 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
         </div>
       )}
 
-      {/* Flagship Free Fire Live Squads Overlay (Supports internal horizontal slide) */}
+      {/* Flagship Free Fire Live Squads Overlay (Authoritative Broadcast Session Engine) */}
       {(currentLayout === 'live-squads' || currentLayout === 'pro' || currentLayout === 'live') && (
-        <BroadcastFreeFireLiveOverlay
-          subscriptionId={effectiveTourId}
-          tournament={tournament}
-          standings={standings}
+        <ObsLiveOverlay
+          tournamentId={effectiveTourId}
+          matchId={targetMatchNumber ? String(targetMatchNumber) : undefined}
           isTransparent={resolvedTransparent}
-          isOverlayVisible={isOverlayVisible}
-          activeMatchNumber={targetMatchNumber}
         />
       )}
 

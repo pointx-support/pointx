@@ -23,6 +23,7 @@ import contactRoutes from './routes/contactRoutes';
 import healthRoutes from './routes/healthRoutes';
 import syncRoutes from './routes/syncRoutes';
 import platformRoutes from './routes/platformRoutes';
+import broadcastSessionRoutes from './routes/broadcastSessionRoutes';
 import { enforceMaintenanceMode } from './middleware/maintenance';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -138,6 +139,7 @@ export function createApp(): Application {
   app.use('/api/admin', adminRoutes);
   app.use('/api/contact', contactRoutes);
   app.use('/api/sync', syncRoutes);
+  app.use('/api/broadcast/sessions', broadcastSessionRoutes);
   app.use('/api', healthRoutes);
   app.use('/health', healthRoutes); // Root alias for health checks
 

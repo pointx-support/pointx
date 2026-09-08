@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTemplateStore } from '../../../store/templateStore';
+import { templatesApi } from '../../../services/api';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
@@ -19,7 +20,13 @@ import {
   UserCheck,
   Image as ImageIcon,
   ListOrdered,
-  Award
+  Award,
+  Shield,
+  Search,
+  Check,
+  Trash2,
+  Building,
+  Users
 } from 'lucide-react';
 import type { GraphicTemplateCategory } from '../../../types/customTemplate';
 
@@ -43,18 +50,46 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
     publishTemplate,
     unpublishTemplate,
     setActiveTemplateId,
-    createCustomTemplate
+    createCustomTemplate,
+    deleteTemplate
   } = useTemplateStore();
   const { showToast } = useToast();
 
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<'all' | GraphicTemplateCategory>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Registered Organizations for Access Control Picker
+  const [organizations, setOrganizations] = useState<Array<{ id: string; name: string; email: string; logoUrl?: string }>>([]);
+  const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
+  const [orgSearchQuery, setOrgSearchQuery] = useState('');
 
   // New Template Form State
   const [templateName, setTemplateName] = useState('');
+  const [description, setDescription] = useState('');
   const [targetCategory, setTargetCategory] = useState<GraphicTemplateCategory>('standings');
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '4:5'>('4:5');
   const [imageUrl, setImageUrl] = useState('');
+  const [visibility, setVisibility] = useState<'GLOBAL' | 'ORGANIZATION_RESTRICTED'>('GLOBAL');
+  const [allowedOrganizationIds, setAllowedOrganizationIds] = useState<string[]>([]);
+
+  // Fetch organizations on mount
+  useEffect(() => {
+    async function loadOrgs() {
+      setIsLoadingOrgs(true);
+      try {
+        const res = await templatesApi.getOrganizations();
+        if (res.success && Array.isArray(res.data)) {
+          setOrganizations(res.data);
+        }
+      } catch (err) {
+        console.warn('Failed to load organizations for template picker:', err);
+      } finally {
+        setIsLoadingOrgs(false);
+      }
+    }
+    loadOrgs();
+  }, []);
 
   const handleTogglePublish = (id: string, currentlyPublished: boolean) => {
     if (currentlyPublished) {
@@ -62,7 +97,7 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
       showToast({ type: 'info', title: 'Template Unpublished', message: 'Hidden from organizer workspace.' });
     } else {
       publishTemplate(id);
-      showToast({ type: 'success', title: 'Template Published', message: 'Now live for all organizers.' });
+      showToast({ type: 'success', title: 'Template Published', message: 'Now live for permitted organizers.' });
     }
   };
 
@@ -71,7 +106,43 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
     onOpenTemplateStudio();
   };
 
-  const handleCreateTemplate = (e: React.FormEvent) => {
+  const handleDeleteTemplate = async (id: string, name: string) => {
+    if (confirm(`Are you sure you want to permanently delete template "${name}"?`)) {
+      try {
+        await templatesApi.delete(id);
+        deleteTemplate(id);
+        showToast({ type: 'success', title: 'Template Deleted', message: `Deleted "${name}".` });
+      } catch (err: any) {
+        showToast({ type: 'error', title: 'Delete Failed', message: err?.message || 'Could not delete template.' });
+      }
+    }
+  };
+
+  const handleToggleOrgSelection = (orgId: string) => {
+    setAllowedOrganizationIds((prev) =>
+      prev.includes(orgId) ? prev.filter((id) => id !== orgId) : [...prev, orgId]
+    );
+  };
+
+  const filteredOrgs = useMemo(() => {
+    if (!orgSearchQuery.trim()) return organizations;
+    const q = orgSearchQuery.toLowerCase();
+    return organizations.filter(
+      (o) => o.name.toLowerCase().includes(q) || o.email.toLowerCase().includes(q)
+    );
+  }, [organizations, orgSearchQuery]);
+
+  const handleSelectAllFilteredOrgs = () => {
+    const idsToAdd = filteredOrgs.map((o) => o.id);
+    setAllowedOrganizationIds((prev) => Array.from(new Set([...prev, ...idsToAdd])));
+  };
+
+  const handleClearFilteredOrgs = () => {
+    const idsToRemove = new Set(filteredOrgs.map((o) => o.id));
+    setAllowedOrganizationIds((prev) => prev.filter((id) => !idsToRemove.has(id)));
+  };
+
+  const handleCreateTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!templateName.trim()) {
       showToast({ type: 'error', title: 'Name Required', message: 'Please enter a template name.' });
@@ -81,66 +152,101 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
       showToast({ type: 'error', title: 'Artwork Required', message: 'Please upload or provide background artwork.' });
       return;
     }
+    if (visibility === 'ORGANIZATION_RESTRICTED' && allowedOrganizationIds.length === 0) {
+      showToast({
+        type: 'error',
+        title: 'Selection Required',
+        message: 'Please select at least one organization permitted to use this template.'
+      });
+      return;
+    }
 
-    const newId = createCustomTemplate(
-      templateName.trim(),
-      imageUrl,
-      {
+    setIsSaving(true);
+    const baseAlignment = {
+      aspectRatio,
+      width: aspectRatio === '4:5' ? 1080 : 1920,
+      height: aspectRatio === '4:5' ? 1350 : 1080,
+      baseY: aspectRatio === '4:5' ? 680 : 540,
+      rowGap: aspectRatio === '4:5' ? 44 : 84,
+      layoutMode: 'dual-column' as const,
+      fontFamily: 'Rajdhani',
+      rankFontSize: 28,
+      teamFontSize: 22,
+      statFontSize: 24,
+      totalFontSize: 26,
+      teamFontWeight: '800',
+      rankColor: '#ffffff',
+      teamColor: '#ffffff',
+      statColor: '#ffffff',
+      totalColor: '#f59e0b',
+      leftRankX: 132,
+      leftTeamX: 206,
+      leftMatchX: 530,
+      leftBooyahX: 612,
+      leftKillsX: 695,
+      leftPlaceX: 778,
+      leftTotalX: 860,
+      rightRankX: 1048,
+      rightTeamX: 1122,
+      rightMatchX: 1446,
+      rightBooyahX: 1528,
+      rightKillsX: 1610,
+      rightPlaceX: 1692,
+      rightTotalX: 1775,
+      showSubtitleBanner: false,
+      subtitleX: 540,
+      subtitleY: 200,
+      subtitleWidth: 400,
+      subtitleHeight: 50,
+      subtitleFontSize: 28,
+      subtitleBgColor: '#051d38',
+      subtitleBorderColor: '#f59e0b',
+      subtitleTextColor: '#ffffff'
+    };
+
+    try {
+      const res = await templatesApi.create({
+        name: templateName.trim(),
+        description: description.trim() || 'Custom esports template calibrated by Admin.',
+        imageUrl,
         aspectRatio,
-        width: aspectRatio === '4:5' ? 1080 : 1920,
-        height: aspectRatio === '4:5' ? 1350 : 1080,
-        baseY: aspectRatio === '4:5' ? 680 : 540,
-        rowGap: aspectRatio === '4:5' ? 44 : 84,
-        layoutMode: 'dual-column',
-        fontFamily: 'Rajdhani',
-        rankFontSize: 28,
-        teamFontSize: 22,
-        statFontSize: 24,
-        totalFontSize: 26,
-        teamFontWeight: '800',
-        rankColor: '#ffffff',
-        teamColor: '#ffffff',
-        statColor: '#ffffff',
-        totalColor: '#f59e0b',
-        leftRankX: 132,
-        leftTeamX: 206,
-        leftMatchX: 530,
-        leftBooyahX: 612,
-        leftKillsX: 695,
-        leftPlaceX: 778,
-        leftTotalX: 860,
-        rightRankX: 1048,
-        rightTeamX: 1122,
-        rightMatchX: 1446,
-        rightBooyahX: 1528,
-        rightKillsX: 1610,
-        rightPlaceX: 1692,
-        rightTotalX: 1775,
-        showSubtitleBanner: false,
-        subtitleX: 540,
-        subtitleY: 200,
-        subtitleWidth: 400,
-        subtitleHeight: 50,
-        subtitleFontSize: 28,
-        subtitleBgColor: '#051d38',
-        subtitleBorderColor: '#f59e0b',
-        subtitleTextColor: '#ffffff'
-      },
-      targetCategory
-    );
+        alignment: baseAlignment,
+        category: targetCategory,
+        visibility,
+        allowedOrganizationIds: visibility === 'ORGANIZATION_RESTRICTED' ? allowedOrganizationIds : [],
+        isPublished: true,
+      });
 
-    setIsAddModalOpen(false);
-    setTemplateName('');
-    setImageUrl('');
+      const newId = res.success && res.data ? res.data.id : createCustomTemplate(
+        templateName.trim(),
+        imageUrl,
+        baseAlignment,
+        targetCategory
+      );
 
-    showToast({
-      type: 'success',
-      title: 'Template Added',
-      message: `Created template for ${TEMPLATE_CATEGORIES.find((c) => c.id === targetCategory)?.label || targetCategory}.`
-    });
+      setIsAddModalOpen(false);
+      setTemplateName('');
+      setDescription('');
+      setImageUrl('');
+      setVisibility('GLOBAL');
+      setAllowedOrganizationIds([]);
 
-    // Automatically focus the new template
-    handleOpenStudio(newId);
+      showToast({
+        type: 'success',
+        title: 'Template Created',
+        message: `Created ${visibility === 'ORGANIZATION_RESTRICTED' ? 'Private' : 'Global'} template.`
+      });
+
+      handleOpenStudio(newId);
+    } catch (err: any) {
+      showToast({
+        type: 'error',
+        title: 'Creation Failed',
+        message: err?.message || 'Could not create template.'
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const filteredTemplates = templates.filter((t) => {
@@ -156,10 +262,10 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
         <div>
           <h2 className="text-xl font-extrabold text-[var(--text-primary)] font-display tracking-tight flex items-center gap-2">
             <Palette className="h-5 w-5 text-[#7D4047] dark:text-[#E8C4C8]" />
-            Template Ecosystem & Governance
+            Template Ecosystem & Organization Governance
           </h2>
           <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-            Manage templates across Point Tables, Warheads, MVP, Team Posters, Slots List, and Certificates.
+            Deploy global or organization-restricted templates with strict server-side access control.
           </p>
         </div>
 
@@ -221,6 +327,7 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
         {filteredTemplates.map((t) => {
           const isPortrait = t.aspectRatio === '4:5';
           const categoryMeta = TEMPLATE_CATEGORIES.find((c) => c.id === (t.category || 'standings'));
+          const isRestricted = t.visibility === 'ORGANIZATION_RESTRICTED';
 
           return (
             <div
@@ -244,14 +351,24 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
                       {categoryMeta.label}
                     </span>
                   )}
-                  {t.isBuiltIn && (
+                  {t.isBuiltIn ? (
                     <span className="px-2 py-0.5 rounded-full bg-[#7D4047]/90 text-[10px] font-mono font-bold text-white uppercase backdrop-blur-xs">
                       Official
+                    </span>
+                  ) : isRestricted ? (
+                    <span className="px-2 py-0.5 rounded-full bg-purple-600/90 text-[10px] font-mono font-bold text-white uppercase backdrop-blur-xs flex items-center gap-1">
+                      <Shield className="h-3 w-3" />
+                      Restricted ({t.allowedOrganizationIds?.length || 0})
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full bg-blue-600/90 text-[10px] font-mono font-bold text-white uppercase backdrop-blur-xs flex items-center gap-1">
+                      <Users className="h-3 w-3" />
+                      Global
                     </span>
                   )}
                 </div>
 
-                <div className="absolute top-3 right-3">
+                <div className="absolute top-3 right-3 flex items-center gap-1.5">
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
                     t.isPublished
                       ? 'bg-emerald-500/90 text-white'
@@ -274,7 +391,7 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
                 </div>
 
                 <div className="flex items-center justify-between text-xs font-mono text-[var(--text-secondary)] pt-2 border-t border-[var(--border-subtle)]">
-                  <span>Font: <strong className="text-[var(--text-primary)]">{t.alignment.fontFamily}</strong></span>
+                  <span>Font: <strong className="text-[var(--text-primary)]">{t.alignment?.fontFamily || 'Rajdhani'}</strong></span>
                   <span>Section: <strong className="text-[var(--text-primary)]">{categoryMeta?.label || 'Point Tables'}</strong></span>
                 </div>
 
@@ -298,6 +415,17 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
                   >
                     Calibrate
                   </Button>
+
+                  {!t.isBuiltIn && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTemplate(t.id, t.name)}
+                      className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                      title="Delete Template"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -310,28 +438,44 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
         <Modal
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
-          title="Add New Template to Studio"
-          description="Select the section category, upload artwork, and deploy for organizers."
-          maxWidth="md"
+          title="Add Custom Template to Studio"
+          description="Configure template metadata, artwork, and organization access governance."
+          maxWidth="lg"
         >
           <form onSubmit={handleCreateTemplate} className="space-y-4 font-sans text-xs sm:text-sm">
             {/* Target Section Selection */}
-            <div>
-              <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
-                Target Section Category *
-              </label>
-              <select
-                value={targetCategory}
-                onChange={(e) => setTargetCategory(e.target.value as GraphicTemplateCategory)}
-                className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] font-bold text-xs text-[var(--text-primary)] cursor-pointer focus:border-[var(--accent-primary)] focus:outline-none"
-              >
-                <option value="standings">🏆 Point Tables (Tournament Standings)</option>
-                <option value="warheads">🔥 Warheads / Kill Leader</option>
-                <option value="fraggers">👑 Top Fraggers / MVP</option>
-                <option value="team-poster">🖼️ Team Poster (Squad Lineup)</option>
-                <option value="slots-list">📋 Slots List (12-Team Schedule)</option>
-                <option value="certificate">🎖️ Victory Certificate (Champion Diploma)</option>
-              </select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
+                  Target Section Category *
+                </label>
+                <select
+                  value={targetCategory}
+                  onChange={(e) => setTargetCategory(e.target.value as GraphicTemplateCategory)}
+                  className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] font-bold text-xs text-[var(--text-primary)] cursor-pointer focus:border-[var(--accent-primary)] focus:outline-none"
+                >
+                  <option value="standings">🏆 Point Tables (Tournament Standings)</option>
+                  <option value="warheads">🔥 Warheads / Kill Leader</option>
+                  <option value="fraggers">👑 Top Fraggers / MVP</option>
+                  <option value="team-poster">🖼️ Team Poster (Squad Lineup)</option>
+                  <option value="slots-list">📋 Slots List (12-Team Schedule)</option>
+                  <option value="certificate">🎖️ Victory Certificate (Champion Diploma)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
+                  Aspect Ratio *
+                </label>
+                <select
+                  value={aspectRatio}
+                  onChange={(e) => setAspectRatio(e.target.value as '16:9' | '4:5')}
+                  className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] font-bold text-xs text-[var(--text-primary)] cursor-pointer"
+                >
+                  <option value="4:5">4:5 Portrait Poster (1080 × 1350 — Social Media)</option>
+                  <option value="16:9">16:9 Widescreen (1920 × 1080 — Broadcast Stream)</option>
+                </select>
+              </div>
             </div>
 
             <Input
@@ -342,19 +486,12 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
               required
             />
 
-            <div>
-              <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
-                Aspect Ratio *
-              </label>
-              <select
-                value={aspectRatio}
-                onChange={(e) => setAspectRatio(e.target.value as '16:9' | '4:5')}
-                className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] font-bold text-xs text-[var(--text-primary)] cursor-pointer"
-              >
-                <option value="4:5">4:5 Portrait Poster (1080 × 1350 — Social Media)</option>
-                <option value="16:9">16:9 Widescreen (1920 × 1080 — Broadcast Stream)</option>
-              </select>
-            </div>
+            <Input
+              label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g. Exclusive graphic template calibrated for Official Free Fire League."
+            />
 
             <ImageUpload
               label="Template Background Artwork *"
@@ -363,12 +500,156 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
               helperText="Upload official 16:9 or 4:5 poster template background (PNG, JPG, WebP)."
             />
 
+            {/* ORGANIZATION ACCESS GOVERNANCE (PART 20 & 21) */}
+            <div className="p-3.5 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-[var(--text-primary)] font-mono uppercase tracking-wider mb-1">
+                  Access & Visibility Governance *
+                </label>
+                <p className="text-[11px] text-[var(--text-muted)] mb-2">
+                  Control which organizations can discover and render this graphic template.
+                </p>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVisibility('GLOBAL')}
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                      visibility === 'GLOBAL'
+                        ? 'bg-[var(--accent-primary)]/15 border-[var(--accent-primary)] text-[var(--text-primary)] font-bold'
+                        : 'bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold text-xs">
+                      <Users className="h-4 w-4 text-[var(--accent-primary)]" />
+                      All Organizations
+                    </div>
+                    <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                      Available to all registered organizers
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setVisibility('ORGANIZATION_RESTRICTED')}
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                      visibility === 'ORGANIZATION_RESTRICTED'
+                        ? 'bg-purple-500/15 border-purple-500 text-[var(--text-primary)] font-bold'
+                        : 'bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold text-xs text-purple-400">
+                      <Building className="h-4 w-4 text-purple-400" />
+                      Specific Organizations
+                    </div>
+                    <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                      Private custom template for selected orgs
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* SEARCHABLE ORGANIZATION PICKER FOR 500+ ORGANIZATIONS (PART 23) */}
+              {visibility === 'ORGANIZATION_RESTRICTED' && (
+                <div className="pt-2 border-t border-[var(--border-subtle)] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[var(--text-primary)] font-mono">
+                      Select Allowed Organizations ({allowedOrganizationIds.length} selected)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllFilteredOrgs}
+                        className="text-[11px] font-bold text-[var(--accent-primary)] hover:underline cursor-pointer"
+                      >
+                        Select Filtered ({filteredOrgs.length})
+                      </button>
+                      <span className="text-[var(--text-muted)]">|</span>
+                      <button
+                        type="button"
+                        onClick={handleClearFilteredOrgs}
+                        className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                      >
+                        Clear Filtered
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                    <input
+                      type="text"
+                      value={orgSearchQuery}
+                      onChange={(e) => setOrgSearchQuery(e.target.value)}
+                      placeholder="Search organizations by name or email..."
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                    />
+                  </div>
+
+                  {/* Scrollable Organization Selection List */}
+                  <div className="max-h-48 overflow-y-auto space-y-1 pr-1 custom-scrollbar border border-[var(--border-subtle)] rounded-xl p-1 bg-[var(--bg-surface)]">
+                    {isLoadingOrgs ? (
+                      <div className="p-4 text-center text-xs text-[var(--text-muted)]">
+                        Loading organizations...
+                      </div>
+                    ) : filteredOrgs.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-[var(--text-muted)]">
+                        No organizations match "{orgSearchQuery}".
+                      </div>
+                    ) : (
+                      filteredOrgs.map((org) => {
+                        const isSelected = allowedOrganizationIds.includes(org.id);
+                        return (
+                          <div
+                            key={org.id}
+                            onClick={() => handleToggleOrgSelection(org.id)}
+                            className={`flex items-center justify-between p-2 rounded-lg text-xs cursor-pointer transition-colors ${
+                              isSelected
+                                ? 'bg-purple-500/20 text-white font-bold'
+                                : 'hover:bg-[var(--bg-surface-hover)] text-[var(--text-secondary)]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}} // Handled by parent div
+                                className="rounded accent-purple-500 cursor-pointer"
+                              />
+                              <span className="truncate">{org.name}</span>
+                              <span className="text-[10px] text-[var(--text-muted)] font-mono truncate">
+                                ({org.email})
+                              </span>
+                            </div>
+                            {isSelected && <Check className="h-3.5 w-3.5 text-purple-400 shrink-0" />}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center justify-end gap-2">
-              <Button variant="outline" size="sm" type="button" onClick={() => setIsAddModalOpen(false)}>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                disabled={isSaving}
+              >
                 Cancel
               </Button>
-              <Button variant="primary" size="sm" type="submit" leftIcon={<Plus className="h-4 w-4" />}>
-                Create & Calibrate
+              <Button
+                variant="primary"
+                size="sm"
+                type="submit"
+                disabled={isSaving}
+                leftIcon={<Plus className="h-4 w-4" />}
+              >
+                {isSaving ? 'Creating Template...' : 'Create & Calibrate'}
               </Button>
             </div>
           </form>
@@ -377,4 +658,3 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
     </div>
   );
 };
-

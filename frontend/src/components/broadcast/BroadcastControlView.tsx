@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTournamentStore } from '../../store/tournamentStore';
-import { calculateTournamentStandings } from '../../engine/standingsEngine';
-import { BroadcastFreeFireLiveOverlay } from './BroadcastFreeFireLiveOverlay';
+import { ObsLiveOverlay } from './ObsLiveOverlay';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { useToast } from '../ui/Toast';
@@ -67,8 +66,6 @@ export const BroadcastControlView: React.FC = () => {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
   const overlayUrl = `${origin}/?mode=broadcast&tournamentId=${currentTournament.id}&layout=${overlayType}&token=${token}`;
   const remoteUrl = `${origin}/?mode=remote&tournamentId=${currentTournament.id}&token=${token}`;
-
-  const standings = calculateTournamentStandings(currentTournament);
 
   useEffect(() => {
     if (currentTournament.id) {
@@ -598,9 +595,8 @@ export const BroadcastControlView: React.FC = () => {
           </div>
 
           <div className="p-4 rounded-2xl bg-[#0d0a17] border border-[#2b164f] flex justify-center items-center overflow-x-auto">
-            <BroadcastFreeFireLiveOverlay
-              tournament={currentTournament}
-              standings={standings}
+            <ObsLiveOverlay
+              tournamentId={currentTournament.id}
               isTransparent={false}
             />
           </div>

@@ -124,11 +124,16 @@ export interface CustomGraphicsTemplate {
   name: string;
   description: string;
   category?: GraphicTemplateCategory;
+  templateType?: string;
   imageUrl: string;
   aspectRatio: '16:9' | '4:5' | '1:1' | '9:16';
   alignment: TemplateAlignmentConfig;
   isBuiltIn: boolean;
   isPublished: boolean;
+  visibility?: 'GLOBAL' | 'ORGANIZATION_RESTRICTED';
+  allowedOrganizationIds?: string[];
+  active?: boolean;
+  version?: number;
   createdAt: string;
   updatedAt: string;
 }

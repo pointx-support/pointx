@@ -633,6 +633,15 @@ export const GraphicsStudioView: React.FC = () => {
                         <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[8px] font-mono font-bold text-white uppercase backdrop-blur-xs">
                           {t.aspectRatio}
                         </span>
+                        {t.visibility === 'ORGANIZATION_RESTRICTED' ? (
+                          <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-purple-600/90 text-[8px] font-mono font-bold text-white uppercase backdrop-blur-xs shadow-xs">
+                            CUSTOM TEMPLATE
+                          </span>
+                        ) : !t.isBuiltIn ? (
+                          <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-blue-600/90 text-[8px] font-mono font-bold text-white uppercase backdrop-blur-xs shadow-xs">
+                            ORGANIZATION TEMPLATE
+                          </span>
+                        ) : null}
                       </div>
 
                       <div className="flex items-center justify-between gap-1">

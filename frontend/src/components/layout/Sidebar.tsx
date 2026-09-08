@@ -972,10 +972,11 @@ export const Sidebar: FC<SidebarProps> = ({
         </div>
       </Modal>
       {/* Edit Tournament Modal */}
-      {currentTournament && (
+      {showEditModal && currentTournament && (
         <EditTournamentModal
           isOpen={showEditModal}
           onClose={() => setShowEditModal(false)}
+          tournamentId={currentTournament.id || (currentTournament as any)._id || (currentTournament as any).customId}
           tournament={currentTournament}
           onSave={(tournamentId, updatedFields) => {
             updateTournament(tournamentId, updatedFields);

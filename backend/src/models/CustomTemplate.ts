@@ -11,6 +11,11 @@ export interface ICustomTemplate extends Document {
   alignment: Record<string, any>;
   isBuiltIn: boolean;
   isPublished: boolean;
+  visibility: 'GLOBAL' | 'ORGANIZATION_RESTRICTED';
+  allowedOrganizationIds: string[];
+  active: boolean;
+  version: number;
+  templateType: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,6 +36,20 @@ const CustomTemplateSchema = new Schema<ICustomTemplate>(
     alignment: { type: Schema.Types.Mixed, required: true },
     isBuiltIn: { type: Boolean, default: false, index: true },
     isPublished: { type: Boolean, default: true, index: true },
+    visibility: {
+      type: String,
+      enum: ['GLOBAL', 'ORGANIZATION_RESTRICTED'],
+      default: 'GLOBAL',
+      index: true,
+    },
+    allowedOrganizationIds: {
+      type: [String],
+      default: [],
+      index: true,
+    },
+    active: { type: Boolean, default: true, index: true },
+    version: { type: Number, default: 1 },
+    templateType: { type: String, default: 'standings', maxlength: 50 },
   },
   {
     timestamps: true,

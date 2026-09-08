@@ -6,7 +6,7 @@ import { BottomNav } from './components/layout/BottomNav';
 import { CommandCenter } from './components/dashboard/CommandCenter';
 import { TournamentWorkspace } from './components/workspace/TournamentWorkspace';
 import { BroadcastContainer } from './components/broadcast/BroadcastContainer';
-import { BroadcastRemoteControl } from './components/broadcast/BroadcastRemoteControl';
+import { NewBroadcastRemote } from './components/broadcast/NewBroadcastRemote';
 import { LoginView } from './components/auth/LoginView';
 import { OnboardingModal } from './components/onboarding/OnboardingModal';
 import { HomePage } from './components/home/HomePage';
@@ -328,7 +328,7 @@ export function App() {
   if (isRemoteMode) {
     return (
       <ToastProvider>
-        <BroadcastRemoteControl />
+        <NewBroadcastRemote />
       </ToastProvider>
     );
   }

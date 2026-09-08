@@ -248,6 +248,10 @@ export const teamsApi = {
 
 export const templatesApi = {
   getAll: () => request<CustomGraphicsTemplate[]>('/templates', { method: 'GET' }),
+  getOrganizations: () =>
+    request<Array<{ id: string; name: string; email: string; logoUrl?: string }>>('/templates/organizations', {
+      method: 'GET',
+    }),
   create: (template: any) =>
     request<CustomGraphicsTemplate>('/templates', {
       method: 'POST',
@@ -401,3 +405,31 @@ export const platformApi = {
       estimatedReturnTime?: string | null;
     }>('/platform/status', { method: 'GET' }),
 };
+
+// ----------------- BROADCAST SESSION API -----------------
+
+export const broadcastSessionApi = {
+  createOrGetSession: (tournamentId: string, matchId?: string) =>
+    request<{ sessionId: string; session: any; state: any }>('/broadcast/sessions', {
+      method: 'POST',
+      body: JSON.stringify({ tournamentId, matchId }),
+    }),
+  getAuthoritativeState: (sessionId: string) =>
+    request<{ state: any }>(`/broadcast/sessions/${sessionId}`, {
+      method: 'GET',
+    }),
+  sendCommand: (
+    sessionId: string,
+    command: {
+      commandType: string;
+      targetTeamId?: string;
+      payload?: any;
+      commandId?: string;
+    }
+  ) =>
+    request<{ revision: number; state: any }>(`/broadcast/sessions/${sessionId}/commands`, {
+      method: 'POST',
+      body: JSON.stringify(command),
+    }),
+};
+

@@ -700,6 +700,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
       {/* Edit Modal */}
       {editingTournament && (
         <EditTournamentModal
+          tournamentId={editingTournament.id || (editingTournament as any)._id || (editingTournament as any).customId}
           tournament={editingTournament}
           isOpen={true}
           onClose={() => setEditingTournament(null)}

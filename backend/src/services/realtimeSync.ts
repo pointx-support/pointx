@@ -92,6 +92,24 @@ export function isServerMatchDeleted(matchId: string): boolean {
 const roomClients = new Map<string, Set<WebSocket>>();
 const clientMetadata = new WeakMap<WebSocket, ClientMeta>();
 
+// Dedicated session broadcast rooms: sessionId -> Set<WebSocket>
+const broadcastSessionClients = new Map<string, Set<WebSocket>>();
+
+export function broadcastToSession(sessionId: string, event: any): void {
+  const room = broadcastSessionClients.get(sessionId);
+  if (!room || room.size === 0) return;
+  const msg = JSON.stringify(event);
+  for (const client of room) {
+    if (client.readyState === WebSocket.OPEN) {
+      try {
+        client.send(msg);
+      } catch (err) {
+        console.warn(`[BroadcastSession] Failed to send to client in session ${sessionId}:`, err);
+      }
+    }
+  }
+}
+
 // Active Server-Sent Event (SSE) response listeners: tournamentId -> Set<http.ServerResponse>
 const sseListeners = new Map<string, Set<any>>();
 
@@ -662,6 +680,22 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
           return;
         }
 
+        if (parsed.action === 'JOIN_BROADCAST_SESSION' || parsed.type === 'JOIN_BROADCAST_SESSION') {
+          const sessId = parsed.sessionId;
+          if (sessId) {
+            if (!broadcastSessionClients.has(sessId)) {
+              broadcastSessionClients.set(sessId, new Set());
+            }
+            broadcastSessionClients.get(sessId)!.add(ws);
+            ws.send(JSON.stringify({
+              type: 'BROADCAST_SESSION_JOINED',
+              sessionId: sessId,
+              timestamp: Date.now(),
+            }));
+          }
+          return;
+        }
+
         if (parsed.type === 'JOIN_ROOM') {
           const newTourId = parsed.tournamentId || 'default';
           if (meta) {
@@ -821,6 +855,13 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
         const set = roomClients.get(meta.tournamentId)!;
         set.delete(ws);
         if (set.size === 0) roomClients.delete(meta.tournamentId);
+      }
+
+      for (const [sessId, clients] of broadcastSessionClients.entries()) {
+        if (clients.has(ws)) {
+          clients.delete(ws);
+          if (clients.size === 0) broadcastSessionClients.delete(sessId);
+        }
       }
     });
 
