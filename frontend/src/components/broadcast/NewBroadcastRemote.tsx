@@ -91,8 +91,9 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         // Connect real-time WebSocket room
         conn = connectBroadcastSession(activeSessionId, initialData, {
           onState: (newState) => {
-            if (!isCancelled) {
+            if (!isCancelled && newState && (newState.sessionId || newState.tournamentId)) {
               setState(newState);
+              setError(null);
             }
           },
           onStatusChange: (status) => {

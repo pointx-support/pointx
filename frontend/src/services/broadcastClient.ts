@@ -128,11 +128,14 @@ export function connectBroadcastSession(
 
           if (message.type === 'BROADCAST_STATE_UPDATED' && message.sessionId === sessionId) {
             const incomingRev = Number(message.revision);
+            const incomingState = message.state || message.payload || message.data;
 
             if (incomingRev === currentRevision + 1) {
               // Exact next sequential revision: apply cleanly
               currentRevision = incomingRev;
-              callbacks.onState(message.state);
+              if (incomingState) {
+                callbacks.onState(incomingState);
+              }
               updateStatus('LIVE');
             } else if (incomingRev > currentRevision + 1) {
               // Gap detected! Client missed one or more updates -> pull full authoritative snapshot
@@ -141,7 +144,10 @@ export function connectBroadcastSession(
               );
               syncAuthoritativeSnapshot();
             } else {
-              // Stale or duplicated revision (incomingRev <= currentRevision) -> ignore
+              // Stale or duplicate revision (incomingRev <= currentRevision)
+              if (incomingState) {
+                callbacks.onState(incomingState);
+              }
             }
           }
         } catch (err) {
@@ -192,12 +198,13 @@ export function connectBroadcastSession(
         targetTeamId,
         payload,
       });
-      if (!res.success || !res.state) {
+      const resolvedState = res.state || res.payload || (res.data as any)?.state;
+      if (!res.success || !resolvedState) {
         throw new Error(res.error || `Command ${commandType} failed`);
       }
       currentRevision = res.revision;
-      callbacks.onState(res.state);
-      return { revision: res.revision, state: res.state };
+      callbacks.onState(resolvedState);
+      return { revision: res.revision, state: resolvedState };
     },
     fetchAuthoritativeSnapshot: syncAuthoritativeSnapshot as any,
     getRevision: () => currentRevision,
