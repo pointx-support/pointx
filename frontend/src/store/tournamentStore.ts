@@ -18,7 +18,7 @@ import {
   calculateTopFraggers,
   calculateTournamentSummary
 } from '../engine/standingsEngine';
-import { broadcastTournamentUpdate, subscribeToTournamentLiveUpdates } from '../services/broadcastSync';
+import { broadcastTournamentUpdate, registerDeletedMatch, subscribeToTournamentLiveUpdates } from '../services/broadcastSync';
 import { tournamentsApi, adminApi } from '../services/api';
 
 export interface AppState {
@@ -850,7 +850,7 @@ export const useTournamentStore = create<AppState>((set, get) => ({
           matchId,
           placement: raw.placement,
           kills: raw.kills,
-          booyah: raw.booyah,
+          booyah: raw.booyah !== undefined ? raw.booyah : (raw as any).isBooyah,
           bonusPoints: raw.bonusPoints,
           penaltyPoints: raw.penaltyPoints
         },
@@ -865,7 +865,7 @@ export const useTournamentStore = create<AppState>((set, get) => ({
       const bonus = d ? d.customBonusPoints : Math.floor(Number(raw.bonusPoints) || 0);
       const penalty = d ? d.penaltyPoints : Math.max(0, Math.floor(Number(raw.penaltyPoints) || 0));
       const total = d ? d.totalPoints : Math.max(0, placePts + killPts + bonus - penalty);
-      const isBooyah = d ? d.booyah : Boolean(raw.booyah || (placement === 1 && placement > 0));
+      const isBooyah = d ? d.booyah : Boolean(raw.booyah !== undefined ? raw.booyah : ((raw as any).isBooyah || (placement === 1 && placement > 0)));
 
       return {
         teamId: raw.teamId,
@@ -961,13 +961,18 @@ export const useTournamentStore = create<AppState>((set, get) => ({
   },
 
   deleteMatch: (matchId) => {
+    registerDeletedMatch(matchId);
     const current = get().currentTournament;
-    get().updateTournament(current.id, { matches: current.matches.filter((m) => m.id !== matchId) });
+    const remainingMatches = current.matches.filter((m) => m.id !== matchId);
+    get().updateTournament(current.id, { matches: remainingMatches });
+    tournamentsApi.deleteMatch(current.id, matchId).catch((err) => {
+      console.warn('[TournamentStore] Backend match delete error:', err);
+    });
   },
 
-  // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  // ────────────────────────────────────────────────────────────────────────────────────────────────────
   // STANDINGS & STATISTICAL AGGREGATIONS
-  // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
   getStandings: (options) => {
     const current = get().currentTournament;
@@ -1002,18 +1007,35 @@ if (typeof window !== 'undefined') {
   subscribeToTournamentLiveUpdates('default', (incomingTour) => {
     if (!incomingTour || !incomingTour.id) return;
     useTournamentStore.setState((state) => {
-      const matchIdx = state.tournaments.findIndex((t) => t.id === incomingTour.id);
+      // Guard against resurrecting deleted matches if incoming snapshot is older than local edit
+      const currentTour =
+        state.currentTournament.id === incomingTour.id
+          ? state.currentTournament
+          : state.tournaments.find((t) => t.id === incomingTour.id);
+
+      let sanitizedTour = incomingTour;
+      if (currentTour && currentTour.matches) {
+        if (incomingTour.matches && incomingTour.matches.length > currentTour.matches.length) {
+          const currentTime = new Date(currentTour.updatedAt || 0).getTime();
+          const incomingTime = new Date(incomingTour.updatedAt || 0).getTime();
+          if (currentTime >= incomingTime) {
+            sanitizedTour = { ...incomingTour, matches: currentTour.matches };
+          }
+        }
+      }
+
+      const matchIdx = state.tournaments.findIndex((t) => t.id === sanitizedTour.id);
       let updatedTournaments: Tournament[];
       if (matchIdx >= 0) {
-        updatedTournaments = state.tournaments.map((t) => (t.id === incomingTour.id ? { ...t, ...incomingTour } : t));
+        updatedTournaments = state.tournaments.map((t) => (t.id === sanitizedTour.id ? { ...t, ...sanitizedTour } : t));
       } else {
-        updatedTournaments = [incomingTour, ...state.tournaments];
+        updatedTournaments = [sanitizedTour, ...state.tournaments];
       }
-      const isCurrent = state.currentTournament.id === incomingTour.id || state.activeTournamentId === incomingTour.id;
+      const isCurrent = state.currentTournament.id === sanitizedTour.id || state.activeTournamentId === sanitizedTour.id;
       persistTournaments(updatedTournaments);
       return {
         tournaments: updatedTournaments,
-        currentTournament: isCurrent ? { ...state.currentTournament, ...incomingTour } : state.currentTournament
+        currentTournament: isCurrent ? { ...state.currentTournament, ...sanitizedTour } : state.currentTournament
       };
     });
   });

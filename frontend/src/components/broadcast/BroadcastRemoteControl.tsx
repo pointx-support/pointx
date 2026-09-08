@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { Tournament, TeamMatchResult, Match } from '../../types/tournament';
 import { useTournamentStore, SEED_TEAMS } from '../../store/tournamentStore';
 import { useAuthStore } from '../../store/authStore';
+import { calculateTeamMatchScore, getPlacementPoints } from '../../engine/scoringEngine';
 import {
   broadcastFullSync,
   subscribeToLiveSquadUpdates,
@@ -72,21 +73,6 @@ function detectDeviceName(): string {
   return `${device} (${browser})`;
 }
 
-// Official Free Fire Placement Point Matrix
-const PLACEMENT_POINTS_MAP: Record<number, number> = {
-  1: 12, // #1 Booyah 👑 -> 12 PTS
-  2: 9,  // #2 -> 9 PTS
-  3: 8,  // #3 -> 8 PTS
-  4: 7,  // #4 -> 7 PTS
-  5: 6,  // #5 -> 6 PTS
-  6: 5,  // #6 -> 5 PTS
-  7: 4,  // #7 -> 4 PTS
-  8: 3,  // #8 -> 3 PTS
-  9: 2,  // #9 -> 2 PTS
-  10: 1, // #10 -> 1 PTS
-  11: 0, // #11 -> 0 PTS
-  12: 0  // #12 -> 0 PTS
-};
 
 export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ tournamentId: propTournamentId }) => {
   const store = useTournamentStore();
@@ -625,9 +611,21 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       }
 
       const isBooyah = placement === 1;
-      const placementPoints = PLACEMENT_POINTS_MAP[placement] ?? 0;
-      const killPoints = (r.kills || 0) * 1;
-      const totalPoints = placementPoints + killPoints;
+      const calc = calculateTeamMatchScore(
+        {
+          teamId: r.teamId,
+          placement,
+          kills: r.kills || 0,
+          booyah: isBooyah,
+          bonusPoints: r.bonusPoints,
+          penaltyPoints: r.penaltyPoints,
+        },
+        tournament.scoringPreset
+      );
+      const d = calc.success && calc.data ? calc.data : null;
+      const placementPoints = d ? d.placementPoints : getPlacementPoints(placement, tournament.scoringPreset);
+      const killPoints = d ? d.killPoints : ((r.kills || 0) * (tournament.scoringPreset?.killPoints ?? 1));
+      const totalPoints = d ? d.totalPoints : (placementPoints + killPoints);
 
       return {
         ...r,
@@ -714,7 +712,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
     const totalTeams = tournament.teams.length || 12;
     const assignedRank = Math.max(2, totalTeams - (nextElimOrder.length - 1));
-    const pts = PLACEMENT_POINTS_MAP[assignedRank] ?? 0;
+    const pts = getPlacementPoints(assignedRank, tournament.scoringPreset);
 
     syncToBroadcast(nextState);
     recalculateAutoPlacements(nextState, nextElimOrder);
@@ -775,12 +773,27 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
     const updatedResults = activeMatch.results.map((r: TeamMatchResult) => {
       if (r.teamId === teamId) {
-        const placePts = PLACEMENT_POINTS_MAP[r.placement || 12] ?? 0;
+        const calc = calculateTeamMatchScore(
+          {
+            teamId: r.teamId,
+            placement: r.placement,
+            kills: newKills,
+            booyah: r.isBooyah,
+            bonusPoints: r.bonusPoints,
+            penaltyPoints: r.penaltyPoints,
+          },
+          tournament.scoringPreset
+        );
+        const d = calc.success && calc.data ? calc.data : null;
+        const placePts = d ? d.placementPoints : getPlacementPoints(r.placement || 12, tournament.scoringPreset);
+        const killPts = d ? d.killPoints : (newKills * (tournament.scoringPreset?.killPoints ?? 1));
+        const total = d ? d.totalPoints : (placePts + killPts);
         return {
           ...r,
           kills: newKills,
-          killPoints: newKills * 1,
-          totalPoints: placePts + newKills
+          killPoints: killPts,
+          placementPoints: placePts,
+          totalPoints: total,
         };
       }
       return r;
@@ -809,12 +822,27 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
     const updatedResults = activeMatch.results.map((r: TeamMatchResult) => {
       const newKills = (r.kills || 0) + 1;
-      const placePts = PLACEMENT_POINTS_MAP[r.placement || 12] ?? 0;
+      const calc = calculateTeamMatchScore(
+        {
+          teamId: r.teamId,
+          placement: r.placement,
+          kills: newKills,
+          booyah: r.isBooyah,
+          bonusPoints: r.bonusPoints,
+          penaltyPoints: r.penaltyPoints,
+        },
+        tournament.scoringPreset
+      );
+      const d = calc.success && calc.data ? calc.data : null;
+      const placePts = d ? d.placementPoints : getPlacementPoints(r.placement || 12, tournament.scoringPreset);
+      const killPts = d ? d.killPoints : (newKills * (tournament.scoringPreset?.killPoints ?? 1));
+      const total = d ? d.totalPoints : (placePts + killPts);
       return {
         ...r,
         kills: newKills,
-        killPoints: newKills * 1,
-        totalPoints: placePts + newKills
+        killPoints: killPts,
+        placementPoints: placePts,
+        totalPoints: total,
       };
     });
 
@@ -868,15 +896,28 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       const kills = Number(item.kills) || 0;
       const bonusPoints = Number(item.bonus) || 0;
       const penaltyPoints = Number(item.penalty) || 0;
-      const placementPoints = PLACEMENT_POINTS_MAP[placement] ?? 0;
-      const killPoints = kills * 1;
-      const totalPoints = placementPoints + killPoints + bonusPoints - penaltyPoints;
+      const isBooyah = placement === 1;
+      const calc = calculateTeamMatchScore(
+        {
+          teamId: team.id,
+          placement,
+          kills,
+          booyah: isBooyah,
+          bonusPoints,
+          penaltyPoints,
+        },
+        tournament.scoringPreset
+      );
+      const d = calc.success && calc.data ? calc.data : null;
+      const placementPoints = d ? d.placementPoints : getPlacementPoints(placement, tournament.scoringPreset);
+      const killPoints = d ? d.killPoints : (kills * (tournament.scoringPreset?.killPoints ?? 1));
+      const totalPoints = d ? d.totalPoints : Math.max(0, placementPoints + killPoints + bonusPoints - penaltyPoints);
 
       return {
         teamId: team.id,
         placement,
         kills,
-        isBooyah: placement === 1,
+        isBooyah,
         bonusPoints,
         penaltyPoints,
         placementPoints,
@@ -1337,8 +1378,9 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
               <tbody className="divide-y divide-[var(--border-subtle)] text-[var(--text-primary)]">
                 {tournament.teams.map((team) => {
                   const item = editedReportResults[team.id] || { placement: 12, kills: 0, bonus: 0, penalty: 0 };
-                  const placePts = PLACEMENT_POINTS_MAP[item.placement] ?? 0;
-                  const total = placePts + (item.kills * 1) + (item.bonus || 0) - (item.penalty || 0);
+                  const placePts = getPlacementPoints(item.placement, tournament.scoringPreset);
+                  const killMultiplier = tournament.scoringPreset?.killPoints ?? 1;
+                  const total = Math.max(0, placePts + (item.kills * killMultiplier) + (item.bonus || 0) - (item.penalty || 0));
 
                   return (
                     <tr key={team.id} className={item.placement === 1 ? 'bg-amber-500/10 font-bold' : ''}>
@@ -1483,8 +1525,9 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       livePlacement = Math.max(2, totalTeams - (elimIndex >= 0 ? elimIndex : 0));
     }
 
-    const placePts = PLACEMENT_POINTS_MAP[livePlacement] ?? 0;
-    const liveTotalMatchPts = placePts + (kills * 1);
+    const placePts = getPlacementPoints(livePlacement, tournament.scoringPreset);
+    const killMultiplier = tournament.scoringPreset?.killPoints ?? 1;
+    const liveTotalMatchPts = placePts + (kills * killMultiplier);
 
     // Pure Fire Burning Logic: Strictly controlled manually via OBS Remote Controller (no automatic activation)
     const isFireManual = fireTeamIds.includes(team.id);

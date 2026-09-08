@@ -12,6 +12,7 @@ import {
   createTournament,
   updateTournament,
   deleteTournament,
+  deleteMatchFromTournament,
   cloneTournament,
   importTournaments,
 } from '../services/tournamentService';
@@ -88,6 +89,31 @@ export async function updateExistingTournament(req: AuthenticatedRequest, res: R
       'MATCH_UPDATED'
     ).catch((err) => console.warn('[RealtimeSync] Tournament update broadcast error:', err));
     return res.status(200).json({ success: true, data: tourData });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteExistingMatch(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
+    const id = req.params.id as string;
+    const matchId = req.params.matchId as string;
+    if (!id || !matchId) {
+      return res.status(400).json({ success: false, error: 'Tournament ID and Match ID are required.' });
+    }
+    const updated = await deleteMatchFromTournament(id, matchId, req.user._id.toString(), req.user.role);
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Tournament not found or unauthorized.' });
+    }
+    const tourData = updated.toJSON();
+    updateAuthoritativeState(
+      updated.customId || id,
+      { tournament: tourData },
+      undefined,
+      'MATCH_DELETED'
+    ).catch((err) => console.warn('[RealtimeSync] Match delete broadcast error:', err));
+    return res.status(200).json({ success: true, data: tourData, message: `Match ${matchId} deleted successfully.` });
   } catch (error) {
     next(error);
   }

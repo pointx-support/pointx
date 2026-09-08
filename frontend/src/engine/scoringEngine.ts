@@ -394,3 +394,30 @@ export function calculateStandings(
 
   return calculateTournamentStandings(mockTournament, { includeDrafts: true });
 }
+
+/**
+ * Calculates tactical mode bonuses (Point Rush, Fire Mode) for a squad.
+ * Point Rush: Official Free Fire Point Rush rules award tactical bonus points for active rush teams.
+ */
+export function calculateTacticalModeBonus(
+  teamId: string,
+  options?: {
+    isPointRushActive?: boolean;
+    pointRushTeamIds?: string[];
+    isFireActive?: boolean;
+    fireTeamIds?: string[];
+    customBonus?: number;
+  }
+): number {
+  let bonus = Math.floor(Number(options?.customBonus) || 0);
+
+  const isPointRush = Boolean(
+    options?.isPointRushActive ||
+    (options?.pointRushTeamIds && options.pointRushTeamIds.includes(teamId))
+  );
+  if (isPointRush) {
+    bonus += 1;
+  }
+
+  return bonus;
+}

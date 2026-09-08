@@ -198,6 +198,8 @@ export const tournamentsApi = {
       body: JSON.stringify(data),
     }),
   delete: (id: string) => request(`/tournaments/${id}`, { method: 'DELETE' }),
+  deleteMatch: (tournamentId: string, matchId: string) =>
+    request<Tournament>(`/tournaments/${tournamentId}/matches/${matchId}`, { method: 'DELETE' }),
   clone: (options: any) =>
     request<Tournament>('/tournaments/clone', {
       method: 'POST',

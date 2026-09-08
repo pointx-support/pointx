@@ -104,7 +104,7 @@ type DisplayListener = (data: BroadcastDisplayState) => void;
 type ConnectionListener = (state: ConnectionState) => void;
 type HeartbeatListener = () => void;
 
-class RealtimeSyncClient {
+export class RealtimeSyncClient {
   private static instance: RealtimeSyncClient | null = null;
 
   private ws: WebSocket | null = null;
@@ -122,6 +122,7 @@ class RealtimeSyncClient {
   private displayListeners = new Set<DisplayListener>();
   private connectionListeners = new Set<ConnectionListener>();
   private heartbeatListeners = new Set<HeartbeatListener>();
+  private deletedMatchTombstones = new Set<string>();
 
   public static getInstance(): RealtimeSyncClient {
     if (!RealtimeSyncClient.instance) {
@@ -132,6 +133,15 @@ class RealtimeSyncClient {
 
   private constructor() {
     if (typeof window === 'undefined') return;
+
+    try {
+      if (window.sessionStorage) {
+        const stored = JSON.parse(window.sessionStorage.getItem('pointx_deleted_matches') || '[]');
+        if (Array.isArray(stored)) {
+          stored.forEach((id) => this.deletedMatchTombstones.add(id));
+        }
+      }
+    } catch {}
 
     // Listen to tab-to-tab BroadcastChannel
     if (broadcastChannel) {
@@ -699,10 +709,34 @@ class RealtimeSyncClient {
     }).catch(() => {});
   }
 
+  public registerDeletedMatch(matchId: string): void {
+    if (!matchId) return;
+    this.deletedMatchTombstones.add(matchId);
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        const stored = JSON.parse(window.sessionStorage.getItem('pointx_deleted_matches') || '[]');
+        if (!stored.includes(matchId)) {
+          stored.push(matchId);
+          window.sessionStorage.setItem('pointx_deleted_matches', JSON.stringify(stored));
+        }
+      }
+    } catch {}
+  }
+
+  public purgeDeletedMatches(tour: Tournament): Tournament {
+    if (!tour || !Array.isArray(tour.matches) || this.deletedMatchTombstones.size === 0) {
+      return tour;
+    }
+    const filtered = tour.matches.filter((m) => !this.deletedMatchTombstones.has(m.id));
+    if (filtered.length === tour.matches.length) return tour;
+    return { ...tour, matches: filtered };
+  }
+
   private notifyTournament(tour: Tournament, revision?: number): void {
+    const cleanTour = this.purgeDeletedMatches(tour);
     for (const listener of this.tournamentListeners) {
       try {
-        listener(tour, revision);
+        listener(cleanTour, revision);
       } catch {}
     }
   }
@@ -724,14 +758,15 @@ class RealtimeSyncClient {
   }
 
   private cacheTournament(tournamentId: string, tour: Tournament): void {
+    const cleanTour = this.purgeDeletedMatches(tour);
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        window.localStorage.setItem(`pointx_live_${tournamentId}`, JSON.stringify(tour));
-        window.localStorage.setItem('pointx_live_default', JSON.stringify(tour));
+        window.localStorage.setItem(`pointx_live_${tournamentId}`, JSON.stringify(cleanTour));
+        window.localStorage.setItem('pointx_live_default', JSON.stringify(cleanTour));
         window.localStorage.setItem('pointx_live_ping', String(Date.now()));
       } catch {}
     } else {
-      memoryStoreMap.set(`pointx_live_${tournamentId}`, JSON.stringify(tour));
+      memoryStoreMap.set(`pointx_live_${tournamentId}`, JSON.stringify(cleanTour));
     }
   }
 
@@ -743,14 +778,16 @@ class RealtimeSyncClient {
         window.localStorage.getItem(`strikz_live_${tournamentId}`);
       if (raw) {
         try {
-          return JSON.parse(raw);
+          const parsed = JSON.parse(raw);
+          return parsed ? this.purgeDeletedMatches(parsed) : null;
         } catch {}
       }
     }
     const mem = memoryStoreMap.get(`pointx_live_${tournamentId}`);
     if (mem) {
       try {
-        return JSON.parse(mem);
+        const parsed = JSON.parse(mem);
+        return parsed ? this.purgeDeletedMatches(parsed) : null;
       } catch {}
     }
     return null;
@@ -825,6 +862,14 @@ class RealtimeSyncClient {
 // =========================================================================
 // PUBLIC CONVENIENCE EXPORTS (Seamless drop-in replacement)
 // =========================================================================
+
+export function registerDeletedMatch(matchId: string): void {
+  RealtimeSyncClient.getInstance().registerDeletedMatch(matchId);
+}
+
+export function purgeDeletedMatches(tournament: Tournament): Tournament {
+  return RealtimeSyncClient.getInstance().purgeDeletedMatches(tournament);
+}
 
 export function broadcastTournamentUpdate(tournament: Tournament): void {
   const client = RealtimeSyncClient.getInstance();

@@ -14,8 +14,10 @@ export interface RemoteDeviceSession {
 export type BroadcastEvent =
   | 'MATCH_CREATED'
   | 'MATCH_UPDATED'
+  | 'MATCH_DELETED'
   | 'MATCH_COMPLETED'
   | 'SCORE_UPDATED'
+  | 'SCORE_DELETED'
   | 'POINT_TABLE_UPDATED'
   | 'TOURNAMENT_UPDATED'
   | 'TEAM_UPDATED'
@@ -249,43 +251,54 @@ export async function updateAuthoritativeState(
   if (updates.themeHue !== undefined) state.themeHue = updates.themeHue;
 
   // Persist tournament matches/teams/status to MongoDB in background
-  if (updates.tournament && tourId !== 'default') {
-    const idQueries: any[] = [{ customId: tourId }];
-    if (tourId.match(/^[0-9a-fA-F]{24}$/)) {
-      idQueries.push({ _id: tourId });
+  const targetDbId = updates.tournament?.id || state.tournament?.id || (tourId !== 'default' ? tourId : null);
+  if (updates.tournament && targetDbId && targetDbId !== 'default' && targetDbId !== 'tour-default-live') {
+    const idQueries: any[] = [{ customId: targetDbId }];
+    if (targetDbId.match(/^[0-9a-fA-F]{24}$/)) {
+      idQueries.push({ _id: targetDbId });
     }
     Tournament.updateOne(
       { $or: idQueries },
       {
         $set: {
-          matches: updates.tournament.matches,
-          teams: updates.tournament.teams,
-          status: updates.tournament.status || 'Live',
+          matches: updates.tournament.matches !== undefined ? updates.tournament.matches : state.tournament?.matches,
+          teams: updates.tournament.teams !== undefined ? updates.tournament.teams : state.tournament?.teams,
+          status: updates.tournament.status || state.tournament?.status || 'Live',
         },
       }
     ).catch((err) => {
-      console.warn(`[SyncStore] DB persist error for ${tourId}:`, err);
+      console.warn(`[SyncStore] DB persist error for ${targetDbId}:`, err);
     });
   }
 
-  // Synchronize state across alias keys in syncStore
+  // Synchronize state across alias keys in syncStore (creating or updating so no stale alias retains old state)
   const aliasRooms = getRoomAliases(tourId, state.tournament);
   for (const alias of aliasRooms) {
-    if (alias !== tourId && syncStore[alias]) {
-      syncStore[alias].revision = state.revision;
-      syncStore[alias].timestamp = state.timestamp;
-      syncStore[alias].tournament = state.tournament;
-      syncStore[alias].squads = state.squads;
-      syncStore[alias].activeLayout = state.activeLayout;
-      syncStore[alias].activeTemplateId = state.activeTemplateId;
-      syncStore[alias].activeTemplate = state.activeTemplate;
-      syncStore[alias].activeMatchNumber = state.activeMatchNumber;
-      syncStore[alias].activeScope = state.activeScope;
-      syncStore[alias].customEventTitle = state.customEventTitle;
-      syncStore[alias].customOrgName = state.customOrgName;
-      syncStore[alias].themeHue = state.themeHue;
-      syncStore[alias].isVisible = state.isVisible;
-      syncStore[alias].highlightedTeamId = state.highlightedTeamId;
+    if (alias !== tourId) {
+      if (!syncStore[alias]) {
+        syncStore[alias] = {
+          ...state,
+          tournament: state.tournament ? { ...state.tournament } : undefined,
+          squads: { ...state.squads },
+          connectedDevices: [...(state.connectedDevices || [])],
+          blockedDeviceIds: [...(state.blockedDeviceIds || [])],
+        };
+      } else {
+        syncStore[alias].revision = state.revision;
+        syncStore[alias].timestamp = state.timestamp;
+        syncStore[alias].tournament = state.tournament;
+        syncStore[alias].squads = state.squads;
+        syncStore[alias].activeLayout = state.activeLayout;
+        syncStore[alias].activeTemplateId = state.activeTemplateId;
+        syncStore[alias].activeTemplate = state.activeTemplate;
+        syncStore[alias].activeMatchNumber = state.activeMatchNumber;
+        syncStore[alias].activeScope = state.activeScope;
+        syncStore[alias].customEventTitle = state.customEventTitle;
+        syncStore[alias].customOrgName = state.customOrgName;
+        syncStore[alias].themeHue = state.themeHue;
+        syncStore[alias].isVisible = state.isVisible;
+        syncStore[alias].highlightedTeamId = state.highlightedTeamId;
+      }
     }
   }
 

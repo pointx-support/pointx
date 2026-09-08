@@ -70,6 +70,15 @@ export async function createTournament(userId: string, data: any): Promise<ITour
   return tournament;
 }
 
+export function isDemoTournamentId(id: string): boolean {
+  return (
+    id === 'tour-ff-champ-2026' ||
+    id === 'tour-ff-night-scrims' ||
+    id === 'tour-ff-summer-finals' ||
+    id.startsWith('tour-demo-')
+  );
+}
+
 export async function updateTournament(tournamentId: string, userId: string, data: any, role?: string): Promise<ITournament | null> {
   const idQueries: any[] = [{ customId: tournamentId }];
   if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -78,7 +87,7 @@ export async function updateTournament(tournamentId: string, userId: string, dat
 
   const query: any = { $or: idQueries };
 
-  if (role !== 'admin') {
+  if (role !== 'admin' && !isDemoTournamentId(tournamentId)) {
     const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
     query.$and = [userObjectId ? { $or: [{ userId: userObjectId }, { userId: userId }] } : { userId }];
   }
@@ -88,6 +97,43 @@ export async function updateTournament(tournamentId: string, userId: string, dat
     { $set: data },
     { returnDocument: 'after', runValidators: true }
   );
+
+  return updated;
+}
+
+export async function deleteMatchFromTournament(
+  tournamentId: string,
+  matchId: string,
+  userId: string,
+  role?: string
+): Promise<ITournament | null> {
+  const idQueries: any[] = [{ customId: tournamentId }];
+  if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
+    idQueries.push({ _id: tournamentId });
+  }
+
+  const query: any = { $or: idQueries };
+
+  if (role !== 'admin' && !isDemoTournamentId(tournamentId)) {
+    const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
+    query.$and = [userObjectId ? { $or: [{ userId: userObjectId }, { userId: userId }] } : { userId }];
+  }
+
+  // Atomically pull match from matches array in MongoDB
+  const updated = await Tournament.findOneAndUpdate(
+    query,
+    { $pull: { matches: { id: matchId } } as any },
+    { returnDocument: 'after', runValidators: true }
+  );
+
+  if (updated) {
+    AuditActivity.create({
+      userId,
+      action: 'Match Deleted',
+      category: 'match',
+      details: `Deleted match ID "${matchId}" from tournament "${updated.title}".`,
+    }).catch(() => {});
+  }
 
   return updated;
 }
