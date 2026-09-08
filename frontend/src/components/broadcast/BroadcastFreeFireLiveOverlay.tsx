@@ -8,6 +8,7 @@ export interface BroadcastFreeFireLiveOverlayProps {
   standings: CalculatedStanding[];
   isTransparent?: boolean;
   isOverlayVisible?: boolean;
+  activeMatchNumber?: number;
 }
 
 export type PlayerState = 'alive' | 'knock' | 'eliminated';
@@ -22,7 +23,8 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
   tournament,
   standings,
   isTransparent = true,
-  isOverlayVisible: propIsOverlayVisible
+  isOverlayVisible: propIsOverlayVisible,
+  activeMatchNumber
 }) => {
   const [isOverlayVisible, setIsOverlayVisible] = useState<boolean>(() => {
     if (propIsOverlayVisible !== undefined) return propIsOverlayVisible;
@@ -168,7 +170,18 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
   };
 
   const displayTeams = standings.slice(0, 12);
-  const activeMatch = tournament.matches && tournament.matches.length > 0 ? tournament.matches[0] : null;
+  
+  // Resolve active match based on activeMatchNumber prop, or live match status, or last match, or matches[0]
+  const activeMatch = React.useMemo(() => {
+    if (!tournament.matches || tournament.matches.length === 0) return null;
+    if (activeMatchNumber !== undefined) {
+      const found = tournament.matches.find((m) => m.matchNumber === activeMatchNumber);
+      if (found) return found;
+    }
+    const liveMatch = tournament.matches.find((m) => m.status === 'Live');
+    if (liveMatch) return liveMatch;
+    return tournament.matches[tournament.matches.length - 1] || tournament.matches[0] || null;
+  }, [tournament.matches, activeMatchNumber]);
 
   return (
     <div
@@ -232,16 +245,16 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
             const allDead = squadPlayers.every((p) => p === 'eliminated');
             const isHighlighted = highlightedTeamId === teamStanding.teamId;
 
-            // Live Match / Standings Kills & Points
+            // Live Match / Standings Kills & Points (Authoritative 0-kill fix)
             const matchResult = activeMatch?.results?.find((r) => r.teamId === teamStanding.teamId);
             const currentKills =
-              matchResult?.kills !== undefined && matchResult.kills > 0
+              matchResult?.kills !== undefined
                 ? matchResult.kills
-                : (teamStanding.totalKills || 0);
+                : (activeMatch ? 0 : (teamStanding.totalKills || 0));
             const currentTotalPoints =
-              matchResult?.totalPoints !== undefined && matchResult.totalPoints > 0
+              matchResult?.totalPoints !== undefined
                 ? matchResult.totalPoints
-                : (teamStanding.totalPoints || 0);
+                : (activeMatch ? (currentKills * (tournament.scoringPreset?.killPoints ?? 1)) : (teamStanding.totalPoints || 0));
 
             // Pure Fire Burning Logic: Strictly controlled manually via OBS Remote Controller (no automatic activation)
             const isFireManual = fireTeamIds.includes(teamStanding.teamId);

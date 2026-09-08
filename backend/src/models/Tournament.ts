@@ -28,6 +28,12 @@ export interface ITournament extends Document {
   };
   bannerUrl?: string;
   logoUrl?: string;
+  broadcastToken?: {
+    tokenHash: string;
+    tokenPreview: string;
+    createdAt: Date;
+    expiresAt?: Date;
+  };
   teams: any[];
   matches: any[];
   createdAt: Date;
@@ -68,6 +74,12 @@ const TournamentSchema = new Schema<ITournament>(
     },
     bannerUrl: { type: String, default: '' },
     logoUrl: { type: String, default: '' },
+    broadcastToken: {
+      tokenHash: { type: String, sparse: true, index: true },
+      tokenPreview: { type: String },
+      createdAt: { type: Date },
+      expiresAt: { type: Date },
+    },
     teams: { type: [Schema.Types.Mixed], default: [] } as any,
     matches: { type: [Schema.Types.Mixed], default: [] } as any,
   },
@@ -86,5 +98,7 @@ const TournamentSchema = new Schema<ITournament>(
 
 TournamentSchema.index({ userId: 1, status: 1 });
 TournamentSchema.index({ userId: 1, createdAt: -1 });
+TournamentSchema.index({ updatedAt: -1 });
+TournamentSchema.index({ status: 1, updatedAt: -1 });
 
 export const Tournament = mongoose.model<ITournament>('Tournament', TournamentSchema);

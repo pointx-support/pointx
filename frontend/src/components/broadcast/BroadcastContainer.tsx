@@ -246,6 +246,7 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
           standings={standings}
           isTransparent={resolvedTransparent}
           isOverlayVisible={isOverlayVisible}
+          activeMatchNumber={targetMatchNumber}
         />
       )}
 

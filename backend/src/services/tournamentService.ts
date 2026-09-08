@@ -1,14 +1,22 @@
 import mongoose from 'mongoose';
 import { Tournament, ITournament } from '../models/Tournament';
 import { AuditActivity } from '../models/AuditActivity';
+import { registerServerDeletedMatch, updateAuthoritativeState } from './realtimeSync';
 
 export async function getTournamentsByUser(userId: string): Promise<ITournament[]> {
   const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
-  const userCondition = userObjectId
+  const userCondition: any = userObjectId
     ? { $or: [{ userId: userObjectId }, { userId: userId }] }
     : { userId };
 
-  return Tournament.find(userCondition).sort({ createdAt: -1 });
+  const query = {
+    $or: [
+      userCondition,
+      { customId: { $in: ['tour-ff-champ-2026', 'tour-ff-night-scrims', 'tour-ff-summer-finals'] } },
+    ],
+  };
+
+  return Tournament.find(query).sort({ createdAt: -1 });
 }
 
 export async function getTournamentsForOrganizer(organizerUserId: string): Promise<ITournament[]> {
@@ -127,6 +135,15 @@ export async function deleteMatchFromTournament(
   );
 
   if (updated) {
+    registerServerDeletedMatch(matchId);
+
+    updateAuthoritativeState(
+      tournamentId,
+      { tournament: updated.toJSON ? updated.toJSON() : updated },
+      undefined,
+      'MATCH_DELETED'
+    ).catch(() => {});
+
     AuditActivity.create({
       userId,
       action: 'Match Deleted',
@@ -136,6 +153,28 @@ export async function deleteMatchFromTournament(
   }
 
   return updated;
+}
+
+export async function updateMatchScoreAtomic(
+  tournamentId: string,
+  matchId: string,
+  rawResult: {
+    teamId: string;
+    kills?: number;
+    placement?: number;
+    isBooyah?: boolean;
+    bonusPoints?: number;
+    penaltyPoints?: number;
+  },
+  userId: string,
+  role?: string
+): Promise<{ tournament: ITournament; calculatedResult: any } | null> {
+  const tournament = await getTournamentById(tournamentId, userId, role);
+  if (!tournament) return null;
+
+  const { updateMatchScoreServer } = await import('./realtimeSync');
+  const result = await updateMatchScoreServer(tournamentId, matchId, rawResult);
+  return { tournament, calculatedResult: result.calculatedResult };
 }
 
 export async function deleteTournament(tournamentId: string, userId: string, role?: string): Promise<boolean> {

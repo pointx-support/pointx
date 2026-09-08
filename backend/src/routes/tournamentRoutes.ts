@@ -7,6 +7,7 @@ import {
   updateExistingTournament,
   deleteExistingTournament,
   deleteExistingMatch,
+  updateMatchScore,
   cloneExistingTournament,
   importTournamentsBatch,
 } from '../controllers/tournamentController';
@@ -24,6 +25,7 @@ router.post('/clone', authenticate, requireOnboarded, cloneExistingTournament);
 router.post('/import', authenticate, requireOnboarded, importTournamentsBatch);
 router.get('/:id', authenticate, requireOnboarded, getTournament);
 router.put('/:id', authenticate, requireOnboarded, updateExistingTournament);
+router.post('/:id/matches/:matchId/score', authenticate, updateMatchScore);
 router.delete('/:id/matches/:matchId', authenticate, deleteExistingMatch);
 router.delete('/:id', authenticate, requireOnboarded, deleteExistingTournament);
 

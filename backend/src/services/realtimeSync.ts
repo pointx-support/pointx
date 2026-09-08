@@ -1,6 +1,7 @@
 import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { Tournament } from '../models/Tournament';
+import { calculateTeamMatchScore, recalculateMatchScores } from './scoringEngine';
 
 export interface RemoteDeviceSession {
   deviceId: string;
@@ -64,6 +65,28 @@ interface ClientMeta {
 
 // In-Memory Authoritative Live State Store
 const syncStore: Record<string, TournamentSyncState> = {};
+
+// Server-side tombstones for deleted matches to prevent resurrection
+const deletedMatchTombstones = new Set<string>();
+
+export function registerServerDeletedMatch(matchId: string): void {
+  if (!matchId) return;
+  deletedMatchTombstones.add(matchId);
+  // Clean from all active states in syncStore
+  for (const tourId of Object.keys(syncStore)) {
+    const state = syncStore[tourId];
+    if (state?.tournament?.matches && Array.isArray(state.tournament.matches)) {
+      state.tournament.matches = state.tournament.matches.filter(
+        (m: any) => (m.id || m.customId) !== matchId
+      );
+    }
+  }
+}
+
+export function isServerMatchDeleted(matchId: string): boolean {
+  return deletedMatchTombstones.has(matchId);
+}
+
 
 // Active WebSocket client rooms: tournamentId -> Set<WebSocket>
 const roomClients = new Map<string, Set<WebSocket>>();
@@ -135,13 +158,16 @@ export async function getOrCreateAuthoritativeState(tournamentId: string): Promi
         doc = await Tournament.findOne({ $or: idQueries }).lean();
       }
 
-      // If not found by specific ID or tourId is 'default', resolve to most recently updated active tournament
-      if (!doc) {
+      // If not found by specific ID, only fallback to demo/active tournament if tourId was 'default'
+      if (!doc && tourId === 'default') {
         doc = await Tournament.findOne({ status: { $ne: 'Archived' } }).sort({ updatedAt: -1 }).lean()
           || await Tournament.findOne({}).sort({ updatedAt: -1 }).lean();
       }
 
       if (doc) {
+        if (doc.matches && Array.isArray(doc.matches)) {
+          doc.matches = doc.matches.filter((m: any) => !deletedMatchTombstones.has(m.id || m.customId));
+        }
         state.tournament = {
           ...doc,
           id: doc.customId || String(doc._id),
@@ -232,7 +258,14 @@ export async function updateAuthoritativeState(
   state.timestamp = Date.now();
 
   // Apply updates
-  if (updates.tournament !== undefined) state.tournament = updates.tournament;
+  if (updates.tournament !== undefined) {
+    if (updates.tournament && Array.isArray(updates.tournament.matches)) {
+      updates.tournament.matches = updates.tournament.matches.filter(
+        (m: any) => !deletedMatchTombstones.has(m.id || m.customId)
+      );
+    }
+    state.tournament = updates.tournament;
+  }
   if (updates.squads !== undefined) state.squads = updates.squads;
   if (updates.highlightedTeamId !== undefined) state.highlightedTeamId = updates.highlightedTeamId;
   if (updates.isVisible !== undefined) state.isVisible = updates.isVisible;
@@ -319,6 +352,129 @@ export async function updateAuthoritativeState(
 
   return state;
 }
+
+/**
+ * Authoritative Server-Side Match Score Calculation and Persistence
+ */
+export async function updateMatchScoreServer(
+  tournamentId: string,
+  matchId: string,
+  rawResult: {
+    teamId: string;
+    kills?: number;
+    placement?: number;
+    isBooyah?: boolean;
+    bonusPoints?: number;
+    penaltyPoints?: number;
+  },
+  sourceWs?: WebSocket
+): Promise<{ state: TournamentSyncState; calculatedResult: any }> {
+  const tourId = tournamentId || 'default';
+  const state = await getOrCreateAuthoritativeState(tourId);
+
+  if (!state.tournament || !Array.isArray(state.tournament.matches)) {
+    throw new Error('Tournament matches not found');
+  }
+
+  const match = state.tournament.matches.find(
+    (m: any) => (m.id || m.customId) === matchId
+  );
+  if (!match) {
+    throw new Error(`Match "${matchId}" not found in tournament`);
+  }
+
+  const calc = calculateTeamMatchScore(
+    {
+      teamId: rawResult.teamId,
+      matchId,
+      placement: rawResult.placement ?? 12,
+      kills: rawResult.kills ?? 0,
+      booyah: rawResult.isBooyah,
+      bonusPoints: rawResult.bonusPoints,
+      penaltyPoints: rawResult.penaltyPoints,
+    },
+    state.tournament.scoringPreset
+  );
+
+  if (!calc.success || !calc.data) {
+    throw new Error(calc.error?.message || 'Failed to calculate match score');
+  }
+
+  const d = calc.data;
+  if (!Array.isArray(match.results)) match.results = [];
+  const existingIdx = match.results.findIndex((r: any) => r.teamId === rawResult.teamId);
+  const updatedTeamResult = {
+    ...(existingIdx >= 0 ? match.results[existingIdx] : {}),
+    teamId: rawResult.teamId,
+    placement: d.placement,
+    kills: d.kills,
+    placementPoints: d.placementPoints,
+    killPoints: d.killPoints,
+    booyahBonusPoints: d.booyahBonusPoints,
+    customBonusPoints: d.customBonusPoints,
+    penaltyPoints: d.penaltyPoints,
+    totalPoints: d.totalPoints,
+    isBooyah: d.booyah,
+  };
+
+  if (existingIdx >= 0) {
+    match.results[existingIdx] = updatedTeamResult;
+  } else {
+    match.results.push(updatedTeamResult);
+  }
+
+  // Recalculate match scores
+  const updatedMatch = recalculateMatchScores(match, state.tournament.scoringPreset);
+  const matchIndex = state.tournament.matches.findIndex(
+    (m: any) => (m.id || m.customId) === matchId
+  );
+  state.tournament.matches[matchIndex] = updatedMatch;
+
+  // Persist to MongoDB
+  const targetDbId =
+    state.tournament.customId || state.tournament.id || String(state.tournament._id);
+  if (targetDbId && targetDbId !== 'default' && targetDbId !== 'tour-default-live') {
+    const idQueries: any[] = [{ customId: targetDbId }];
+    if (targetDbId.match(/^[0-9a-fA-F]{24}$/)) {
+      idQueries.push({ _id: targetDbId });
+    }
+    await Tournament.updateOne(
+      { $or: idQueries },
+      { $set: { matches: state.tournament.matches } }
+    );
+  }
+
+  const updatedState = await updateAuthoritativeState(
+    tourId,
+    { tournament: state.tournament },
+    sourceWs,
+    'SCORE_UPDATED'
+  );
+
+  // Broadcast ultra-lightweight SCORE_DELTA (~180 bytes) specifically for OBS / live overlays
+  const aliasRooms = getRoomAliases(tourId, state.tournament);
+  const deltaPayload = {
+    type: 'SCORE_DELTA',
+    tournamentId: tourId,
+    revision: updatedState.revision,
+    data: {
+      matchId,
+      teamId: rawResult.teamId,
+      kills: d.kills,
+      placement: d.placement,
+      placementPoints: d.placementPoints,
+      killPoints: d.killPoints,
+      totalPoints: d.totalPoints,
+      isBooyah: d.booyah,
+    },
+    timestamp: updatedState.timestamp,
+  };
+  broadcastToRooms(aliasRooms, deltaPayload, sourceWs);
+  broadcastToSseRooms(aliasRooms, deltaPayload);
+
+  return { state: updatedState, calculatedResult: d };
+}
+
 
 /**
  * Broadcast message to all WebSocket clients across room aliases with client deduplication
@@ -523,6 +679,20 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
             return;
           }
 
+          const incomingRev = Number(parsed.revision ?? payload.revision);
+          if (incomingRev && incomingRev < state.revision) {
+            ws.send(
+              JSON.stringify({
+                type: 'STALE_REVISION',
+                tournamentId: activeTourId,
+                currentRevision: state.revision,
+                data: clientRole === 'dashboard' ? state : sanitizeStateForBroadcast(state),
+                timestamp: state.timestamp,
+              })
+            );
+            return;
+          }
+
           delete payload.pinCode;
           delete payload.sessionToken;
           delete payload.blockedDeviceIds;
@@ -540,6 +710,47 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
               timestamp: updatedState.timestamp,
             })
           );
+          return;
+        }
+
+        if (parsed.type === 'UPDATE_MATCH_SCORE' || parsed.type === 'RECORD_ELIMINATION') {
+          const payload = parsed.payload || parsed.data || parsed;
+          const matchId = payload.matchId;
+          const teamId = payload.teamId;
+
+          try {
+            const result = await updateMatchScoreServer(
+              activeTourId,
+              matchId,
+              {
+                teamId,
+                kills: payload.kills,
+                placement: payload.placement,
+                isBooyah: payload.isBooyah ?? payload.booyah,
+                bonusPoints: payload.bonusPoints,
+                penaltyPoints: payload.penaltyPoints,
+              },
+              ws
+            );
+
+            ws.send(
+              JSON.stringify({
+                type: 'ACK',
+                tournamentId: activeTourId,
+                revision: result.state.revision,
+                success: true,
+                data: result.calculatedResult,
+                timestamp: result.state.timestamp,
+              })
+            );
+          } catch (err: any) {
+            ws.send(
+              JSON.stringify({
+                type: 'ERROR',
+                error: err?.message || 'Failed to update match score',
+              })
+            );
+          }
           return;
         }
 

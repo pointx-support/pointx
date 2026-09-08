@@ -120,6 +120,7 @@ export class RealtimeSyncClient {
   private tournamentListeners = new Set<TournamentListener>();
   private squadListeners = new Set<SquadListener>();
   private displayListeners = new Set<DisplayListener>();
+  private scoreDeltaListeners = new Set<(delta: any) => void>();
   private connectionListeners = new Set<ConnectionListener>();
   private heartbeatListeners = new Set<HeartbeatListener>();
   private deletedMatchTombstones = new Set<string>();
@@ -243,6 +244,21 @@ export class RealtimeSyncClient {
     return () => {
       this.displayListeners.delete(cb);
     };
+  }
+
+  public subscribeScoreDelta(cb: (delta: any) => void): () => void {
+    this.scoreDeltaListeners.add(cb);
+    return () => {
+      this.scoreDeltaListeners.delete(cb);
+    };
+  }
+
+  private notifyScoreDelta(delta: any): void {
+    for (const listener of this.scoreDeltaListeners) {
+      try {
+        listener(delta);
+      } catch {}
+    }
   }
 
   public subscribeConnection(cb: ConnectionListener): () => void {
@@ -450,6 +466,59 @@ export class RealtimeSyncClient {
         this.ws.send(JSON.stringify({ type: 'PONG' }));
       }
       this.notifyHeartbeat();
+      return;
+    }
+
+    if (msg.type === 'MATCH_DELETED') {
+      const matchId = msg.matchId || msg.payload?.matchId || msg.data?.matchId;
+      if (matchId) {
+        this.registerDeletedMatch(matchId);
+      }
+      if (Array.isArray(msg.deletedMatchIds)) {
+        msg.deletedMatchIds.forEach((id: string) => this.registerDeletedMatch(id));
+      }
+    }
+
+    if (msg.type === 'SCORE_DELTA' && msg.data) {
+      const delta = msg.data;
+      this.notifyScoreDelta(delta);
+
+      const currentTour = this.getCachedTournament(this.currentTournamentId);
+      if (currentTour && Array.isArray(currentTour.matches)) {
+        const match = currentTour.matches.find((m) => m.id === delta.matchId || (m as any).customId === delta.matchId);
+        if (match && Array.isArray(match.results)) {
+          const res = match.results.find((r: any) => r.teamId === delta.teamId);
+          if (res) {
+            res.kills = delta.kills;
+            res.placement = delta.placement;
+            res.placementPoints = delta.placementPoints;
+            res.killPoints = delta.killPoints;
+            res.totalPoints = delta.totalPoints;
+            res.isBooyah = delta.isBooyah;
+          } else {
+            match.results.push(delta);
+          }
+          this.cacheTournament(this.currentTournamentId, currentTour);
+          this.notifyTournament(currentTour, this.currentRevision);
+        }
+      }
+      this.notifyHeartbeat();
+      return;
+    }
+
+    if (msg.type === 'STALE_REVISION') {
+      if (msg.currentRevision) {
+        this.currentRevision = Number(msg.currentRevision);
+      }
+      const stalePayload = msg.data || msg.payload;
+      if (stalePayload) {
+        this.handleServerMessage({
+          type: 'STATE_UPDATED',
+          revision: this.currentRevision,
+          data: stalePayload,
+          timestamp: msg.timestamp || Date.now(),
+        });
+      }
       return;
     }
 
@@ -706,6 +775,55 @@ export class RealtimeSyncClient {
         tournamentId: tourId,
         timestamp: ts,
       }),
+    }).catch(() => {});
+  }
+
+  public updateMatchScore(
+    tournamentId: string,
+    matchId: string,
+    result: {
+      teamId: string;
+      kills?: number;
+      placement?: number;
+      isBooyah?: boolean;
+      bonusPoints?: number;
+      penaltyPoints?: number;
+    }
+  ): void {
+    const tourId = tournamentId || this.currentTournamentId;
+    const effectiveRole = this.getRole();
+    const effectiveDeviceId = this.getDeviceId();
+    const effectiveToken = this.getToken();
+
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        this.ws.send(
+          JSON.stringify({
+            type: 'UPDATE_MATCH_SCORE',
+            tournamentId: tourId,
+            role: effectiveRole,
+            deviceId: effectiveDeviceId,
+            token: effectiveToken,
+            payload: {
+              tournamentId: tourId,
+              matchId,
+              ...result,
+            },
+          })
+        );
+        return;
+      } catch {}
+    }
+
+    // Fallback: POST /api/tournaments/:id/matches/:matchId/score
+    fetch(`/api/tournaments/${tourId}/matches/${matchId}/score`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(effectiveToken ? { 'x-broadcast-token': effectiveToken } : {}),
+        ...(effectiveDeviceId ? { 'x-device-id': effectiveDeviceId } : {}),
+      },
+      body: JSON.stringify(result),
     }).catch(() => {});
   }
 
@@ -971,4 +1089,25 @@ export function setClientSyncRole(role: 'obs' | 'remote' | 'dashboard'): void {
 export function setClientSyncAuth(token?: string, deviceId?: string): void {
   RealtimeSyncClient.getInstance().setAuthCredentials(token, deviceId);
 }
+
+export function sendMatchScoreUpdate(
+  tournamentId: string,
+  matchId: string,
+  result: {
+    teamId: string;
+    kills?: number;
+    placement?: number;
+    isBooyah?: boolean;
+    bonusPoints?: number;
+    penaltyPoints?: number;
+  }
+): void {
+  RealtimeSyncClient.getInstance().updateMatchScore(tournamentId, matchId, result);
+}
+
+export function subscribeToScoreDelta(cb: (delta: any) => void): () => void {
+  return RealtimeSyncClient.getInstance().subscribeScoreDelta(cb);
+}
+
+
 

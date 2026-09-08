@@ -13,6 +13,7 @@ import {
   updateTournament,
   deleteTournament,
   deleteMatchFromTournament,
+  updateMatchScoreAtomic,
   cloneTournament,
   importTournaments,
 } from '../services/tournamentService';
@@ -163,3 +164,37 @@ export async function importTournamentsBatch(req: AuthenticatedRequest, res: Res
     next(error);
   }
 }
+
+export async function updateMatchScore(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
+    const id = req.params.id as string;
+    const matchId = req.params.matchId as string;
+    const { teamId, kills, placement, isBooyah, bonusPoints, penaltyPoints } = req.body;
+
+    if (!teamId) {
+      return res.status(400).json({ success: false, error: 'teamId is required.' });
+    }
+
+    const updated = await updateMatchScoreAtomic(
+      id,
+      matchId,
+      { teamId, kills, placement, isBooyah, bonusPoints, penaltyPoints },
+      req.user._id.toString(),
+      req.user.role
+    );
+
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Tournament or match not found.' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: updated.tournament.toJSON(),
+      calculatedResult: updated.calculatedResult,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+

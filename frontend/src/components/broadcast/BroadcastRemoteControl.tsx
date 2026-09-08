@@ -9,6 +9,7 @@ import {
   subscribeToTournamentLiveUpdates,
   setClientSyncRole,
   setClientSyncAuth,
+  sendMatchScoreUpdate,
   type LivePlayerState
 } from '../../services/broadcastSync';
 import { tournamentsApi } from '../../services/api';
@@ -101,6 +102,10 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   }, [targetTournamentId, store.currentTournament, store.tournaments]);
 
   const [tournament, setTournament] = useState<Tournament>(resolvedInitialTournament);
+  const [selectedMatchNumber, setSelectedMatchNumber] = useState<number | undefined>(() => {
+    const fromUrl = urlParams?.get('match') || urlParams?.get('matchNumber');
+    return fromUrl ? Number(fromUrl) : undefined;
+  });
   const [isOverlayVisible, setIsOverlayVisible] = useState<boolean>(true);
   const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(true);
@@ -459,7 +464,13 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
   const activeMatch: Match = React.useMemo(() => {
     if (tournament.matches && tournament.matches.length > 0) {
-      return tournament.matches[0];
+      if (selectedMatchNumber !== undefined) {
+        const found = tournament.matches.find((m) => m.matchNumber === selectedMatchNumber);
+        if (found) return found;
+      }
+      const live = tournament.matches.find((m) => m.status === 'Live');
+      if (live) return live;
+      return tournament.matches[tournament.matches.length - 1] || tournament.matches[0];
     }
     const now = new Date().toISOString();
     const effectiveTeams = tournament.teams && tournament.teams.length > 0 ? tournament.teams : SEED_TEAMS;
@@ -516,7 +527,8 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
     updatedTour?: Tournament,
     activeFireTeamIds: string[] = fireTeamIds,
     activePointRushTeamIds: string[] = pointRushTeamIds,
-    activePointRush: boolean = isPointRushActive
+    activePointRush: boolean = isPointRushActive,
+    activeMatchNum: number | undefined = selectedMatchNumber
   ) => {
     const tourToSync = updatedTour || tournament;
     broadcastFullSync({
@@ -528,6 +540,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       pointRushTeamIds: activePointRushTeamIds,
       isPointRushActive: activePointRush,
       isVisible: visible,
+      activeMatchNumber: activeMatchNum ?? (activeMatch?.matchNumber || 1),
       timestamp: Date.now()
     });
   };
@@ -638,6 +651,17 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
     });
 
     updateMatchResults(tournament.id, activeMatch.id, updatedResults as any);
+
+    updatedResults.forEach((r) => {
+      sendMatchScoreUpdate(tournament.id, activeMatch.id, {
+        teamId: r.teamId,
+        kills: r.kills,
+        placement: r.placement,
+        isBooyah: r.isBooyah,
+        bonusPoints: r.bonusPoints,
+        penaltyPoints: r.penaltyPoints
+      });
+    });
 
     const matchesList = tournament.matches && tournament.matches.length > 0
       ? tournament.matches.map((m) =>
@@ -801,6 +825,15 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
     updateMatchResults(tournament.id, activeMatch.id, updatedResults as any);
     
+    sendMatchScoreUpdate(tournament.id, activeMatch.id, {
+      teamId,
+      kills: newKills,
+      placement: currentResult?.placement,
+      isBooyah: currentResult?.isBooyah,
+      bonusPoints: currentResult?.bonusPoints,
+      penaltyPoints: currentResult?.penaltyPoints
+    });
+
     const matchesList = tournament.matches && tournament.matches.length > 0
       ? tournament.matches.map((m) =>
           m.id === activeMatch.id ? { ...m, results: updatedResults as any } : m
@@ -1207,6 +1240,26 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
             >
               Match Report
             </Button>
+
+            {/* Match Selector Dropdown */}
+            {tournament.matches && tournament.matches.length > 1 && (
+              <select
+                aria-label="Select Active Match"
+                value={selectedMatchNumber ?? activeMatch.matchNumber}
+                onChange={(e) => {
+                  const num = Number(e.target.value);
+                  setSelectedMatchNumber(num);
+                  syncToBroadcast(squadStates, highlightedTeamId, isOverlayVisible, undefined, fireTeamIds, pointRushTeamIds, isPointRushActive, num);
+                }}
+                className="bg-black/30 border border-amber-500/40 text-amber-500 rounded-lg px-2 py-1 text-xs font-bold cursor-pointer"
+              >
+                {tournament.matches.map((m) => (
+                  <option key={m.id || m.matchNumber} value={m.matchNumber} className="bg-zinc-900 text-white">
+                    Match {m.matchNumber} {m.status === 'Live' ? '● LIVE' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
 
             {/* Feature: Add 1 Point to All Teams with 2-Step Confirmation */}
             <Button

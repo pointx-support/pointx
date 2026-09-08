@@ -392,6 +392,14 @@ export const useTournamentStore = create<AppState>((set, get) => ({
       const res = await tournamentsApi.getAll();
       if (res.success && Array.isArray(res.data)) {
         const loadedTournaments = res.data;
+        const currentTournaments = get().tournaments;
+
+        // If backend returned empty array, but we have local/demo tournaments, preserve them
+        if (loadedTournaments.length === 0 && currentTournaments.length > 0) {
+          set({ isLoadingTournaments: false, hasLoadedFromDatabase: true });
+          return;
+        }
+
         const currentActiveId = get().activeTournamentId;
         const matching = currentActiveId ? loadedTournaments.find((t) => t.id === currentActiveId) : null;
         const active = matching || (loadedTournaments.length > 0 ? loadedTournaments[0] : (currentActiveId ? get().currentTournament : createBlankTournament()));
