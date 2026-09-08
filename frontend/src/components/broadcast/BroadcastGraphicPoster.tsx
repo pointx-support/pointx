@@ -9,11 +9,23 @@ import { DynamicCustomTemplate } from '../graphics/templates/DynamicCustomTempla
 export interface BroadcastGraphicPosterProps {
   tournament: Tournament;
   isTransparent?: boolean;
+  templateId?: string;
+  template?: any;
+  hue?: number;
+  scope?: string | number;
+  customTitle?: string;
+  customOrg?: string;
 }
 
 export const BroadcastGraphicPoster: React.FC<BroadcastGraphicPosterProps> = ({
   tournament,
-  isTransparent = true
+  isTransparent = true,
+  templateId: propTemplateId,
+  template: propTemplate,
+  hue: propHue,
+  scope: propScope,
+  customTitle: propCustomTitle,
+  customOrg: propCustomOrg,
 }) => {
   const { templates, getActiveTemplate } = useTemplateStore();
 
@@ -24,19 +36,23 @@ export const BroadcastGraphicPoster: React.FC<BroadcastGraphicPosterProps> = ({
   const requestedTemplateId = urlParams?.get('templateId') || urlParams?.get('template');
   const requestedHue = urlParams?.get('hue') ? Number(urlParams.get('hue')) : 0;
   const requestedScope = urlParams?.get('scope') || 'overall';
-  const customTitle = urlParams?.get('title') || tournament.title || 'PointX Championship';
-  const customOrg = urlParams?.get('org') || tournament.organizer || 'PointX Esports';
+  const customTitle = propCustomTitle || urlParams?.get('title') || tournament.title || 'PointX Championship';
+  const customOrg = propCustomOrg || urlParams?.get('org') || tournament.organizer || 'PointX Esports';
+  const activeHue = propHue !== undefined ? propHue : requestedHue;
+  const activeScope = propScope !== undefined ? propScope : requestedScope;
 
   const template = useMemo(() => {
-    if (requestedTemplateId) {
-      const match = templates.find((t) => t.id === requestedTemplateId);
+    if (propTemplate) return propTemplate;
+    const targetId = propTemplateId || requestedTemplateId;
+    if (targetId) {
+      const match = templates.find((t) => t.id === targetId || (t as any)._id === targetId);
       if (match) return match;
     }
     return getActiveTemplate() || templates[0];
-  }, [requestedTemplateId, templates, getActiveTemplate]);
+  }, [propTemplate, propTemplateId, requestedTemplateId, templates, getActiveTemplate]);
 
-  const isOverall = requestedScope === 'overall';
-  const scopeNumber = !isOverall ? Number(requestedScope) : undefined;
+  const isOverall = activeScope === 'overall';
+  const scopeNumber = !isOverall ? Number(activeScope) : undefined;
 
   const standings = useMemo(() => {
     return calculateTournamentStandings(tournament, {
@@ -60,7 +76,7 @@ export const BroadcastGraphicPoster: React.FC<BroadcastGraphicPosterProps> = ({
     subtitle: graphicSubtitle
   };
 
-  const isPortrait = template.aspectRatio === '4:5';
+  const isPortrait = template?.aspectRatio === '4:5';
 
   return (
     <div
@@ -83,12 +99,14 @@ export const BroadcastGraphicPoster: React.FC<BroadcastGraphicPosterProps> = ({
           height: '100%'
         }}
       >
-        <DynamicCustomTemplate
-          template={template}
-          data={renderData}
-          hueRotate={requestedHue}
-          isInteractive={false}
-        />
+        {template ? (
+          <DynamicCustomTemplate
+            template={template}
+            data={renderData}
+            hueRotate={activeHue}
+            isInteractive={false}
+          />
+        ) : null}
       </div>
     </div>
   );

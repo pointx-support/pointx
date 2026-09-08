@@ -121,7 +121,8 @@ router.post('/state', optionalAuthenticate, async (req: AuthenticatedRequest, re
   delete sanitized.tokenExpiresAt;
   delete sanitized.blockedDeviceIds;
 
-  const updatedState = await updateAuthoritativeState(tourId, sanitized);
+  const eventType = body.eventType || 'STATE_UPDATED';
+  const updatedState = await updateAuthoritativeState(tourId, sanitized, undefined, eventType);
 
   res.status(200).json({
     success: true,

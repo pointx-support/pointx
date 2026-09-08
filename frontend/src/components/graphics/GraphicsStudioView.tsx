@@ -10,6 +10,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useToast } from '../ui/Toast';
 import { getOrdinalSuffix } from '../../utils/format';
+import { broadcastTemplateLiveUpdate } from '../../services/broadcastSync';
 import {
   Sparkles,
   Download,
@@ -113,6 +114,19 @@ export const GraphicsStudioView: React.FC = () => {
   }, [activeCategory, templates, activeTemplateId, setActiveTemplateId]);
 
   const currentTemplate = currentCategoryTemplate;
+
+  // Real-time synchronization to live OBS instances
+  useEffect(() => {
+    if (currentTemplate) {
+      broadcastTemplateLiveUpdate(currentTemplate, {
+        tournamentId: currentTournament.id,
+        themeHue: hueRotate,
+        activeScope: selectedScope,
+        customEventTitle,
+        customOrgName,
+      });
+    }
+  }, [currentTemplate, hueRotate, selectedScope, customEventTitle, customOrgName, currentTournament.id]);
 
   // Compute standings and subtitle dynamically based on selected scope
   const isOverall = selectedScope === 'overall';

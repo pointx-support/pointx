@@ -5,6 +5,7 @@ import { BroadcastFreeFireLiveOverlay } from './BroadcastFreeFireLiveOverlay';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { useToast } from '../ui/Toast';
+import { broadcastLayoutChange } from '../../services/broadcastSync';
 import {
   Tv,
   Copy,
@@ -74,6 +75,16 @@ export const BroadcastControlView: React.FC = () => {
       setToken(getPersistentBroadcastToken(currentTournament.id));
     }
   }, [currentTournament.id]);
+
+  const handleSelectOverlay = (sceneId: 'live-squads' | 'standings' | 'match' | 'mvp' | 'lowerthird' | 'graphic') => {
+    setOverlayType(sceneId);
+    broadcastLayoutChange(sceneId, { tournamentId: currentTournament.id });
+    showToast({
+      type: 'success',
+      title: 'OBS Scene Switched Live',
+      message: `OBS Browser source switched to ${sceneId.replace('-', ' ').toUpperCase()}.`
+    });
+  };
 
   // Poll live sync state for connected devices and active PIN across all networks
   useEffect(() => {
@@ -335,7 +346,7 @@ export const BroadcastControlView: React.FC = () => {
                   <button
                     key={sc.id}
                     type="button"
-                    onClick={() => setOverlayType(sc.id as any)}
+                    onClick={() => handleSelectOverlay(sc.id as any)}
                     className={`px-3 py-2 rounded-xl text-xs font-bold transition-all text-left truncate cursor-pointer border ${
                       overlayType === sc.id
                         ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] border-[var(--accent-primary)] shadow-sm'

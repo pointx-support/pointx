@@ -11,6 +11,20 @@ export interface RemoteDeviceSession {
   verified?: boolean;
 }
 
+export type BroadcastEvent =
+  | 'MATCH_CREATED'
+  | 'MATCH_UPDATED'
+  | 'MATCH_COMPLETED'
+  | 'SCORE_UPDATED'
+  | 'POINT_TABLE_UPDATED'
+  | 'TOURNAMENT_UPDATED'
+  | 'TEAM_UPDATED'
+  | 'PLAYER_UPDATED'
+  | 'TEMPLATE_UPDATED'
+  | 'GRAPHICS_UPDATED'
+  | 'OBS_STATE_UPDATED'
+  | 'STATE_UPDATED';
+
 export interface TournamentSyncState {
   tournamentId: string;
   revision: number;
@@ -24,6 +38,16 @@ export interface TournamentSyncState {
   connectedDevices: RemoteDeviceSession[];
   blockedDeviceIds: string[];
   timestamp: number;
+
+  // Real-Time Display & Template Controls
+  activeLayout?: string; // 'live-squads' | 'standings' | 'match' | 'fraggers' | 'lower-third' | 'graphic' | 'poster'
+  activeTemplateId?: string;
+  activeTemplate?: any;
+  activeMatchNumber?: number;
+  activeScope?: string | number; // 'overall' | number
+  customEventTitle?: string;
+  customOrgName?: string;
+  themeHue?: number;
   [key: string]: any;
 }
 
@@ -174,13 +198,29 @@ export function sanitizeStateForBroadcast(state: TournamentSyncState): any {
 }
 
 /**
- * Atomically update state, increment revision, broadcast to all connected clients,
+ * Helper to compute all room aliases for a tournament (customId, _id, id, and 'default')
+ */
+export function getRoomAliases(tournamentId: string, tournamentDoc?: any): string[] {
+  const rooms = new Set<string>();
+  if (tournamentId) rooms.add(tournamentId);
+  rooms.add('default');
+  if (tournamentDoc) {
+    if (tournamentDoc.customId) rooms.add(tournamentDoc.customId);
+    if (tournamentDoc._id) rooms.add(String(tournamentDoc._id));
+    if (tournamentDoc.id) rooms.add(String(tournamentDoc.id));
+  }
+  return Array.from(rooms);
+}
+
+/**
+ * Atomically update state, increment revision, broadcast to all connected clients across room aliases,
  * and persist tournament updates to MongoDB
  */
 export async function updateAuthoritativeState(
   tournamentId: string,
   updates: Partial<TournamentSyncState>,
-  sourceWs?: WebSocket
+  sourceWs?: WebSocket,
+  eventType: BroadcastEvent = 'STATE_UPDATED'
 ): Promise<TournamentSyncState> {
   const tourId = tournamentId || 'default';
   const state = await getOrCreateAuthoritativeState(tourId);
@@ -197,6 +237,16 @@ export async function updateAuthoritativeState(
   if (updates.pinCode !== undefined) state.pinCode = updates.pinCode;
   if (updates.blockedDeviceIds !== undefined) state.blockedDeviceIds = updates.blockedDeviceIds;
   if (updates.connectedDevices !== undefined) state.connectedDevices = updates.connectedDevices;
+
+  // Real-Time Display & Template Controls
+  if (updates.activeLayout !== undefined) state.activeLayout = updates.activeLayout;
+  if (updates.activeTemplateId !== undefined) state.activeTemplateId = updates.activeTemplateId;
+  if (updates.activeTemplate !== undefined) state.activeTemplate = updates.activeTemplate;
+  if (updates.activeMatchNumber !== undefined) state.activeMatchNumber = updates.activeMatchNumber;
+  if (updates.activeScope !== undefined) state.activeScope = updates.activeScope;
+  if (updates.customEventTitle !== undefined) state.customEventTitle = updates.customEventTitle;
+  if (updates.customOrgName !== undefined) state.customOrgName = updates.customOrgName;
+  if (updates.themeHue !== undefined) state.themeHue = updates.themeHue;
 
   // Persist tournament matches/teams/status to MongoDB in background
   if (updates.tournament && tourId !== 'default') {
@@ -218,60 +268,87 @@ export async function updateAuthoritativeState(
     });
   }
 
-  // Real-time broadcast to all connected WebSocket clients in this tournament room
-  const safeState = sanitizeStateForBroadcast(state);
-  broadcastToRoom(tourId, {
-    type: 'STATE_UPDATED',
-    tournamentId: tourId,
-    revision: state.revision,
-    data: safeState,
-    timestamp: state.timestamp,
-  });
+  // Synchronize state across alias keys in syncStore
+  const aliasRooms = getRoomAliases(tourId, state.tournament);
+  for (const alias of aliasRooms) {
+    if (alias !== tourId && syncStore[alias]) {
+      syncStore[alias].revision = state.revision;
+      syncStore[alias].timestamp = state.timestamp;
+      syncStore[alias].tournament = state.tournament;
+      syncStore[alias].squads = state.squads;
+      syncStore[alias].activeLayout = state.activeLayout;
+      syncStore[alias].activeTemplateId = state.activeTemplateId;
+      syncStore[alias].activeTemplate = state.activeTemplate;
+      syncStore[alias].activeMatchNumber = state.activeMatchNumber;
+      syncStore[alias].activeScope = state.activeScope;
+      syncStore[alias].customEventTitle = state.customEventTitle;
+      syncStore[alias].customOrgName = state.customOrgName;
+      syncStore[alias].themeHue = state.themeHue;
+      syncStore[alias].isVisible = state.isVisible;
+      syncStore[alias].highlightedTeamId = state.highlightedTeamId;
+    }
+  }
 
-  // Broadcast to all active SSE listeners
-  broadcastToSse(tourId, {
-    type: 'STATE_UPDATED',
+  // Real-time broadcast to all connected WebSocket clients across all alias rooms
+  const safeState = sanitizeStateForBroadcast(state);
+  const payload = {
+    type: eventType,
     tournamentId: tourId,
     revision: state.revision,
     data: safeState,
     timestamp: state.timestamp,
-  });
+  };
+
+  broadcastToRooms(aliasRooms, payload, sourceWs);
+
+  // Broadcast to all active SSE listeners across all alias rooms
+  broadcastToSseRooms(aliasRooms, payload);
 
   return state;
 }
 
 /**
- * Broadcast message to all WebSocket clients in a specific tournament room
+ * Broadcast message to all WebSocket clients across room aliases with client deduplication
  */
-function broadcastToRoom(tournamentId: string, message: any, excludeWs?: WebSocket): void {
-  const clients = roomClients.get(tournamentId);
-  if (!clients || clients.size === 0) return;
-
+function broadcastToRooms(roomIds: string[], message: any, excludeWs?: WebSocket): void {
+  const sentClients = new Set<WebSocket>();
   const raw = JSON.stringify(message);
-  for (const client of clients) {
-    if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
-      try {
-        client.send(raw);
-      } catch (err) {
-        console.warn(`[WebSocket Broadcast Error] ${tournamentId}:`, err);
+
+  for (const rid of roomIds) {
+    const clients = roomClients.get(rid);
+    if (!clients || clients.size === 0) continue;
+    for (const client of clients) {
+      if (!sentClients.has(client) && client !== excludeWs && client.readyState === WebSocket.OPEN) {
+        sentClients.add(client);
+        try {
+          client.send(raw);
+        } catch (err) {
+          console.warn(`[WebSocket Broadcast Error] ${rid}:`, err);
+        }
       }
     }
   }
 }
 
 /**
- * Broadcast message to active SSE listeners
+ * Broadcast message to active SSE listeners across room aliases with listener deduplication
  */
-function broadcastToSse(tournamentId: string, message: any): void {
-  const listeners = sseListeners.get(tournamentId);
-  if (!listeners || listeners.size === 0) return;
-
+function broadcastToSseRooms(roomIds: string[], message: any): void {
+  const sentListeners = new Set<any>();
   const raw = `data: ${JSON.stringify(message)}\n\n`;
-  for (const res of listeners) {
-    try {
-      res.write(raw);
-    } catch {
-      listeners.delete(res);
+
+  for (const rid of roomIds) {
+    const listeners = sseListeners.get(rid);
+    if (!listeners || listeners.size === 0) continue;
+    for (const res of listeners) {
+      if (!sentListeners.has(res)) {
+        sentListeners.add(res);
+        try {
+          res.write(raw);
+        } catch {
+          listeners.delete(res);
+        }
+      }
     }
   }
 }
@@ -437,7 +514,8 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
           delete payload.sessionToken;
           delete payload.blockedDeviceIds;
 
-          const updatedState = await updateAuthoritativeState(activeTourId, payload, ws);
+          const eventType = parsed.eventType || payload.eventType || 'STATE_UPDATED';
+          const updatedState = await updateAuthoritativeState(activeTourId, payload, ws, eventType);
 
           // Send ACK back to sender
           ws.send(

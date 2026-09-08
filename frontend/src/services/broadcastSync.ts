@@ -22,6 +22,8 @@ export interface BroadcastTokenInfo {
   createdAt: number;
 }
 
+export type ConnectionState = 'CONNECTED' | 'CONNECTING' | 'RECONNECTING' | 'DISCONNECTED';
+
 export type LivePlayerState = 'alive' | 'knock' | 'eliminated';
 
 export interface LiveSquadSyncState {
@@ -36,6 +38,20 @@ export interface LiveSquadSyncState {
   timestamp: number;
 }
 
+export interface BroadcastDisplayState {
+  tournamentId: string;
+  revision?: number;
+  activeLayout?: string;
+  activeTemplateId?: string;
+  activeTemplate?: any;
+  activeMatchNumber?: number;
+  activeScope?: string | number;
+  customEventTitle?: string;
+  customOrgName?: string;
+  themeHue?: number;
+  timestamp: number;
+}
+
 export interface FullSyncPayload {
   tournamentId: string;
   revision?: number;
@@ -46,6 +62,14 @@ export interface FullSyncPayload {
   pointRushTeamIds?: string[];
   isPointRushActive?: boolean;
   isVisible?: boolean;
+  activeLayout?: string;
+  activeTemplateId?: string;
+  activeTemplate?: any;
+  activeMatchNumber?: number;
+  activeScope?: string | number;
+  customEventTitle?: string;
+  customOrgName?: string;
+  themeHue?: number;
   timestamp?: number;
 }
 
@@ -76,6 +100,8 @@ export function getBroadcastToken(tournamentId: string): string {
 
 type TournamentListener = (tour: Tournament, revision?: number) => void;
 type SquadListener = (data: LiveSquadSyncState) => void;
+type DisplayListener = (data: BroadcastDisplayState) => void;
+type ConnectionListener = (state: ConnectionState) => void;
 type HeartbeatListener = () => void;
 
 class RealtimeSyncClient {
@@ -89,9 +115,12 @@ class RealtimeSyncClient {
   private reconnectTimer: any = null;
   private healthCheckTimer: any = null;
   private reconnectAttempts: number = 0;
+  private connectionState: ConnectionState = 'DISCONNECTED';
 
   private tournamentListeners = new Set<TournamentListener>();
   private squadListeners = new Set<SquadListener>();
+  private displayListeners = new Set<DisplayListener>();
+  private connectionListeners = new Set<ConnectionListener>();
   private heartbeatListeners = new Set<HeartbeatListener>();
 
   public static getInstance(): RealtimeSyncClient {
@@ -113,6 +142,8 @@ class RealtimeSyncClient {
           this.notifyTournament(msg.data, msg.revision);
         } else if (msg.type === 'LIVE_SQUADS_UPDATED' && msg.data) {
           this.notifySquads(msg.data);
+        } else if (msg.type === 'DISPLAY_STATE_UPDATED' && msg.data) {
+          this.notifyDisplayState(msg.data);
         }
       });
     }
@@ -134,6 +165,14 @@ class RealtimeSyncClient {
           try {
             const parsed = JSON.parse(raw);
             if (parsed) this.notifySquads(parsed);
+          } catch {}
+        }
+      } else if (event.key.startsWith('pointx_display_')) {
+        const raw = event.newValue;
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed) this.notifyDisplayState(parsed);
           } catch {}
         }
       }
@@ -181,6 +220,51 @@ class RealtimeSyncClient {
     return () => {
       this.squadListeners.delete(cb);
     };
+  }
+
+  public subscribeDisplay(cb: DisplayListener): () => void {
+    this.displayListeners.add(cb);
+
+    const cachedDisplay = this.getCachedDisplayState(this.currentTournamentId);
+    if (cachedDisplay) {
+      cb(cachedDisplay);
+    }
+
+    return () => {
+      this.displayListeners.delete(cb);
+    };
+  }
+
+  public subscribeConnection(cb: ConnectionListener): () => void {
+    this.connectionListeners.add(cb);
+    cb(this.connectionState);
+
+    return () => {
+      this.connectionListeners.delete(cb);
+    };
+  }
+
+  public getConnectionState(): ConnectionState {
+    return this.connectionState;
+  }
+
+  private setConnectionState(state: ConnectionState): void {
+    if (this.connectionState !== state) {
+      this.connectionState = state;
+      for (const listener of this.connectionListeners) {
+        try {
+          listener(state);
+        } catch {}
+      }
+    }
+  }
+
+  private notifyDisplayState(data: BroadcastDisplayState): void {
+    for (const listener of this.displayListeners) {
+      try {
+        listener(data);
+      } catch {}
+    }
   }
 
   private role: 'obs' | 'remote' | 'dashboard' = 'dashboard';
@@ -255,6 +339,7 @@ class RealtimeSyncClient {
 
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       if (this.ws.readyState === WebSocket.OPEN) {
+        this.setConnectionState('CONNECTED');
         this.ws.send(JSON.stringify({
           type: 'JOIN_ROOM',
           tournamentId: this.currentTournamentId,
@@ -267,6 +352,7 @@ class RealtimeSyncClient {
     }
 
     this.isConnecting = true;
+    this.setConnectionState(this.reconnectAttempts > 0 ? 'RECONNECTING' : 'CONNECTING');
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
 
@@ -285,6 +371,7 @@ class RealtimeSyncClient {
       this.ws.onopen = () => {
         this.isConnecting = false;
         this.reconnectAttempts = 0;
+        this.setConnectionState('CONNECTED');
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           this.ws.send(JSON.stringify({
             type: 'JOIN_ROOM',
@@ -311,6 +398,7 @@ class RealtimeSyncClient {
       this.ws.onclose = () => {
         this.ws = null;
         this.isConnecting = false;
+        this.setConnectionState('RECONNECTING');
         this.scheduleReconnect();
       };
     } catch {
@@ -326,6 +414,7 @@ class RealtimeSyncClient {
     try {
       this.sse = new EventSource(`/api/sync/stream?tournamentId=${encodeURIComponent(this.currentTournamentId)}`);
       this.sse.onmessage = (event: MessageEvent) => {
+        this.setConnectionState('CONNECTED');
         try {
           const msg = JSON.parse(event.data);
           this.handleServerMessage(msg);
@@ -336,8 +425,11 @@ class RealtimeSyncClient {
           this.sse.close();
           this.sse = null;
         }
+        this.scheduleReconnect();
       };
-    } catch {}
+    } catch {
+      this.scheduleReconnect();
+    }
   }
 
   private handleServerMessage(msg: any): void {
@@ -382,13 +474,43 @@ class RealtimeSyncClient {
       this.notifySquads(squadState);
     }
 
+    // Process display and template updates in real-time
+    if (
+      payload.activeLayout !== undefined ||
+      payload.activeTemplateId !== undefined ||
+      payload.activeTemplate !== undefined ||
+      payload.activeMatchNumber !== undefined ||
+      payload.activeScope !== undefined ||
+      payload.customEventTitle !== undefined ||
+      payload.customOrgName !== undefined ||
+      payload.themeHue !== undefined
+    ) {
+      const displayState: BroadcastDisplayState = {
+        tournamentId: payload.tournamentId || this.currentTournamentId,
+        revision: this.currentRevision,
+        activeLayout: payload.activeLayout,
+        activeTemplateId: payload.activeTemplateId,
+        activeTemplate: payload.activeTemplate,
+        activeMatchNumber: payload.activeMatchNumber,
+        activeScope: payload.activeScope,
+        customEventTitle: payload.customEventTitle,
+        customOrgName: payload.customOrgName,
+        themeHue: payload.themeHue,
+        timestamp: payload.timestamp || Date.now(),
+      };
+      this.cacheDisplayState(this.currentTournamentId, displayState);
+      this.notifyDisplayState(displayState);
+    }
+
     this.notifyHeartbeat();
   }
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectAttempts += 1;
-    const delay = Math.min(500 * Math.pow(1.5, this.reconnectAttempts - 1), 3000);
+    this.setConnectionState('RECONNECTING');
+    // Exponential backoff capped at 5s, never giving up
+    const delay = Math.min(500 * Math.pow(1.5, Math.min(this.reconnectAttempts, 8) - 1), 5000);
 
     this.reconnectTimer = setTimeout(() => {
       this.connect();
@@ -451,15 +573,46 @@ class RealtimeSyncClient {
             },
           });
         }
+        if (
+          payload.activeLayout !== undefined ||
+          payload.activeTemplateId !== undefined ||
+          payload.activeTemplate !== undefined ||
+          payload.activeMatchNumber !== undefined ||
+          payload.activeScope !== undefined ||
+          payload.customEventTitle !== undefined ||
+          payload.customOrgName !== undefined ||
+          payload.themeHue !== undefined
+        ) {
+          const displayPayload: BroadcastDisplayState = {
+            tournamentId: tourId,
+            revision: payload.revision || this.currentRevision,
+            activeLayout: payload.activeLayout,
+            activeTemplateId: payload.activeTemplateId,
+            activeTemplate: payload.activeTemplate,
+            activeMatchNumber: payload.activeMatchNumber,
+            activeScope: payload.activeScope,
+            customEventTitle: payload.customEventTitle,
+            customOrgName: payload.customOrgName,
+            themeHue: payload.themeHue,
+            timestamp: ts,
+          };
+          broadcastChannel.postMessage({
+            type: 'DISPLAY_STATE_UPDATED',
+            tournamentId: tourId,
+            data: displayPayload,
+            timestamp: ts,
+          });
+        }
       } catch {}
     }
 
-    // 2. LocalStorage Persistence
+    // 2. Local Notification & Persistence
     if (payload.tournament) {
       this.cacheTournament(tourId, payload.tournament);
+      this.notifyTournament(payload.tournament, this.currentRevision);
     }
     if (payload.squads || payload.isVisible !== undefined || payload.fireTeamIds !== undefined || payload.pointRushTeamIds !== undefined || payload.isPointRushActive !== undefined) {
-      this.cacheSquads(tourId, {
+      const squadState: LiveSquadSyncState = {
         tournamentId: tourId,
         squads: payload.squads || {},
         highlightedTeamId: payload.highlightedTeamId,
@@ -468,7 +621,35 @@ class RealtimeSyncClient {
         isPointRushActive: payload.isPointRushActive || false,
         isVisible: payload.isVisible !== undefined ? payload.isVisible : true,
         timestamp: ts,
-      });
+      };
+      this.cacheSquads(tourId, squadState);
+      this.notifySquads(squadState);
+    }
+    if (
+      payload.activeLayout !== undefined ||
+      payload.activeTemplateId !== undefined ||
+      payload.activeTemplate !== undefined ||
+      payload.activeMatchNumber !== undefined ||
+      payload.activeScope !== undefined ||
+      payload.customEventTitle !== undefined ||
+      payload.customOrgName !== undefined ||
+      payload.themeHue !== undefined
+    ) {
+      const dispState: BroadcastDisplayState = {
+        tournamentId: tourId,
+        revision: payload.revision || this.currentRevision,
+        activeLayout: payload.activeLayout,
+        activeTemplateId: payload.activeTemplateId,
+        activeTemplate: payload.activeTemplate,
+        activeMatchNumber: payload.activeMatchNumber,
+        activeScope: payload.activeScope,
+        customEventTitle: payload.customEventTitle,
+        customOrgName: payload.customOrgName,
+        themeHue: payload.themeHue,
+        timestamp: ts,
+      };
+      this.cacheDisplayState(tourId, dispState);
+      this.notifyDisplayState(dispState);
     }
 
     const effectiveRole = this.getRole();
@@ -607,6 +788,38 @@ class RealtimeSyncClient {
     }
     return null;
   }
+
+  private cacheDisplayState(tournamentId: string, data: BroadcastDisplayState): void {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(`pointx_display_${tournamentId}`, JSON.stringify(data));
+        window.localStorage.setItem('pointx_display_default', JSON.stringify(data));
+        window.localStorage.setItem('pointx_display_ping', String(Date.now()));
+      } catch {}
+    } else {
+      memoryStoreMap.set(`pointx_display_${tournamentId}`, JSON.stringify(data));
+    }
+  }
+
+  private getCachedDisplayState(tournamentId: string): BroadcastDisplayState | null {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw =
+        window.localStorage.getItem(`pointx_display_${tournamentId}`) ||
+        window.localStorage.getItem('pointx_display_default');
+      if (raw) {
+        try {
+          return JSON.parse(raw);
+        } catch {}
+      }
+    }
+    const mem = memoryStoreMap.get(`pointx_display_${tournamentId}`);
+    if (mem) {
+      try {
+        return JSON.parse(mem);
+      } catch {}
+    }
+    return null;
+  }
 }
 
 // =========================================================================
@@ -661,6 +874,49 @@ export function subscribeToLiveSquadUpdates(
   const client = RealtimeSyncClient.getInstance();
   client.setTournament(tournamentId);
   return client.subscribeSquads(onUpdate);
+}
+
+export function subscribeToBroadcastDisplayUpdates(
+  tournamentId: string,
+  onUpdate: (displayState: BroadcastDisplayState) => void
+): () => void {
+  const client = RealtimeSyncClient.getInstance();
+  client.setTournament(tournamentId);
+  return client.subscribeDisplay(onUpdate);
+}
+
+export function subscribeToConnectionState(cb: (state: ConnectionState) => void): () => void {
+  return RealtimeSyncClient.getInstance().subscribeConnection(cb);
+}
+
+export function broadcastDisplayUpdate(payload: Partial<BroadcastDisplayState> & { tournamentId?: string }): void {
+  const client = RealtimeSyncClient.getInstance();
+  const tourId = payload.tournamentId || 'default';
+  client.setTournament(tourId);
+  client.sendUpdate({
+    tournamentId: tourId,
+    ...payload,
+    timestamp: Date.now(),
+  });
+}
+
+export function broadcastLayoutChange(layout: string, extra?: Partial<BroadcastDisplayState> & { tournamentId?: string }): void {
+  const tourId = extra?.tournamentId || 'default';
+  broadcastDisplayUpdate({
+    tournamentId: tourId,
+    activeLayout: layout,
+    ...extra,
+  });
+}
+
+export function broadcastTemplateLiveUpdate(template: any, extra?: Partial<BroadcastDisplayState> & { tournamentId?: string }): void {
+  const tourId = extra?.tournamentId || 'default';
+  broadcastDisplayUpdate({
+    tournamentId: tourId,
+    activeTemplateId: template?.id || template?._id,
+    activeTemplate: template,
+    ...extra,
+  });
 }
 
 export function setClientSyncRole(role: 'obs' | 'remote' | 'dashboard'): void {

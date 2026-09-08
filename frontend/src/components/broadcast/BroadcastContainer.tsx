@@ -4,7 +4,10 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import { calculateTournamentStandings } from '../../engine/standingsEngine';
 import {
   subscribeToTournamentLiveUpdates,
-  subscribeToLiveSquadUpdates
+  subscribeToLiveSquadUpdates,
+  subscribeToBroadcastDisplayUpdates,
+  subscribeToConnectionState,
+  type ConnectionState
 } from '../../services/broadcastSync';
 import { BroadcastStandings } from './BroadcastStandings';
 import { BroadcastMatchResult } from './BroadcastMatchResult';
@@ -43,16 +46,24 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
 
   const [tournament, setTournament] = useState(initialTournament);
   const [lastSyncTime, setLastSyncTime] = useState<number>(() => Date.now());
-  const [isConnected, setIsConnected] = useState<boolean>(true);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionState>('CONNECTING');
   const [isOverlayVisible, setIsOverlayVisible] = useState<boolean>(true);
 
-  // Default to the flagship Free Fire live-squads overlay for OBS streams
-  const resolvedLayout = layoutType || urlParams?.get('layout') || 'live-squads';
+  // Dynamic Live Layout and Template Controls
+  const initialLayout = layoutType || urlParams?.get('layout') || 'live-squads';
+  const [currentLayout, setCurrentLayout] = useState<string>(initialLayout);
+  const [currentTemplateId, setCurrentTemplateId] = useState<string | undefined>(urlParams?.get('templateId') || urlParams?.get('template') || undefined);
+  const [currentTemplate, setCurrentTemplate] = useState<any>(undefined);
+  const [currentScope, setCurrentScope] = useState<string | number | undefined>(urlParams?.get('scope') || undefined);
+  const [currentHue, setCurrentHue] = useState<number | undefined>(urlParams?.get('hue') ? Number(urlParams.get('hue')) : undefined);
+  const [customEventTitle, setCustomEventTitle] = useState<string | undefined>(urlParams?.get('title') || undefined);
+  const [customOrgName, setCustomOrgName] = useState<string | undefined>(urlParams?.get('org') || undefined);
+  const [targetMatchNumber, setTargetMatchNumber] = useState<number | undefined>(urlParams?.get('match') ? Number(urlParams.get('match')) : undefined);
+
   const resolvedTransparent = isTransparent !== undefined
     ? isTransparent
     : urlParams?.get('transparent') !== 'false';
   const isDebugMode = urlParams?.get('debug') === 'true';
-  const targetMatchNumber = urlParams?.get('match') ? Number(urlParams.get('match')) : undefined;
 
   useEffect(() => {
     // Initial fetch from backend sync & tournament API
@@ -60,26 +71,42 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
       try {
         const res = await fetch(`/api/sync/state?tournamentId=${effectiveTourId}`);
         const data = await res.json();
-        if (data?.data?.tournament) {
-          setTournament(data.data.tournament);
+        if (data?.data) {
+          if (data.data.tournament) {
+            setTournament(data.data.tournament);
+          }
+          if (data.data.activeLayout && !layoutType) {
+            setCurrentLayout(data.data.activeLayout);
+          }
+          if (data.data.activeTemplateId) setCurrentTemplateId(data.data.activeTemplateId);
+          if (data.data.activeTemplate) setCurrentTemplate(data.data.activeTemplate);
+          if (data.data.activeScope !== undefined) setCurrentScope(data.data.activeScope);
+          if (data.data.activeMatchNumber !== undefined) setTargetMatchNumber(data.data.activeMatchNumber);
+          if (data.data.themeHue !== undefined) setCurrentHue(data.data.themeHue);
+          if (data.data.customEventTitle !== undefined) setCustomEventTitle(data.data.customEventTitle);
+          if (data.data.customOrgName !== undefined) setCustomOrgName(data.data.customOrgName);
+          if (data.data.isVisible !== undefined) setIsOverlayVisible(data.data.isVisible);
           setLastSyncTime(Date.now());
-          setIsConnected(true);
+          setConnectionStatus('CONNECTED');
         } else if (effectiveTourId && effectiveTourId !== 'default') {
           const tourRes = await fetch(`/api/tournaments/${effectiveTourId}`);
           const tourData = await tourRes.json();
           if (tourData?.data) {
             setTournament(tourData.data);
             setLastSyncTime(Date.now());
-            setIsConnected(true);
+            setConnectionStatus('CONNECTED');
           }
-        }
-        if (data?.data?.isVisible !== undefined) {
-          setIsOverlayVisible(data.data.isVisible);
         }
       } catch {}
     };
 
     loadInitialState();
+
+    // Subscribe to connection health
+    const unsubConnection = subscribeToConnectionState((state) => {
+      setConnectionStatus(state);
+      if (state === 'CONNECTED') setLastSyncTime(Date.now());
+    });
 
     // Subscribe to tournament data updates
     const unsubTournament = subscribeToTournamentLiveUpdates(
@@ -87,11 +114,11 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
       (updatedTournament) => {
         setTournament(updatedTournament);
         setLastSyncTime(Date.now());
-        setIsConnected(true);
+        setConnectionStatus('CONNECTED');
       },
       () => {
         setLastSyncTime(Date.now());
-        setIsConnected(true);
+        setConnectionStatus('CONNECTED');
       }
     );
 
@@ -101,14 +128,32 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
         setIsOverlayVisible(data.isVisible);
       }
       setLastSyncTime(Date.now());
-      setIsConnected(true);
+      setConnectionStatus('CONNECTED');
+    });
+
+    // Subscribe to real-time display, layout, and template changes
+    const unsubDisplay = subscribeToBroadcastDisplayUpdates(effectiveTourId, (disp) => {
+      if (disp.activeLayout && !layoutType) {
+        setCurrentLayout(disp.activeLayout);
+      }
+      if (disp.activeTemplateId) setCurrentTemplateId(disp.activeTemplateId);
+      if (disp.activeTemplate) setCurrentTemplate(disp.activeTemplate);
+      if (disp.activeScope !== undefined) setCurrentScope(disp.activeScope);
+      if (disp.activeMatchNumber !== undefined) setTargetMatchNumber(disp.activeMatchNumber);
+      if (disp.themeHue !== undefined) setCurrentHue(disp.themeHue);
+      if (disp.customEventTitle !== undefined) setCustomEventTitle(disp.customEventTitle);
+      if (disp.customOrgName !== undefined) setCustomOrgName(disp.customOrgName);
+      setLastSyncTime(Date.now());
+      setConnectionStatus('CONNECTED');
     });
 
     return () => {
+      unsubConnection();
       unsubTournament();
       unsubSquads();
+      unsubDisplay();
     };
-  }, [effectiveTourId]);
+  }, [effectiveTourId, layoutType]);
 
   const standings = calculateTournamentStandings(tournament);
 
@@ -130,8 +175,10 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
         <div className="fixed top-2 right-2 z-50 rounded-xl bg-black/90 border border-[#2ea66e]/40 p-2.5 text-[10px] font-mono text-slate-300 shadow-2xl flex items-center gap-3">
           <div className="flex items-center gap-1 text-[#2ea66e] font-bold">
             <Wifi className="h-3 w-3" />
-            <span>{isConnected ? 'LIVE SYNC' : 'OFFLINE'}</span>
+            <span>{connectionStatus === 'CONNECTED' ? 'LIVE SYNC' : connectionStatus}</span>
           </div>
+          <span>•</span>
+          <span>Layout: {currentLayout}</span>
           <span>•</span>
           <span>Tour: {tournament.id.slice(0, 14)}...</span>
           <span>•</span>
@@ -143,7 +190,7 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
       )}
 
       {/* Standings Table Layout with Show/Hide Support */}
-      {resolvedLayout === 'standings' && (
+      {currentLayout === 'standings' && (
         <div
           className={`w-full min-h-screen transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] transform ${
             isOverlayVisible
@@ -160,7 +207,7 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
       )}
 
       {/* Match Result Layout */}
-      {resolvedLayout === 'match' && (
+      {currentLayout === 'match' && (
         <div
           className={`w-full min-h-screen transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] transform ${
             isOverlayVisible
@@ -177,7 +224,7 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
       )}
 
       {/* Top Fraggers Layout */}
-      {resolvedLayout === 'fraggers' && (
+      {(currentLayout === 'fraggers' || currentLayout === 'mvp') && (
         <div
           className={`w-full min-h-screen transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] transform ${
             isOverlayVisible
@@ -193,7 +240,7 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
       )}
 
       {/* Flagship Free Fire Live Squads Overlay (Supports internal horizontal slide) */}
-      {(resolvedLayout === 'live-squads' || resolvedLayout === 'pro' || resolvedLayout === 'live') && (
+      {(currentLayout === 'live-squads' || currentLayout === 'pro' || currentLayout === 'live') && (
         <BroadcastFreeFireLiveOverlay
           tournament={tournament}
           standings={standings}
@@ -203,7 +250,7 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
       )}
 
       {/* Lower Third Layout */}
-      {resolvedLayout === 'lower-third' && (
+      {(currentLayout === 'lower-third' || currentLayout === 'lowerthird') && (
         <div
           className={`w-full min-h-screen transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] transform ${
             isOverlayVisible
@@ -219,8 +266,8 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
         </div>
       )}
 
-      {/* Graphic Poster Layout */}
-      {(resolvedLayout === 'graphic' || resolvedLayout === 'graphic-poster' || resolvedLayout === 'poster') && (
+      {/* Graphic Poster Layout with Dynamic Live Template & Hue Updates */}
+      {(currentLayout === 'graphic' || currentLayout === 'graphic-poster' || currentLayout === 'poster') && (
         <div
           className={`w-full min-h-screen transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] transform ${
             isOverlayVisible
@@ -231,6 +278,12 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
           <BroadcastGraphicPoster
             tournament={tournament}
             isTransparent={resolvedTransparent}
+            templateId={currentTemplateId}
+            template={currentTemplate}
+            hue={currentHue}
+            scope={currentScope}
+            customTitle={customEventTitle}
+            customOrg={customOrgName}
           />
         </div>
       )}

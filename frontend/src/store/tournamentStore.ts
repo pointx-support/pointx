@@ -18,7 +18,7 @@ import {
   calculateTopFraggers,
   calculateTournamentSummary
 } from '../engine/standingsEngine';
-import { broadcastTournamentUpdate } from '../services/broadcastSync';
+import { broadcastTournamentUpdate, subscribeToTournamentLiveUpdates } from '../services/broadcastSync';
 import { tournamentsApi, adminApi } from '../services/api';
 
 export interface AppState {
@@ -997,3 +997,24 @@ export const useTournamentStore = create<AppState>((set, get) => ({
 
   autofillKnownTeams: () => SEED_TEAMS
 }));
+
+if (typeof window !== 'undefined') {
+  subscribeToTournamentLiveUpdates('default', (incomingTour) => {
+    if (!incomingTour || !incomingTour.id) return;
+    useTournamentStore.setState((state) => {
+      const matchIdx = state.tournaments.findIndex((t) => t.id === incomingTour.id);
+      let updatedTournaments: Tournament[];
+      if (matchIdx >= 0) {
+        updatedTournaments = state.tournaments.map((t) => (t.id === incomingTour.id ? { ...t, ...incomingTour } : t));
+      } else {
+        updatedTournaments = [incomingTour, ...state.tournaments];
+      }
+      const isCurrent = state.currentTournament.id === incomingTour.id || state.activeTournamentId === incomingTour.id;
+      persistTournaments(updatedTournaments);
+      return {
+        tournaments: updatedTournaments,
+        currentTournament: isCurrent ? { ...state.currentTournament, ...incomingTour } : state.currentTournament
+      };
+    });
+  });
+}

@@ -6,6 +6,7 @@ import {
   updateTemplate,
   deleteTemplate,
 } from '../services/templateService';
+import { updateAuthoritativeState } from '../services/realtimeSync';
 
 export async function listTemplates(req: Request, res: Response, next: NextFunction) {
   try {
@@ -34,7 +35,18 @@ export async function updateExistingTemplate(req: AuthenticatedRequest, res: Res
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Template not found or cannot be edited.' });
     }
-    return res.status(200).json({ success: true, data: updated.toJSON() });
+    const templateData = updated.toJSON();
+    const tournamentId = (req.query.tournamentId as string) || (req.body?.tournamentId as string) || 'default';
+    updateAuthoritativeState(
+      tournamentId,
+      {
+        activeTemplateId: templateData._id || templateData.id,
+        activeTemplate: templateData,
+      },
+      undefined,
+      'TEMPLATE_UPDATED'
+    ).catch((err) => console.warn('[RealtimeSync] Template update broadcast error:', err));
+    return res.status(200).json({ success: true, data: templateData });
   } catch (error) {
     next(error);
   }

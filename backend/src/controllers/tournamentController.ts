@@ -15,6 +15,7 @@ import {
   cloneTournament,
   importTournaments,
 } from '../services/tournamentService';
+import { updateAuthoritativeState } from '../services/realtimeSync';
 
 export async function getMyTournaments(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
@@ -57,7 +58,14 @@ export async function createNewTournament(req: AuthenticatedRequest, res: Respon
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const validated = createTournamentSchema.parse(req.body);
     const tournament = await createTournament(req.user._id.toString(), validated);
-    return res.status(201).json({ success: true, data: tournament.toJSON() });
+    const tourData = tournament.toJSON();
+    updateAuthoritativeState(
+      tournament.customId || tournament._id.toString(),
+      { tournament: tourData },
+      undefined,
+      'TOURNAMENT_UPDATED'
+    ).catch((err) => console.warn('[RealtimeSync] Tournament create broadcast error:', err));
+    return res.status(201).json({ success: true, data: tourData });
   } catch (error) {
     next(error);
   }
@@ -72,7 +80,14 @@ export async function updateExistingTournament(req: AuthenticatedRequest, res: R
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Tournament not found or unauthorized.' });
     }
-    return res.status(200).json({ success: true, data: updated.toJSON() });
+    const tourData = updated.toJSON();
+    updateAuthoritativeState(
+      updated.customId || id,
+      { tournament: tourData },
+      undefined,
+      'MATCH_UPDATED'
+    ).catch((err) => console.warn('[RealtimeSync] Tournament update broadcast error:', err));
+    return res.status(200).json({ success: true, data: tourData });
   } catch (error) {
     next(error);
   }
