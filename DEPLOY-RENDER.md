@@ -47,7 +47,7 @@ If you prefer creating the service manually without the Blueprint:
 | **Branch** | `main` | Or your active branch |
 | **Root Directory** | *(Leave blank)* | Default root of the repository |
 | **Runtime** | `Node` | Node.js environment |
-| **Build Command** | `npm install && npm run build` | Installs dependencies & builds frontend |
+| **Build Command** | `npm install --include=dev && npm run build` | Installs dependencies & builds frontend |
 | **Start Command** | `npm start` | Runs `tsx backend/src/server.ts` |
 | **Instance Type** | `Free` or `Starter` | Starter recommended for no cold-sleep |
 

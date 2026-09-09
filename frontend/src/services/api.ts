@@ -5,12 +5,26 @@ import type { CustomGraphicsTemplate } from '../types/customTemplate';
 import type { GeneratedGraphicRecord } from '../types/export';
 import type { AdminUserRecord, PlatformSettings } from '../types/admin';
 
+const isBrowser = typeof window !== 'undefined';
+const isLocalhostBrowser = isBrowser && (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  window.location.hostname === '0.0.0.0'
+);
+
 const envApiUrl = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '').trim();
-const API_BASE_URL = envApiUrl
-  ? envApiUrl.replace(/\/+$/, '')
-  : typeof window !== 'undefined'
+
+// CRITICAL PRODUCTION FIX: If running on Render or remote domain, NEVER attempt to connect to localhost/127.0.0.1
+const sanitizedEnvUrl = (!isLocalhostBrowser && (envApiUrl.includes('localhost') || envApiUrl.includes('127.0.0.1')))
+  ? ''
+  : envApiUrl;
+
+const API_BASE_URL = sanitizedEnvUrl
+  ? sanitizedEnvUrl.replace(/\/+$/, '')
+  : isBrowser
   ? '/api'
   : 'http://127.0.0.1:5000/api';
+
 const TOKEN_KEY = 'pointx_auth_token_v1';
 let memoryToken: string | null = null;
 
@@ -32,8 +46,8 @@ export function setStoredToken(token: string | null) {
 
 async function request<T = any>(
   endpoint: string,
-  options: RequestInit = {}
-): Promise<{ success: boolean; data?: T; error?: string; [key: string]: any }> {
+  options: RequestInit & { timeoutMs?: number } = {}
+): Promise<{ success: boolean; data?: T; error?: string; isTimeout?: boolean; [key: string]: any }> {
   const token = getStoredToken();
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -48,13 +62,26 @@ async function request<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  // Enforce a hard 12-second timeout on all API requests to prevent infinite loading state
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs || 12000;
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  if (options.signal) {
+    options.signal.addEventListener('abort', () => controller.abort());
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
+      signal: controller.signal,
       headers,
       credentials: 'include',
     });
 
+    clearTimeout(timeoutId);
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
@@ -83,10 +110,17 @@ async function request<T = any>(
 
     return data;
   } catch (err: any) {
-    console.warn(`[API Network Error] ${endpoint}:`, err);
+    clearTimeout(timeoutId);
+    const isAbort = err.name === 'AbortError';
+    const errorMessage = isAbort
+      ? 'Request timed out. The PointX server may still be waking up from cold start.'
+      : (err.message || 'Network error. Please check your connection.');
+
+    console.warn(`[API Network Error] ${endpoint} (${isAbort ? 'TIMEOUT' : 'FAILED'}):`, errorMessage);
     return {
       success: false,
-      error: err.message || 'Network error. Please check your connection.',
+      error: errorMessage,
+      isTimeout: isAbort,
     };
   }
 }

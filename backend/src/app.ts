@@ -20,7 +20,7 @@ import mediaRoutes from './routes/mediaRoutes';
 import graphicsHistoryRoutes from './routes/graphicsHistoryRoutes';
 import adminRoutes from './routes/adminRoutes';
 import contactRoutes from './routes/contactRoutes';
-import healthRoutes from './routes/healthRoutes';
+import healthRoutes, { handleLivenessHealth, handleReadiness } from './routes/healthRoutes';
 import syncRoutes from './routes/syncRoutes';
 import platformRoutes from './routes/platformRoutes';
 import broadcastSessionRoutes from './routes/broadcastSessionRoutes';
@@ -141,7 +141,8 @@ export function createApp(): Application {
   app.use('/api/sync', syncRoutes);
   app.use('/api/broadcast/sessions', broadcastSessionRoutes);
   app.use('/api', healthRoutes);
-  app.use('/health', healthRoutes); // Root alias for health checks
+  app.get('/health', handleLivenessHealth); // Root alias for health checks
+  app.get('/ready', handleReadiness); // Root alias for readiness checks
 
   // 8. 404 Route Catch-All for /api routes
   app.use('/api', (_req, res) => {

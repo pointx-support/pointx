@@ -60,6 +60,7 @@ export async function enforceMaintenanceMode(req: AuthenticatedRequest, res: Res
   // 1. Unconditionally allow vital infrastructure, status, and administrative operations
   if (
     path.startsWith('/api/health') ||
+    path.startsWith('/api/ready') ||
     path.startsWith('/api/platform/status') ||
     path.startsWith('/api/admin') ||
     path.startsWith('/api/auth/login') ||

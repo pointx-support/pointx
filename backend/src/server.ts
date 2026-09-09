@@ -24,25 +24,52 @@ async function startServer() {
     // 1b. Attach Real-Time WebSocket Synchronization Server
     setupRealtimeSyncServer(server);
 
-    // 2. Connect Database & Ensure Super Admin in background
-    connectDB()
-      .then(async () => {
-        console.log(`🗄  Database: MongoDB Connected successfully`);
-        await ensureSuperAdminAccount();
+    // 2. Resilient Background Database Connection & Migrations
+    async function initializeDatabaseAndMigrations() {
+      let attempt = 0;
+      const maxRetries = 20;
+
+      while (attempt < maxRetries) {
         try {
-          const tenantStats = await runTenantMigration();
-          console.log(`🏢 [Tenant Migration] Complete: ${tenantStats.usersMigrated} users, ${tenantStats.tournamentsMigrated} tournaments, ${tenantStats.teamsMigrated} teams updated.`);
-        } catch (mErr) {
-          console.error('[Tenant Migration Error]', mErr);
+          attempt++;
+          await connectDB();
+          console.log(`🗄  Database: MongoDB Connected successfully`);
+
+          try {
+            await ensureSuperAdminAccount();
+          } catch (adminErr) {
+            console.error('[Bootstrap Admin Error]', adminErr);
+          }
+
+          try {
+            const tenantStats = await runTenantMigration();
+            console.log(`🏢 [Tenant Migration] Complete: ${tenantStats.usersMigrated} users, ${tenantStats.tournamentsMigrated} tournaments, ${tenantStats.teamsMigrated} teams updated.`);
+          } catch (mErr) {
+            console.error('[Tenant Migration Error]', mErr);
+          }
+
+          try {
+            const migrationResult = await migrateExistingTemplates();
+            if (migrationResult.migrated > 0 || migrationResult.needsReview > 0) {
+              console.log(`🎨 [Template Migration] Migrated: ${migrationResult.migrated}, Needs Review: ${migrationResult.needsReview}`);
+            }
+          } catch (tErr) {
+            console.error('[Template Migration Error]', tErr);
+          }
+
+          return; // Connected and bootstrapped!
+        } catch (err: any) {
+          const delay = Math.min(2000 * Math.pow(1.3, attempt), 20000);
+          console.warn(`[Database Connection Notice] Attempt ${attempt} failed: ${err.message || err}. Reconnecting in ${Math.round(delay / 1000)}s...`);
+          await new Promise((r) => setTimeout(r, delay));
         }
-        const migrationResult = await migrateExistingTemplates();
-        if (migrationResult.migrated > 0 || migrationResult.needsReview > 0) {
-          console.log(`🎨 [Template Migration] Migrated: ${migrationResult.migrated}, Needs Review: ${migrationResult.needsReview}`);
-        }
-      })
-      .catch((err) => {
-        console.error('[Database Connection Warning]', err);
-      });
+      }
+      console.error(`[Database Critical] Could not connect to MongoDB after ${maxRetries} attempts. HTTP server is still alive for health checks.`);
+    }
+
+    initializeDatabaseAndMigrations().catch((err) => {
+      console.error('[Database Initialization Exception]', err);
+    });
 
     // 4. Graceful Shutdown Handlers
     const shutdown = async (signal: string) => {
