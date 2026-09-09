@@ -2,6 +2,9 @@ import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { Tournament } from '../models/Tournament';
 import { calculateTeamMatchScore, recalculateMatchScores } from './scoringEngine';
+import { LiveStateStore, type RemoteCommand } from './liveStateStore';
+import { enqueueBatchedPersistence, flushPersistenceImmediately } from './batchedPersistenceService';
+import { getNextMatchForTournament } from './tournamentService';
 
 export interface RemoteDeviceSession {
   deviceId: string;
@@ -721,6 +724,120 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
               timestamp: state.timestamp,
             })
           );
+          return;
+        }
+
+        if (parsed.type === 'COMMAND') {
+          const cmd: RemoteCommand = {
+            commandId: parsed.commandId || `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+            command: parsed.command,
+            sessionId: parsed.sessionId,
+            organizationId: parsed.organizationId || 'org-default',
+            tournamentId: parsed.tournamentId || activeTourId,
+            matchId: parsed.matchId || 'm1',
+            payload: parsed.payload || {},
+            timestamp: parsed.timestamp || Date.now(),
+          };
+
+          if (cmd.command === 'NEXT_MATCH') {
+            await flushPersistenceImmediately(cmd.organizationId, cmd.tournamentId, cmd.matchId);
+
+            const nextRes = await getNextMatchForTournament(cmd.tournamentId, cmd.matchId);
+            if (nextRes.hasNext && nextRes.nextMatch) {
+              const nextLiveState = await LiveStateStore.getInstance().getOrCreateLiveState(
+                cmd.organizationId,
+                cmd.tournamentId,
+                nextRes.nextMatch.id
+              );
+
+              const nextMsg = {
+                type: 'NEXT_MATCH_READY',
+                tournamentId: cmd.tournamentId,
+                matchId: nextRes.nextMatch.id,
+                matchNumber: nextRes.nextMatch.matchNumber,
+                nextMatch: nextRes.nextMatch,
+                initialState: nextLiveState,
+                timestamp: Date.now(),
+              };
+
+              const aliasRooms = getRoomAliases(cmd.tournamentId);
+              broadcastToRooms(aliasRooms, nextMsg);
+              ws.send(JSON.stringify(nextMsg));
+            } else {
+              ws.send(JSON.stringify({
+                type: 'NO_NEXT_MATCH',
+                message: nextRes.message || 'No next match',
+                timestamp: Date.now(),
+              }));
+            }
+            return;
+          }
+
+          if (cmd.command === 'FINALIZE_MATCH') {
+            await flushPersistenceImmediately(cmd.organizationId, cmd.tournamentId, cmd.matchId);
+          }
+
+          const currentTourState = await getOrCreateAuthoritativeState(cmd.tournamentId);
+          const scoringPreset = currentTourState.tournament?.scoringPreset;
+
+          const { state: updatedLiveState, patch } = await LiveStateStore.getInstance().applyCommand(cmd, scoringPreset);
+
+          // Batched asynchronous persistence (3s debounce window)
+          enqueueBatchedPersistence(updatedLiveState, scoringPreset);
+
+          // Broadcast ultra-lightweight MATCH_DELTA (~200 bytes)
+          const deltaMsg = {
+            type: 'MATCH_DELTA',
+            matchId: cmd.matchId,
+            revision: updatedLiveState.revision,
+            patch,
+            timestamp: updatedLiveState.updatedAt,
+          };
+
+          const aliasRooms = getRoomAliases(cmd.tournamentId);
+          broadcastToRooms(aliasRooms, deltaMsg);
+          broadcastToSseRooms(aliasRooms, deltaMsg);
+
+          // Send immediate ACK back to Remote
+          ws.send(JSON.stringify({
+            type: 'ACK',
+            commandId: cmd.commandId,
+            revision: updatedLiveState.revision,
+            success: true,
+            timestamp: updatedLiveState.updatedAt,
+          }));
+          return;
+        }
+
+        if (parsed.type === 'JOIN_MATCH') {
+          const orgId = parsed.organizationId || 'org-default';
+          const tourId = parsed.tournamentId || activeTourId;
+          const matchId = parsed.matchId || 'm1';
+
+          const liveState = await LiveStateStore.getInstance().getOrCreateLiveState(orgId, tourId, matchId);
+          ws.send(JSON.stringify({
+            type: 'INITIAL_MATCH_STATE',
+            matchId,
+            revision: liveState.revision,
+            data: liveState,
+            timestamp: liveState.updatedAt,
+          }));
+          return;
+        }
+
+        if (parsed.type === 'REQUEST_FULL_STATE') {
+          const orgId = parsed.organizationId || 'org-default';
+          const tourId = parsed.tournamentId || activeTourId;
+          const matchId = parsed.matchId || 'm1';
+
+          const liveState = await LiveStateStore.getInstance().getOrCreateLiveState(orgId, tourId, matchId);
+          ws.send(JSON.stringify({
+            type: 'FULL_MATCH_STATE',
+            matchId,
+            revision: liveState.revision,
+            state: liveState,
+            timestamp: liveState.updatedAt,
+          }));
           return;
         }
 

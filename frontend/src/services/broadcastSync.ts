@@ -253,6 +253,31 @@ export class RealtimeSyncClient {
     };
   }
 
+  private rawMessageListeners = new Set<(msg: any) => void>();
+
+  public subscribeRawMessage(cb: (msg: any) => void): () => void {
+    this.rawMessageListeners.add(cb);
+    return () => {
+      this.rawMessageListeners.delete(cb);
+    };
+  }
+
+  public notifyRawMessage(msg: any): void {
+    for (const listener of this.rawMessageListeners) {
+      try {
+        listener(msg);
+      } catch {}
+    }
+  }
+
+  public sendRawMessage(msg: any): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        this.ws.send(JSON.stringify(msg));
+      } catch {}
+    }
+  }
+
   private notifyScoreDelta(delta: any): void {
     for (const listener of this.scoreDeltaListeners) {
       try {
@@ -413,6 +438,7 @@ export class RealtimeSyncClient {
       this.ws.onmessage = (event: MessageEvent) => {
         try {
           const msg = JSON.parse(event.data);
+          this.notifyRawMessage(msg);
           this.handleServerMessage(msg);
         } catch {}
       };
@@ -443,6 +469,7 @@ export class RealtimeSyncClient {
         this.setConnectionState('CONNECTED');
         try {
           const msg = JSON.parse(event.data);
+          this.notifyRawMessage(msg);
           this.handleServerMessage(msg);
         } catch {}
       };

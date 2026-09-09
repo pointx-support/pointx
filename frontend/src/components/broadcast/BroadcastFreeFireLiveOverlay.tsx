@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Tournament, CalculatedStanding } from '../../types/tournament';
 import { subscribeToLiveSquadUpdates } from '../../services/broadcastSync';
+import { CanonicalLiveStore } from '../../services/canonicalLiveStore';
 import { Flame, Crosshair } from 'lucide-react';
 
 export interface BroadcastFreeFireLiveOverlayProps {
@@ -135,6 +136,18 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
     }
   }, [propIsOverlayVisible]);
 
+  // Resolve active match based on activeMatchNumber prop, or live match status, or last match, or matches[0]
+  const activeMatch = React.useMemo(() => {
+    if (!tournament.matches || tournament.matches.length === 0) return null;
+    if (activeMatchNumber !== undefined) {
+      const found = tournament.matches.find((m) => m.matchNumber === activeMatchNumber);
+      if (found) return found;
+    }
+    const liveMatch = tournament.matches.find((m) => m.status === 'Live');
+    if (liveMatch) return liveMatch;
+    return tournament.matches[tournament.matches.length - 1] || tournament.matches[0] || null;
+  }, [tournament.matches, activeMatchNumber]);
+
   React.useEffect(() => {
     const unsubscribe = subscribeToLiveSquadUpdates(effectiveSubId, (data) => {
       if (data.squads) {
@@ -156,8 +169,48 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
         setIsOverlayVisible(data.isVisible);
       }
     });
-    return () => unsubscribe();
-  }, [effectiveSubId]);
+
+    const store = CanonicalLiveStore.getInstance();
+    store.setMatchContext(
+      (tournament as any)?.organizationId || 'org-default',
+      effectiveSubId,
+      activeMatch?.id || 'm1'
+    );
+
+    const unsubStore = store.subscribe((liveState) => {
+      if (liveState.tableVisible !== undefined) {
+        setIsOverlayVisible(liveState.tableVisible);
+      }
+      if (liveState.fireTeamId !== undefined) {
+        setFireTeamIds(liveState.fireTeamId ? [liveState.fireTeamId] : []);
+      }
+      if (liveState.pointRushThreshold !== undefined) {
+        const qualifying = Object.values(liveState.teams || {})
+          .filter((t) => t.pointRushEnabled)
+          .map((t) => t.teamId);
+        setPointRushTeamIds(qualifying);
+        setIsPointRushActive(qualifying.length > 0);
+      }
+      if (liveState.teams) {
+        setLiveSquads((prev) => {
+          const updated = { ...prev };
+          for (const [tid, teamObj] of Object.entries(liveState.teams)) {
+            if (teamObj.players) {
+              const pArr: any[] = Object.values(teamObj.players).map((p) => p.status);
+              while (pArr.length < 4) pArr.push('alive');
+              updated[tid] = pArr.slice(0, 4) as any;
+            }
+          }
+          return updated;
+        });
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      unsubStore();
+    };
+  }, [effectiveSubId, activeMatch?.id]);
 
   const togglePlayerState = (teamId: string, playerIndex: number) => {
     setLiveSquads((prev) => {
@@ -174,18 +227,6 @@ export const BroadcastFreeFireLiveOverlay: React.FC<BroadcastFreeFireLiveOverlay
   };
 
   const displayTeams = standings.slice(0, 12);
-  
-  // Resolve active match based on activeMatchNumber prop, or live match status, or last match, or matches[0]
-  const activeMatch = React.useMemo(() => {
-    if (!tournament.matches || tournament.matches.length === 0) return null;
-    if (activeMatchNumber !== undefined) {
-      const found = tournament.matches.find((m) => m.matchNumber === activeMatchNumber);
-      if (found) return found;
-    }
-    const liveMatch = tournament.matches.find((m) => m.status === 'Live');
-    if (liveMatch) return liveMatch;
-    return tournament.matches[tournament.matches.length - 1] || tournament.matches[0] || null;
-  }, [tournament.matches, activeMatchNumber]);
 
   return (
     <div

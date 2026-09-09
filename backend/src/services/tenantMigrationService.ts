@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
-import { User, IUser } from '../models/User';
-import { Organization, IOrganization } from '../models/Organization';
+import { User, type IUser } from '../models/User';
+import { Organization, type IOrganization } from '../models/Organization';
 import { OrganizationMembership } from '../models/OrganizationMembership';
 import { Tournament } from '../models/Tournament';
 import { GlobalTeam } from '../models/GlobalTeam';
@@ -115,8 +115,10 @@ export async function runTenantMigration(): Promise<{
         const ownerUser = await User.findById(ownerUserId);
         if (ownerUser) {
           const org = await ensureUserOrganization(ownerUser);
-          targetOrgId = org._id as any;
-          userOrgMap.set(ownerUserId, targetOrgId);
+          targetOrgId = org._id as mongoose.Types.ObjectId;
+          if (targetOrgId) {
+            userOrgMap.set(ownerUserId, targetOrgId);
+          }
         }
       }
 

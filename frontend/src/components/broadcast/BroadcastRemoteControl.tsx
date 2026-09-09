@@ -13,6 +13,7 @@ import {
   sendMatchScoreUpdate,
   type LivePlayerState
 } from '../../services/broadcastSync';
+import { CanonicalLiveStore } from '../../services/canonicalLiveStore';
 import { tournamentsApi } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
@@ -539,6 +540,51 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
     setIsReportModalOpen(true);
   };
 
+  React.useEffect(() => {
+    const store = CanonicalLiveStore.getInstance();
+    store.setMatchContext((tournament as any)?.organizationId || 'org-default', tournament.id, activeMatch.id);
+
+    const unsub = store.subscribe((liveState) => {
+      if (liveState.tableVisible !== undefined) {
+        setIsOverlayVisible(liveState.tableVisible);
+      }
+      if (liveState.fireTeamId !== undefined) {
+        setFireTeamIds(liveState.fireTeamId ? [liveState.fireTeamId] : []);
+      }
+      if (liveState.pointRushThreshold !== undefined) {
+        const qualifying = Object.values(liveState.teams || {})
+          .filter((t) => t.pointRushEnabled)
+          .map((t) => t.teamId);
+        setPointRushTeamIds(qualifying);
+        setIsPointRushActive(qualifying.length > 0);
+      }
+    });
+
+    const unsubNext = store.subscribeNextMatch((data) => {
+      if (data.nextMatchNumber) {
+        setSelectedMatchNumber(data.nextMatchNumber);
+        showToast({
+          type: 'success',
+          title: `Switched to Match #${data.nextMatchNumber} 🎮`,
+          message: `Loaded real match #${data.nextMatchNumber}. All previous match states cleanly isolated.`,
+        });
+      }
+    });
+
+    return () => {
+      unsub();
+      unsubNext();
+    };
+  }, [tournament.id, activeMatch.id]);
+
+  const handleNextMatchClick = () => {
+    haptics.medium();
+    CanonicalLiveStore.getInstance().sendCommand('NEXT_MATCH', {
+      currentMatchId: activeMatch.id,
+      currentMatchNumber: activeMatch.matchNumber,
+    });
+  };
+
   // Sync to OBS whenever squad states, highlighted team, visibility, fire, or point rush change
   const syncToBroadcast = (
     newSquads: Record<string, [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState]>,
@@ -609,6 +655,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   const toggleOverlayVisibility = () => {
     const nextVisible = !isOverlayVisible;
     setIsOverlayVisible(nextVisible);
+    CanonicalLiveStore.getInstance().sendCommand('SET_TABLE_VISIBILITY', { visible: nextVisible });
     syncToBroadcast(squadStates, highlightedTeamId, nextVisible);
     showToast({
       type: nextVisible ? 'success' : 'info',
@@ -708,7 +755,8 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
         eliminated: 'alive'
       };
       const updated = [...current] as [LivePlayerState, LivePlayerState, LivePlayerState, LivePlayerState];
-      updated[playerIndex] = cycle[updated[playerIndex]];
+      const nextPlayerStatus = cycle[updated[playerIndex]];
+      updated[playerIndex] = nextPlayerStatus;
       const nextState = { ...prev, [teamId]: updated };
 
       const isDeadNow = updated.every((p) => p === 'eliminated');
@@ -722,7 +770,12 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
         setEliminationOrder(nextElimOrder);
       }
 
-      syncToBroadcast(nextState);
+      CanonicalLiveStore.getInstance().sendCommand('SET_PLAYER_STATUS', {
+        teamId,
+        playerId: `${teamId}-p${playerIndex + 1}`,
+        status: nextPlayerStatus,
+      });
+
       recalculateAutoPlacements(nextState, nextElimOrder);
       return nextState;
     });
@@ -747,7 +800,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
     const assignedRank = Math.max(2, totalTeams - (nextElimOrder.length - 1));
     const pts = getPlacementPoints(assignedRank, tournament.scoringPreset);
 
-    syncToBroadcast(nextState);
+    CanonicalLiveStore.getInstance().sendCommand('WIPE_SQUAD', { teamId });
     recalculateAutoPlacements(nextState, nextElimOrder);
 
     showToast({
@@ -768,7 +821,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
     setEliminationOrder(nextElimOrder);
     setSquadStates(nextState);
 
-    syncToBroadcast(nextState);
+    CanonicalLiveStore.getInstance().sendCommand('REVIVE_SQUAD', { teamId });
     recalculateAutoPlacements(nextState, nextElimOrder);
   };
 
@@ -803,6 +856,13 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
 
     const currentResult = activeMatch.results.find((r: TeamMatchResult) => r.teamId === teamId);
     const newKills = Math.max(0, (currentResult?.kills || 0) + delta);
+
+    // Send lightweight delta command (~50 bytes)
+    CanonicalLiveStore.getInstance().sendCommand('ADD_KILLS', {
+      teamId,
+      delta,
+      kills: newKills,
+    });
 
     const updatedResults = activeMatch.results.map((r: TeamMatchResult) => {
       if (r.teamId === teamId) {
@@ -1287,6 +1347,16 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
                 ))}
               </select>
             )}
+
+            {/* Realtime NEXT MATCH Transition */}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleNextMatchClick}
+              className="font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5"
+            >
+              NEXT MATCH →
+            </Button>
 
             {/* Feature: Add 1 Point to All Teams with 2-Step Confirmation */}
             <Button

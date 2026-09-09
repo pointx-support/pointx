@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { Tournament, ITournament } from '../models/Tournament';
+import { Tournament, type ITournament } from '../models/Tournament';
 import { AuditActivity } from '../models/AuditActivity';
 import { registerServerDeletedMatch, updateAuthoritativeState } from './realtimeSync';
 import { ensureUserOrganization } from './tenantMigrationService';
@@ -439,3 +439,83 @@ export async function importTournaments(
 
   return count;
 }
+
+export async function getNextMatchForTournament(
+  tournamentId: string,
+  currentMatchId: string
+): Promise<{ hasNext: boolean; nextMatchId?: string; nextMatchNumber?: number; nextMatch?: any; message?: string }> {
+  const idQueries: any[] = [{ customId: tournamentId }];
+  if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
+    idQueries.push({ _id: tournamentId });
+  }
+
+  const tour = await Tournament.findOne({ $or: idQueries });
+  if (!tour) {
+    return { hasNext: false, message: 'Tournament not found' };
+  }
+
+  if (!Array.isArray(tour.matches)) tour.matches = [];
+
+  const currentMatch = tour.matches.find((m: any) => (m.id || m.customId) === currentMatchId);
+  const currentNum = currentMatch?.matchNumber || 1;
+  const targetNextNum = currentNum + 1;
+
+  // 1. Check if an existing match already has matchNumber === targetNextNum
+  let nextMatch = tour.matches.find((m: any) => m.matchNumber === targetNextNum);
+  if (nextMatch) {
+    return {
+      hasNext: true,
+      nextMatchId: nextMatch.id || nextMatch.customId,
+      nextMatchNumber: nextMatch.matchNumber,
+      nextMatch,
+    };
+  }
+
+  // 2. Check structure matchCount limit
+  const totalPlanned = tour.structure?.matchCount || 6;
+  if (targetNextNum > totalPlanned) {
+    return {
+      hasNext: false,
+      message: `Match ${currentNum} is the final match of the tournament (Total: ${totalPlanned}).`,
+    };
+  }
+
+  // 3. Create legitimate persisted next match in MongoDB
+  const effectiveTeams = Array.isArray(tour.teams) && tour.teams.length > 0 ? tour.teams : [];
+  const newMatchId = `m_${tour.customId || tournamentId}_${targetNextNum}`;
+  const now = new Date().toISOString();
+
+  nextMatch = {
+    id: newMatchId,
+    customId: newMatchId,
+    tournamentId: tour.customId || tournamentId,
+    matchNumber: targetNextNum,
+    mapName: 'Purgatory',
+    status: 'Upcoming',
+    createdAt: now,
+    updatedAt: now,
+    results: effectiveTeams.map((t: any, idx: number) => ({
+      teamId: t.id,
+      placement: Math.max(1, (effectiveTeams.length || 12) - idx),
+      kills: 0,
+      placementPoints: 0,
+      killPoints: 0,
+      totalPoints: 0,
+      isBooyah: false,
+    })),
+  };
+
+  tour.matches.push(nextMatch);
+  await Tournament.updateOne(
+    { $or: idQueries },
+    { $set: { matches: tour.matches } }
+  );
+
+  return {
+    hasNext: true,
+    nextMatchId: newMatchId,
+    nextMatchNumber: targetNextNum,
+    nextMatch,
+  };
+}
+
