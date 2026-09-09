@@ -13,6 +13,13 @@ export interface BroadcastSessionConnection {
     targetTeamId?: string,
     payload?: any
   ) => Promise<{ revision: number; state: AuthoritativeBroadcastState }>;
+  sendBatchCommands: (
+    commands: Array<{
+      commandType: string;
+      targetTeamId?: string;
+      payload?: any;
+    }>
+  ) => Promise<{ revision: number; state: AuthoritativeBroadcastState }>;
   submitMatchReport: (
     overrides?: any[]
   ) => Promise<{ success: boolean; state: AuthoritativeBroadcastState }>;
@@ -24,6 +31,7 @@ export interface BroadcastSessionCallbacks {
   onState: (state: AuthoritativeBroadcastState) => void;
   onStatusChange?: (status: BroadcastSyncStatus) => void;
   onError?: (err: any) => void;
+  onOverlayEvent?: (event: any) => void;
 }
 
 /**
@@ -129,6 +137,17 @@ export function connectBroadcastSession(
         try {
           const message = JSON.parse(event.data);
 
+          if (
+            (message.type === 'REFRESH_OVERLAY' ||
+              message.action === 'REFRESH_OVERLAY' ||
+              message.type === 'BROADCAST_OVERLAY_EVENT') &&
+            (!message.sessionId || message.sessionId === sessionId)
+          ) {
+            callbacks.onOverlayEvent?.(message);
+            syncAuthoritativeSnapshot();
+            return;
+          }
+
           if (message.type === 'BROADCAST_STATE_UPDATED' && message.sessionId === sessionId) {
             const incomingRev = Number(message.revision);
             const incomingState = message.state || message.payload || message.data;
@@ -197,6 +216,18 @@ export function connectBroadcastSession(
       const resolvedState = res.state || res.payload || (res.data as any)?.state;
       if (!res.success || !resolvedState) {
         throw new Error(res.error || `Command ${commandType} failed`);
+      }
+      if (res.revision >= currentRevision) {
+        currentRevision = res.revision;
+        callbacks.onState(resolvedState);
+      }
+      return { revision: res.revision, state: resolvedState };
+    },
+    sendBatchCommands: async (commands: Array<{ commandType: string; targetTeamId?: string; payload?: any }>) => {
+      const res = await broadcastSessionApi.sendBatchCommands(sessionId, commands);
+      const resolvedState = res.state || res.payload || (res.data as any)?.state;
+      if (!res.success || !resolvedState) {
+        throw new Error(res.error || 'Batch command execution failed');
       }
       if (res.revision >= currentRevision) {
         currentRevision = res.revision;

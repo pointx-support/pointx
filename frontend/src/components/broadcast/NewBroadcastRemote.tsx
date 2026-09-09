@@ -10,6 +10,7 @@ import {
   Plus,
   Minus,
   RotateCcw,
+  RefreshCw,
   Skull,
   ShieldCheck,
   Radio,
@@ -219,10 +220,10 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
             teamCopy.squadPlayers = ['alive', 'alive', 'alive', 'alive'];
             teamCopy.alivePlayersCount = 4;
             teamCopy.isWiped = false;
-          } else if (commandType === 'SET_MODE') {
-            teamCopy.isFireActive = payload?.mode === 'FIRE';
+          } else if (commandType === 'SET_MODE' || commandType === 'SET_FIRE' || commandType === 'TOGGLE_FIRE') {
+            teamCopy.isFireActive = payload?.fire !== undefined ? !!payload.fire : (payload?.mode === 'FIRE');
           } else if (commandType === 'SET_POINT_RUSH') {
-            teamCopy.isPointRushActive = !!payload?.enabled;
+            teamCopy.isPointRushActive = payload?.rush !== undefined ? !!payload.rush : !!payload?.enabled;
           }
           return teamCopy;
         });
@@ -232,7 +233,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
     });
   }, []);
 
-  // Sequential queue processor: runs in background, sends commands one by one to prevent race conditions
+  // Batch queue processor: drains queue in batches to eliminate serial network roundtrip lag
   const processQueue = useCallback(async () => {
     const conn = connectionRef.current || connection;
     if (isProcessingQueueRef.current || !conn) return;
@@ -240,13 +241,16 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
 
     isProcessingQueueRef.current = true;
     while (commandQueueRef.current.length > 0) {
-      const nextCmd = commandQueueRef.current[0];
+      const batch = commandQueueRef.current.splice(0, commandQueueRef.current.length);
       try {
-        await conn.sendCommand(nextCmd.commandType, nextCmd.targetTeamId, nextCmd.payload);
+        if (batch.length === 1) {
+          await conn.sendCommand(batch[0].commandType, batch[0].targetTeamId, batch[0].payload);
+        } else if (batch.length > 1) {
+          await conn.sendBatchCommands(batch);
+        }
       } catch (err: any) {
-        console.error('[RemoteCommand Error]', nextCmd, err);
+        console.error('[RemoteCommand Error]', batch, err);
       }
-      commandQueueRef.current.shift();
     }
     isProcessingQueueRef.current = false;
   }, [connection]);
@@ -354,6 +358,28 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         title: 'Match Finished!',
         message: 'Placement points computed! Review Match Report before pushing to website.',
       });
+    }
+  };
+
+  const [isRefreshingObs, setIsRefreshingObs] = useState<boolean>(false);
+
+  const handleRefreshObs = async () => {
+    setIsRefreshingObs(true);
+    try {
+      executeCommand('REFRESH_OVERLAY', undefined, { hardReload: false });
+      showToast({
+        type: 'success',
+        title: 'OBS Overlay Refreshed',
+        message: 'Sent instant refresh signal to OBS broadcast view.',
+      });
+    } catch (err: any) {
+      showToast({
+        type: 'error',
+        title: 'Refresh Failed',
+        message: err.message || 'Could not refresh OBS overlay.',
+      });
+    } finally {
+      setTimeout(() => setIsRefreshingObs(false), 600);
     }
   };
 
@@ -629,6 +655,19 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
               <RotateCcw className="h-3.5 w-3.5 text-sky-400" />
               <span>Reset 4 Alive</span>
             </button>
+
+            {/* Refresh OBS Overlay */}
+            <button
+              type="button"
+              style={{ touchAction: 'manipulation' }}
+              onClick={handleRefreshObs}
+              disabled={isRefreshingObs}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-sky-950/80 hover:bg-sky-900 border border-sky-500/40 text-sky-200 text-xs font-bold transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+              title="Instantly send refresh/re-sync signal to the OBS overlay"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 text-sky-400 ${isRefreshingObs ? 'animate-spin' : ''}`} />
+              <span>{isRefreshingObs ? 'Refreshing...' : 'Refresh OBS'}</span>
+            </button>
           </div>
 
           {/* Finish / Reopen Match Button */}
@@ -805,7 +844,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
                     <button
                       type="button"
                       style={{ touchAction: 'manipulation' }}
-                      onClick={() => executeCommand('SET_MODE', teamId, { mode: isFireActive ? 'NORMAL' : 'FIRE' })}
+                      onClick={() => executeCommand('SET_MODE', teamId, { mode: isFireActive ? 'NORMAL' : 'FIRE', fire: !isFireActive })}
                       className={`px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
                         isFireActive
                           ? 'bg-orange-600 text-white shadow-md'

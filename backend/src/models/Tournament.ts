@@ -98,6 +98,7 @@ const TournamentSchema = new Schema<ITournament>(
   }
 );
 
+TournamentSchema.index({ id: 1 });
 TournamentSchema.index({ userId: 1, status: 1 });
 TournamentSchema.index({ userId: 1, createdAt: -1 });
 TournamentSchema.index({ organizationId: 1, status: 1 });

@@ -23,6 +23,9 @@ export interface BroadcastCommand {
     | 'RESET_BROADCAST'
     | 'FINISH_MATCH'
     | 'REOPEN_MATCH'
+    | 'SET_FIRE'
+    | 'TOGGLE_FIRE'
+    | 'REFRESH_OVERLAY'
     | 'SUBMIT_MATCH_REPORT';
   targetTeamId?: string;
   payload?: any;
@@ -198,34 +201,24 @@ export async function getOrCreateBroadcastSession(
   return session;
 }
 
-/**
- * Fetch the complete authoritative broadcast snapshot for OBS and Remote clients.
- * GUARANTEE: Zero placement points during live match play until finished!
- */
-export async function getAuthoritativeBroadcastState(sessionId: string): Promise<any> {
-  const session = await BroadcastSession.findOne({ sessionId, active: true });
-  if (!session) {
-    const err: any = new Error('BROADCAST_SESSION_NOT_FOUND');
-    err.statusCode = 404;
-    throw err;
-  }
-
+export async function getTournamentForSession(tournamentId: string): Promise<any> {
   const idQueries: any[] = [
-    { customId: session.tournamentId },
-    { id: session.tournamentId },
+    { customId: tournamentId },
+    { id: tournamentId },
   ];
-  if (mongoose.Types.ObjectId.isValid(session.tournamentId)) {
-    idQueries.push({ _id: new mongoose.Types.ObjectId(session.tournamentId) });
-    idQueries.push({ _id: session.tournamentId });
+  if (mongoose.Types.ObjectId.isValid(tournamentId)) {
+    idQueries.push({ _id: new mongoose.Types.ObjectId(tournamentId) });
+    idQueries.push({ _id: tournamentId });
   }
 
-  let tournament = await Tournament.findOne({ $or: idQueries });
-  if (!tournament) {
-    const err: any = new Error('TOURNAMENT_NOT_FOUND');
-    err.statusCode = 404;
-    throw err;
-  }
+  return await Tournament.findOne({ $or: idQueries });
+}
 
+/**
+ * Pure in-memory compiler for authoritative broadcast snapshot.
+ * GUARANTEE: Zero placement points during live match play until finished or squad is wiped!
+ */
+export function buildAuthoritativeSnapshot(session: any, tournament: any): any {
   if (!Array.isArray(tournament.matches)) {
     tournament.matches = [];
   }
@@ -250,9 +243,6 @@ export async function getAuthoritativeBroadcastState(sessionId: string): Promise
       scoringVersion: tournament.scoringPreset?.version || 1,
       results: [],
     };
-    tournament.matches = [match];
-    tournament.markModified('matches');
-    await tournament.save().catch(() => {});
   }
 
   const scoringConfig = normalizeScoringConfig(tournament.scoringPreset);
@@ -275,6 +265,9 @@ export async function getAuthoritativeBroadcastState(sessionId: string): Promise
     const teamId = team.id || team.customId || (team._id ? String(team._id) : `team-${idx + 1}`);
     return !teamWipedStatusMap.get(teamId);
   });
+
+  const fireTeamIds: string[] = Array.isArray(session.fireTeamIds) ? session.fireTeamIds : [];
+  const pointRushTeamIds: string[] = Array.isArray(session.pointRushTeamIds) ? session.pointRushTeamIds : [];
 
   // Calculate live and final team rows
   const calculatedTeams = teamsList.map((team: any, idx: number) => {
@@ -334,6 +327,8 @@ export async function getAuthoritativeBroadcastState(sessionId: string): Promise
       }
     }
 
+    const isTeamFire = fireTeamIds.includes(teamId) || (session.activeMode === 'FIRE' && fireTeamIds.length === 0);
+
     return {
       teamId,
       name: team.name || `Team ${idx + 1}`,
@@ -350,8 +345,8 @@ export async function getAuthoritativeBroadcastState(sessionId: string): Promise
       squadPlayers,
       alivePlayersCount,
       isWiped,
-      isFireActive: session.fireTeamIds.includes(teamId) || session.activeMode === 'FIRE',
-      isPointRushActive: session.pointRushTeamIds.includes(teamId) || session.pointRushEnabled,
+      isFireActive: isTeamFire,
+      isPointRushActive: pointRushTeamIds.includes(teamId) || !!session.pointRushEnabled,
       isFocused: session.selectedTeamId === teamId,
     };
   });
@@ -389,8 +384,8 @@ export async function getAuthoritativeBroadcastState(sessionId: string): Promise
     tableVisible: session.tableVisible,
     activeMode: session.activeMode,
     pointRushEnabled: session.pointRushEnabled,
-    fireTeamIds: session.fireTeamIds,
-    pointRushTeamIds: session.pointRushTeamIds,
+    fireTeamIds,
+    pointRushTeamIds,
     selectedTeamId: session.selectedTeamId,
     selectedPlayerIndex: session.selectedPlayerIndex,
     isMatchFinished: !!session.isMatchFinished,
@@ -429,37 +424,9 @@ export async function getAuthoritativeBroadcastState(sessionId: string): Promise
 }
 
 /**
- * Execute an atomic command on a Broadcast Session with queue mutex serialization.
+ * Fetch the complete authoritative broadcast snapshot for OBS and Remote clients.
  */
-export async function executeBroadcastCommand(
-  sessionId: string,
-  command: BroadcastCommand,
-  user?: { _id?: any; role?: string; organizationName?: string }
-): Promise<any> {
-  // Idempotency: return cached response if commandId has already been processed recently
-  if (command.commandId && processedCommandIds.has(command.commandId)) {
-    const cached = processedCommandIds.get(command.commandId)!;
-    if (Date.now() - cached.timestamp < COMMAND_ID_TTL_MS) {
-      return cached.result;
-    }
-    processedCommandIds.delete(command.commandId);
-  }
-
-  const currentLock = sessionCommandLocks.get(sessionId) || Promise.resolve();
-  const nextLock = currentLock
-    .catch(() => {})
-    .then(async () => {
-      return await executeBroadcastCommandInternal(sessionId, command, user);
-    });
-  sessionCommandLocks.set(sessionId, nextLock);
-  return await nextLock;
-}
-
-async function executeBroadcastCommandInternal(
-  sessionId: string,
-  command: BroadcastCommand,
-  user?: { _id?: any; role?: string; organizationName?: string }
-): Promise<any> {
+export async function getAuthoritativeBroadcastState(sessionId: string): Promise<any> {
   const session = await BroadcastSession.findOne({ sessionId, active: true });
   if (!session) {
     const err: any = new Error('BROADCAST_SESSION_NOT_FOUND');
@@ -467,30 +434,30 @@ async function executeBroadcastCommandInternal(
     throw err;
   }
 
-  const idQueries: any[] = [
-    { customId: session.tournamentId },
-    { id: session.tournamentId },
-  ];
-  if (mongoose.Types.ObjectId.isValid(session.tournamentId)) {
-    idQueries.push({ _id: new mongoose.Types.ObjectId(session.tournamentId) });
-    idQueries.push({ _id: session.tournamentId });
-  }
-
-  const tournament = await Tournament.findOne({ $or: idQueries });
+  const tournament = await getTournamentForSession(session.tournamentId);
   if (!tournament) {
     const err: any = new Error('TOURNAMENT_NOT_FOUND');
     err.statusCode = 404;
     throw err;
   }
 
-  // Authorization check: MUST BE AUTHENTICATED
+  return buildAuthoritativeSnapshot(session, tournament);
+}
+
+/**
+ * Verify authorization for a user against a broadcast session.
+ */
+async function verifySessionAuthorization(
+  session: any,
+  tournament: any,
+  user?: { _id?: any; role?: string; organizationName?: string }
+): Promise<void> {
   if (!user) {
     const err: any = new Error('Unauthorized: Authentication required to execute remote broadcast commands.');
     err.statusCode = 401;
     throw err;
   }
 
-  // Admin or verified member of tournament organization
   if (user.role !== 'admin') {
     const userStr = user._id ? user._id.toString() : '';
     const tourOwner = tournament.userId ? tournament.userId.toString() : '';
@@ -514,11 +481,16 @@ async function executeBroadcastCommandInternal(
       throw err;
     }
   }
+}
 
-  if (!session.teamStats) session.teamStats = {};
-  if (!session.squads) session.squads = {};
-  if (!Array.isArray(session.eliminatedTeamOrder)) session.eliminatedTeamOrder = [];
-
+/**
+ * Apply a single broadcast command mutation to a session in memory.
+ */
+function applySingleCommandToSession(
+  session: any,
+  tournament: any,
+  command: BroadcastCommand
+): void {
   const ensureSquadExists = (targetTeamId: string) => {
     if (!session.squads[targetTeamId]) {
       session.squads[targetTeamId] = ['alive', 'alive', 'alive', 'alive'];
@@ -570,7 +542,7 @@ async function executeBroadcastCommandInternal(
         session.eliminatedTeamOrder.push(tId);
         session.markModified('eliminatedTeamOrder');
       } else if (!isWiped && session.eliminatedTeamOrder.includes(tId)) {
-        session.eliminatedTeamOrder = session.eliminatedTeamOrder.filter((id) => id !== tId);
+        session.eliminatedTeamOrder = session.eliminatedTeamOrder.filter((id: string) => id !== tId);
         session.markModified('eliminatedTeamOrder');
       }
       break;
@@ -595,7 +567,7 @@ async function executeBroadcastCommandInternal(
       session.squads[tId] = ['alive', 'alive', 'alive', 'alive'];
       session.markModified('squads');
 
-      session.eliminatedTeamOrder = session.eliminatedTeamOrder.filter((id) => id !== tId);
+      session.eliminatedTeamOrder = session.eliminatedTeamOrder.filter((id: string) => id !== tId);
       session.markModified('eliminatedTeamOrder');
       break;
     }
@@ -613,20 +585,76 @@ async function executeBroadcastCommandInternal(
 
     case 'SET_MODE': {
       const mode: BroadcastMode = payload?.mode || 'NORMAL';
-      session.activeMode = mode;
       const tId = targetTeamId || payload?.teamId;
+      const fireExplicit = payload?.fire !== undefined ? !!payload.fire : (mode === 'FIRE');
+      const rushExplicit = payload?.rush !== undefined ? !!payload.rush : (mode === 'RUSH');
+
+      if (!Array.isArray(session.fireTeamIds)) session.fireTeamIds = [];
+      if (!Array.isArray(session.pointRushTeamIds)) session.pointRushTeamIds = [];
+
       if (tId) {
-        if (mode === 'FIRE') {
-          session.fireTeamIds = session.fireTeamIds.includes(tId)
-            ? session.fireTeamIds.filter((id) => id !== tId)
-            : [...session.fireTeamIds, tId];
-        } else if (mode === 'RUSH') {
-          session.pointRushTeamIds = session.pointRushTeamIds.includes(tId)
-            ? session.pointRushTeamIds.filter((id) => id !== tId)
-            : [...session.pointRushTeamIds, tId];
-        } else if (mode === 'FOCUS') {
-          session.selectedTeamId = session.selectedTeamId === tId ? null : tId;
+        if (fireExplicit) {
+          if (!session.fireTeamIds.includes(tId)) {
+            session.fireTeamIds = [...session.fireTeamIds, tId];
+          }
+          session.activeMode = 'FIRE';
+        } else {
+          session.fireTeamIds = session.fireTeamIds.filter((id: string) => id !== tId);
+          if (session.fireTeamIds.length === 0 && session.activeMode === 'FIRE') {
+            session.activeMode = 'NORMAL';
+          }
         }
+
+        if (rushExplicit) {
+          if (!session.pointRushTeamIds.includes(tId)) {
+            session.pointRushTeamIds = [...session.pointRushTeamIds, tId];
+          }
+        } else {
+          session.pointRushTeamIds = session.pointRushTeamIds.filter((id: string) => id !== tId);
+        }
+
+        if (mode === 'FOCUS') {
+          session.selectedTeamId = session.selectedTeamId === tId ? null : tId;
+        } else if (mode === 'NORMAL' && session.selectedTeamId === tId) {
+          session.selectedTeamId = null;
+        }
+      } else {
+        session.activeMode = mode;
+        if (mode === 'NORMAL') {
+          session.fireTeamIds = [];
+          session.pointRushTeamIds = [];
+          session.selectedTeamId = null;
+        }
+      }
+      session.markModified('fireTeamIds');
+      session.markModified('pointRushTeamIds');
+      break;
+    }
+
+    case 'SET_FIRE':
+    case 'TOGGLE_FIRE': {
+      const tId = targetTeamId || payload?.teamId;
+      if (!Array.isArray(session.fireTeamIds)) session.fireTeamIds = [];
+      if (tId) {
+        const turnOn = payload?.fire !== undefined
+          ? !!payload.fire
+          : !session.fireTeamIds.includes(tId);
+        if (turnOn) {
+          if (!session.fireTeamIds.includes(tId)) {
+            session.fireTeamIds = [...session.fireTeamIds, tId];
+          }
+          session.activeMode = 'FIRE';
+        } else {
+          session.fireTeamIds = session.fireTeamIds.filter((id: string) => id !== tId);
+          if (session.fireTeamIds.length === 0 && session.activeMode === 'FIRE') {
+            session.activeMode = 'NORMAL';
+          }
+        }
+        session.markModified('fireTeamIds');
+      } else {
+        session.fireTeamIds = [];
+        if (session.activeMode === 'FIRE') session.activeMode = 'NORMAL';
+        session.markModified('fireTeamIds');
       }
       break;
     }
@@ -641,10 +669,12 @@ async function executeBroadcastCommandInternal(
       const enabled = payload?.enabled !== undefined ? !!payload.enabled : !session.pointRushEnabled;
       session.pointRushEnabled = enabled;
       const tId = targetTeamId || payload?.teamId;
+      if (!Array.isArray(session.pointRushTeamIds)) session.pointRushTeamIds = [];
       if (tId) {
         session.pointRushTeamIds = session.pointRushTeamIds.includes(tId)
-          ? session.pointRushTeamIds.filter((id) => id !== tId)
+          ? session.pointRushTeamIds.filter((id: string) => id !== tId)
           : [...session.pointRushTeamIds, tId];
+        session.markModified('pointRushTeamIds');
       }
       break;
     }
@@ -709,20 +739,80 @@ async function executeBroadcastCommandInternal(
       break;
     }
 
-    case 'SUBMIT_MATCH_REPORT': {
-      return await submitMatchReportToWebsite(sessionId, payload?.results || payload?.overrides, user);
+    case 'REFRESH_OVERLAY': {
+      // Refresh signal handled by caller
+      break;
     }
 
     default:
       throw new Error(`Unsupported command type: ${commandType}`);
   }
+}
+
+/**
+ * Execute an atomic command on a Broadcast Session with queue mutex serialization.
+ */
+export async function executeBroadcastCommand(
+  sessionId: string,
+  command: BroadcastCommand,
+  user?: { _id?: any; role?: string; organizationName?: string }
+): Promise<any> {
+  // Idempotency: return cached response if commandId has already been processed recently
+  if (command.commandId && processedCommandIds.has(command.commandId)) {
+    const cached = processedCommandIds.get(command.commandId)!;
+    if (Date.now() - cached.timestamp < COMMAND_ID_TTL_MS) {
+      return cached.result;
+    }
+    processedCommandIds.delete(command.commandId);
+  }
+
+  const currentLock = sessionCommandLocks.get(sessionId) || Promise.resolve();
+  const nextLock = currentLock
+    .catch(() => {})
+    .then(async () => {
+      return await executeBroadcastCommandInternal(sessionId, command, user);
+    });
+  sessionCommandLocks.set(sessionId, nextLock);
+  return await nextLock;
+}
+
+async function executeBroadcastCommandInternal(
+  sessionId: string,
+  command: BroadcastCommand,
+  user?: { _id?: any; role?: string; organizationName?: string }
+): Promise<any> {
+  const session = await BroadcastSession.findOne({ sessionId, active: true });
+  if (!session) {
+    const err: any = new Error('BROADCAST_SESSION_NOT_FOUND');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const tournament = await getTournamentForSession(session.tournamentId);
+  if (!tournament) {
+    const err: any = new Error('TOURNAMENT_NOT_FOUND');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  await verifySessionAuthorization(session, tournament, user);
+
+  if (command.commandType === 'SUBMIT_MATCH_REPORT') {
+    return await submitMatchReportToWebsite(sessionId, command.payload?.results || command.payload?.overrides, user);
+  }
+
+  if (!session.teamStats) session.teamStats = {};
+  if (!session.squads) session.squads = {};
+  if (!Array.isArray(session.eliminatedTeamOrder)) session.eliminatedTeamOrder = [];
+
+  applySingleCommandToSession(session, tournament, command);
 
   // Strictly monotonically increment revision
   session.revision = (session.revision || 1) + 1;
   await session.save();
 
-  // Compile authoritative state
-  const authoritativeState = await getAuthoritativeBroadcastState(session.sessionId);
+  // Compile authoritative state in memory with 0 redundant DB queries
+  const authoritativeState = buildAuthoritativeSnapshot(session, tournament);
 
   // Realtime Broadcast across session room
   broadcastToSession(session.sessionId, {
@@ -734,12 +824,22 @@ async function executeBroadcastCommandInternal(
     timestamp: Date.now(),
   });
 
+  if (command.commandType === 'REFRESH_OVERLAY') {
+    broadcastToSession(session.sessionId, {
+      type: 'REFRESH_OVERLAY',
+      action: 'REFRESH_OVERLAY',
+      sessionId: session.sessionId,
+      hardReload: !!command.payload?.hardReload,
+      timestamp: Date.now(),
+    });
+  }
+
   const result = {
     success: true,
-    delta: payload?.delta !== undefined ? Number(payload.delta) : 1,
-    kills: targetTeamId && session.teamStats ? session.teamStats[targetTeamId]?.kills : undefined,
+    delta: command.payload?.delta !== undefined ? Number(command.payload.delta) : 1,
+    kills: command.targetTeamId && session.teamStats ? session.teamStats[command.targetTeamId]?.kills : undefined,
     revision: session.revision,
-    teamId: targetTeamId,
+    teamId: command.targetTeamId,
     matchId: session.matchId,
     sessionId: session.sessionId,
     state: authoritativeState,
@@ -759,6 +859,98 @@ async function executeBroadcastCommandInternal(
   }
 
   return result;
+}
+
+/**
+ * Execute a batch of broadcast commands in a single DB transaction and single broadcast frame.
+ * Eliminates serial HTTP queue lag when multiple commands are dispatched rapidly.
+ */
+export async function executeBatchBroadcastCommands(
+  sessionId: string,
+  commands: BroadcastCommand[],
+  user?: { _id?: any; role?: string; organizationName?: string }
+): Promise<any> {
+  const currentLock = sessionCommandLocks.get(sessionId) || Promise.resolve();
+  const nextLock = currentLock
+    .catch(() => {})
+    .then(async () => {
+      return await executeBatchBroadcastCommandsInternal(sessionId, commands, user);
+    });
+  sessionCommandLocks.set(sessionId, nextLock);
+  return await nextLock;
+}
+
+async function executeBatchBroadcastCommandsInternal(
+  sessionId: string,
+  commands: BroadcastCommand[],
+  user?: { _id?: any; role?: string; organizationName?: string }
+): Promise<any> {
+  if (!Array.isArray(commands) || commands.length === 0) {
+    return await getAuthoritativeBroadcastState(sessionId);
+  }
+
+  const session = await BroadcastSession.findOne({ sessionId, active: true });
+  if (!session) {
+    const err: any = new Error('BROADCAST_SESSION_NOT_FOUND');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const tournament = await getTournamentForSession(session.tournamentId);
+  if (!tournament) {
+    const err: any = new Error('TOURNAMENT_NOT_FOUND');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  await verifySessionAuthorization(session, tournament, user);
+
+  if (!session.teamStats) session.teamStats = {};
+  if (!session.squads) session.squads = {};
+  if (!Array.isArray(session.eliminatedTeamOrder)) session.eliminatedTeamOrder = [];
+
+  let hasRefreshOverlay = false;
+  let hardReload = false;
+
+  for (const cmd of commands) {
+    if (cmd.commandType === 'REFRESH_OVERLAY') {
+      hasRefreshOverlay = true;
+      if (cmd.payload?.hardReload) hardReload = true;
+    }
+    applySingleCommandToSession(session, tournament, cmd);
+  }
+
+  session.revision = (session.revision || 1) + 1;
+  await session.save();
+
+  const authoritativeState = buildAuthoritativeSnapshot(session, tournament);
+
+  broadcastToSession(session.sessionId, {
+    type: 'BROADCAST_STATE_UPDATED',
+    sessionId: session.sessionId,
+    revision: session.revision,
+    state: authoritativeState,
+    payload: authoritativeState,
+    timestamp: Date.now(),
+  });
+
+  if (hasRefreshOverlay) {
+    broadcastToSession(session.sessionId, {
+      type: 'REFRESH_OVERLAY',
+      action: 'REFRESH_OVERLAY',
+      sessionId: session.sessionId,
+      hardReload,
+      timestamp: Date.now(),
+    });
+  }
+
+  return {
+    success: true,
+    batchSize: commands.length,
+    revision: session.revision,
+    sessionId: session.sessionId,
+    state: authoritativeState,
+  };
 }
 
 /**

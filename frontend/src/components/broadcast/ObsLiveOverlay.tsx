@@ -81,6 +81,21 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
               setSyncStatus(status);
             }
           },
+          onOverlayEvent: (evt) => {
+            if (evt?.hardReload) {
+              window.location.reload();
+            } else {
+              fetchSessionState(activeSessionId)
+                .then((fresh) => {
+                  if (!isCancelled && fresh) {
+                    setState(fresh);
+                  }
+                })
+                .catch(() => {
+                  window.location.reload();
+                });
+            }
+          },
           onError: (err) => {
             console.warn('[ObsLiveOverlay] Sync error:', err);
           },

@@ -4,6 +4,7 @@ import {
   getOrCreateBroadcastSession,
   getAuthoritativeBroadcastState,
   executeBroadcastCommand,
+  executeBatchBroadcastCommands,
   submitMatchReportToWebsite,
 } from '../services/broadcastSessionService';
 
@@ -62,12 +63,28 @@ export async function getSessionAuthoritativeState(req: Request, res: Response, 
 export async function postSessionCommand(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     const sessionId = req.params.sessionId as string;
-    const { commandType, targetTeamId, payload, commandId } = req.body;
+    const { commandType, targetTeamId, payload, commandId, commands } = req.body;
 
-    if (!sessionId || !commandType) {
+    if (!sessionId) {
       return res.status(400).json({
         success: false,
-        error: 'sessionId and commandType are required.',
+        error: 'sessionId is required.',
+      });
+    }
+
+    if (Array.isArray(commands) && commands.length > 0) {
+      const result = await executeBatchBroadcastCommands(
+        sessionId,
+        commands,
+        req.user
+      );
+      return res.status(200).json(result);
+    }
+
+    if (!commandType) {
+      return res.status(400).json({
+        success: false,
+        error: 'sessionId and commandType or commands are required.',
       });
     }
 

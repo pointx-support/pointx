@@ -291,10 +291,54 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
       .send({
         commandType: 'SET_MODE',
         targetTeamId: 'team-bravo',
-        payload: { mode: 'FIRE' },
+        payload: { mode: 'FIRE', fire: true },
       });
     expect(fireRes.body.state.activeMode).toBe('FIRE');
     expect(fireRes.body.state.fireTeamIds).toContain('team-bravo');
+    const bravoFire = fireRes.body.state.teams.find((t: any) => t.teamId === 'team-bravo');
+    expect(bravoFire.isFireActive).toBe(true);
+
+    // Turn OFF FIRE on team-bravo
+    const unfireRes = await request(app)
+      .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({
+        commandType: 'SET_MODE',
+        targetTeamId: 'team-bravo',
+        payload: { mode: 'NORMAL', fire: false },
+      });
+    expect(unfireRes.body.state.fireTeamIds).not.toContain('team-bravo');
+    const bravoUnfire = unfireRes.body.state.teams.find((t: any) => t.teamId === 'team-bravo');
+    expect(bravoUnfire.isFireActive).toBe(false);
+    expect(unfireRes.body.state.activeMode).toBe('NORMAL');
+
+    // Trigger REFRESH_OVERLAY command
+    const refreshRes = await request(app)
+      .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({
+        commandType: 'REFRESH_OVERLAY',
+        payload: { hardReload: false },
+      });
+    expect(refreshRes.status).toBe(200);
+    expect(refreshRes.body.success).toBe(true);
+
+    // Test Batch Commands dispatch
+    const batchRes = await request(app)
+      .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({
+        commands: [
+          { commandType: 'ADD_KILL', targetTeamId: 'team-alpha', payload: { delta: 2 } },
+          { commandType: 'SET_POINT_RUSH', targetTeamId: 'team-alpha', payload: { rush: true, enabled: true } },
+          { commandType: 'REFRESH_OVERLAY', payload: {} },
+        ],
+      });
+    expect(batchRes.status).toBe(200);
+    expect(batchRes.body.batchSize).toBe(3);
+    const alphaAfterBatch = batchRes.body.state.teams.find((t: any) => t.teamId === 'team-alpha');
+    expect(alphaAfterBatch.kills).toBeGreaterThanOrEqual(2);
+    expect(alphaAfterBatch.isPointRushActive).toBe(true);
 
     // Add +1 Point to All Teams
     const ptsRes = await request(app)

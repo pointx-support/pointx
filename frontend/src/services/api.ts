@@ -468,6 +468,19 @@ export const broadcastSessionApi = {
       method: 'POST',
       body: JSON.stringify(command),
     }),
+  sendBatchCommands: (
+    sessionId: string,
+    commands: Array<{
+      commandType: string;
+      targetTeamId?: string;
+      payload?: any;
+      commandId?: string;
+    }>
+  ) =>
+    request<{ revision: number; state: any; batchSize: number }>(`/broadcast/sessions/${sessionId}/commands`, {
+      method: 'POST',
+      body: JSON.stringify({ commands }),
+    }),
   submitMatchReport: (
     sessionId: string,
     payload?: { results?: any[]; overrides?: any[] }
