@@ -9,8 +9,8 @@ import type { Tournament } from '../../types/tournament';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
-import { ImageUpload } from '../ui/ImageUpload';
 import { useToast } from '../ui/Toast';
+import { CustomTemplateWizard } from '../admin/CustomTemplateWizard';
 import {
   CheckCircle2,
   Trash2,
@@ -53,7 +53,6 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
     templates,
     activeTemplateId,
     setActiveTemplateId,
-    createCustomTemplate,
     updateTemplateAlignment,
     updateTemplateMetadata,
     publishTemplate,
@@ -99,13 +98,6 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
   const [fontUploadName, setFontUploadName] = useState('');
   const [fontUploadFile, setFontUploadFile] = useState<File | null>(null);
   const [isUploadingFont, setIsUploadingFont] = useState(false);
-
-  // Create Template form state
-  const [createName, setCreateName] = useState('');
-  const [createCategory, setCreateCategory] = useState<GraphicTemplateCategory>('standings');
-  const [createAspectRatio, setCreateAspectRatio] = useState<'16:9' | '4:5'>('16:9');
-  const [createLayoutMode, setCreateLayoutMode] = useState<'dual-column' | 'single-column'>('dual-column');
-  const [createImageUrl, setCreateImageUrl] = useState('');
 
   // Edit Template form state
   const [editName, setEditName] = useState('');
@@ -607,38 +599,6 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       setIsUploadingFont(false);
       showToast({ type: 'error', title: 'Upload Failed', message: 'Could not process font file.' });
     }
-  };
-
-  // Create Template Submit Handler
-  const handleCreateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!createName.trim()) {
-      showToast({ type: 'error', title: 'Name Required', message: 'Please enter a template name.' });
-      return;
-    }
-    if (!createImageUrl) {
-      showToast({ type: 'error', title: 'Image Required', message: 'Please upload a background poster image.' });
-      return;
-    }
-
-    const baseConfig: TemplateAlignmentConfig = {
-      ...alignment,
-      aspectRatio: createAspectRatio,
-      layoutMode: createLayoutMode,
-      width: createAspectRatio === '4:5' ? 1080 : 1920,
-      height: createAspectRatio === '4:5' ? 1350 : 1080
-    };
-
-    createCustomTemplate(createName.trim(), createImageUrl, baseConfig, createCategory);
-    setIsCreateModalOpen(false);
-    setCreateName('');
-    setCreateImageUrl('');
-
-    showToast({
-      type: 'success',
-      title: 'Template Created',
-      message: `Created "${createName.trim()}". Now ready for alignment!`
-    });
   };
 
   // Edit Template Submit Handler
@@ -1566,89 +1526,15 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
         </Modal>
       )}
 
-      {/* CREATE NEW TEMPLATE MODAL */}
+      {/* CANONICAL 7-STEP TEMPLATE WIZARD */}
       {isCreateModalOpen && (
-        <Modal
+        <CustomTemplateWizard
           isOpen={isCreateModalOpen}
           onClose={() => setIsCreateModalOpen(false)}
-          title="Add New Custom Template"
-          description="Upload custom poster artwork and calibrate leaderboard coordinates."
-          maxWidth="md"
-        >
-          <form onSubmit={handleCreateSubmit} className="space-y-4 font-sans text-xs sm:text-sm">
-            <div>
-              <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
-                Target Section Category *
-              </label>
-              <select
-                value={createCategory}
-                onChange={(e) => setCreateCategory(e.target.value as GraphicTemplateCategory)}
-                className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] font-bold text-xs text-[var(--text-primary)] cursor-pointer focus:border-[var(--accent-primary)] focus:outline-none"
-              >
-                <option value="standings">🏆 Point Tables (Tournament Standings)</option>
-                <option value="warheads">🔥 Warheads / Kill Leader</option>
-                <option value="fraggers">👑 Top Fraggers / MVP</option>
-                <option value="team-poster">🖼️ Team Poster (Squad Lineup)</option>
-                <option value="slots-list">📋 Slots List (12-Team Schedule)</option>
-                <option value="certificate">🎖️ Victory Certificate (Champion Diploma)</option>
-              </select>
-            </div>
-
-            <Input
-              label="Template Name *"
-              value={createName}
-              onChange={(e) => setCreateName(e.target.value)}
-              placeholder="Enter template name"
-              required
-            />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
-                  Aspect Ratio:
-                </label>
-                <select
-                  value={createAspectRatio}
-                  onChange={(e) => setCreateAspectRatio(e.target.value as '16:9' | '4:5')}
-                  className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] font-bold text-xs text-[var(--text-primary)] cursor-pointer"
-                >
-                  <option value="16:9">16:9 Widescreen (1920 × 1080)</option>
-                  <option value="4:5">4:5 Portrait Poster (1080 × 1350)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1 font-mono">
-                  Default Layout:
-                </label>
-                <select
-                  value={createLayoutMode}
-                  onChange={(e) => setCreateLayoutMode(e.target.value as 'dual-column' | 'single-column')}
-                  className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] font-bold text-xs text-[var(--text-primary)] cursor-pointer"
-                >
-                  <option value="dual-column">Dual Column (6 × 2 Squads)</option>
-                  <option value="single-column">Single Column (12 × 1 Rows)</option>
-                </select>
-              </div>
-            </div>
-
-            <ImageUpload
-              label="Poster Background Artwork *"
-              value={createImageUrl}
-              onChange={(val) => setCreateImageUrl(val || '')}
-              helperText="Upload official 16:9 or 4:5 poster template background (PNG, JPG, WebP)."
-            />
-
-            <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center justify-end gap-2">
-              <Button variant="outline" size="sm" type="button" onClick={() => setIsCreateModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button variant="primary" size="sm" type="submit" leftIcon={<Plus className="h-4 w-4" />}>
-                Create & Calibrate
-              </Button>
-            </div>
-          </form>
-        </Modal>
+          onSuccess={(newId) => {
+            setActiveTemplateId(newId);
+          }}
+        />
       )}
 
       {/* EDIT TEMPLATE DETAILS MODAL */}

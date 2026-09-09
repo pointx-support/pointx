@@ -64,6 +64,9 @@ export interface ICustomTemplate extends Document {
   active: boolean;
   version: number;
   templateType: TemplateType;
+  defaultLayout: string;
+  elements: Record<string, any>;
+  variables: string[];
   category?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -105,6 +108,9 @@ const CustomTemplateSchema = new Schema<ICustomTemplate>(
       default: 'POINTS_TABLE',
       index: true,
     },
+    defaultLayout: { type: String, default: 'default', index: true },
+    elements: { type: Schema.Types.Mixed, default: {} },
+    variables: { type: [String], default: [] },
     category: { type: String, maxlength: 50 },
   },
   {

@@ -27,6 +27,8 @@ export interface MasterGraphicRendererProps {
     winnerTeamId?: string;
     awardTitle?: string;
     awardSubtitle?: string;
+    tournamentDate?: string;
+    tournamentTime?: string;
     standingsData?: GraphicsRenderData;
   };
   hueRotate?: number;
@@ -109,6 +111,7 @@ export const MasterGraphicRenderer: React.FC<MasterGraphicRendererProps> = ({
           artworkUrl={template.imageUrl}
           aspectRatio={template.aspectRatio}
           hueRotate={hueRotate}
+          layoutMode={template.defaultLayout}
           svgRef={svgRef}
         />
       );
@@ -141,6 +144,7 @@ export const MasterGraphicRenderer: React.FC<MasterGraphicRendererProps> = ({
           artworkUrl={template.imageUrl}
           aspectRatio={template.aspectRatio}
           hueRotate={hueRotate}
+          layoutMode={template.defaultLayout}
           svgRef={svgRef}
         />
       );
@@ -151,7 +155,9 @@ export const MasterGraphicRenderer: React.FC<MasterGraphicRendererProps> = ({
         customTitle: options?.customTitle,
         organizerName: options?.organizerName,
         awardTitle: options?.awardTitle,
-        awardSubtitle: options?.awardSubtitle
+        awardSubtitle: options?.awardSubtitle,
+        tournamentDate: options?.tournamentDate,
+        tournamentTime: options?.tournamentTime,
       });
       return (
         <VictoryCertificateRenderer

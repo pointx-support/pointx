@@ -254,6 +254,8 @@ export function getVictoryCertificateData(
     awardTitle?: string;
     awardSubtitle?: string;
     date?: string;
+    tournamentDate?: string;
+    tournamentTime?: string;
     certificateId?: string;
     signature?: string;
   }
@@ -275,12 +277,15 @@ export function getVictoryCertificateData(
   }
 
   const certDate =
+    options?.tournamentDate ||
     options?.date ||
     new Date().toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
     });
+
+  const certTime = options?.tournamentTime || (tournament as any).startTime || '18:00 UTC';
 
   const certId =
     options?.certificateId ||
@@ -289,6 +294,7 @@ export function getVictoryCertificateData(
   return {
     tournamentTitle: options?.customTitle?.trim() || tournament.title || 'GRAND CHAMPIONSHIP FINALS',
     tournamentDate: certDate,
+    tournamentTime: certTime,
     organizerName: options?.organizerName?.trim() || tournament.organizer || 'POINTX ESPORTS ARENA',
     organizerLogo: tournament.organizerLogoUrl,
     organizerSignature: options?.signature || options?.organizerName || tournament.organizer || 'Official Host',

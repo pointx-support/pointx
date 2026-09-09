@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import type { SlotsListRenderData } from '../../../types/customTemplate';
 
 export interface SlotsListRendererProps {
@@ -6,6 +6,7 @@ export interface SlotsListRendererProps {
   artworkUrl?: string;
   aspectRatio?: '16:9' | '4:5' | '1:1' | '9:16';
   hueRotate?: number;
+  layoutMode?: string;
   svgRef?: React.RefObject<SVGSVGElement | null>;
 }
 
@@ -14,6 +15,7 @@ export const SlotsListRenderer: React.FC<SlotsListRendererProps> = ({
   artworkUrl,
   aspectRatio = '4:5',
   hueRotate = 0,
+  layoutMode = 'dual_grid',
   svgRef
 }) => {
   const isLandscape = aspectRatio === '16:9';
@@ -113,52 +115,94 @@ export const SlotsListRenderer: React.FC<SlotsListRendererProps> = ({
         </text>
       </g>
 
-      {/* 12 Slots in 2 Columns */}
-      <g transform={`translate(${(width - 940) / 2}, 240)`}>
-        {slots.slice(0, 12).map((slot, idx) => {
-          const col = idx < 6 ? 0 : 1;
-          const row = idx % 6;
-          const xPos = col * 485;
-          const yPos = row * 155;
-          const slotFormatted = slot.slotNumber.toString().padStart(2, '0');
+      {/* 12 Slots in Dual Grid or Single Column */}
+      {layoutMode === 'single_column' ? (
+        <g transform={`translate(${(width - 860) / 2}, 240)`}>
+          {slots.slice(0, 12).map((slot, idx) => {
+            const yPos = idx * 72;
+            const slotFormatted = slot.slotNumber.toString().padStart(2, '0');
 
-          return (
-            <g key={idx} transform={`translate(${xPos}, ${yPos})`}>
-              <rect
-                width="455"
-                height="135"
-                rx="20"
-                fill="#121626"
-                stroke={slot.isConfirmed ? '#FFD200' : '#ffffff'}
-                strokeOpacity={slot.isConfirmed ? 0.6 : 0.15}
-                strokeWidth={slot.isConfirmed ? 1.5 : 1}
-              />
+            return (
+              <g key={idx} transform={`translate(0, ${yPos})`}>
+                <rect
+                  width="860"
+                  height="62"
+                  rx="14"
+                  fill="#121626"
+                  stroke={slot.isConfirmed ? '#FFD200' : '#ffffff'}
+                  strokeOpacity={slot.isConfirmed ? 0.6 : 0.15}
+                  strokeWidth={slot.isConfirmed ? 1.5 : 1}
+                />
+                {/* Slot Number Pill */}
+                <rect x="15" y="11" width="60" height="40" rx="10" fill="#FFD200" fillOpacity="0.15" stroke="#FFD200" strokeWidth="1.5" />
+                <text x="45" y="38" textAnchor="middle" fill="#FFD200" fontFamily="monospace" fontWeight="900" fontSize="20">
+                  {slotFormatted}
+                </text>
+                {/* Team Name */}
+                <text x={slot.logoUrl ? 135 : 95} y="38" fill={slot.isConfirmed ? '#FFFFFF' : '#718096'} fontFamily="sans-serif" fontWeight="900" fontSize="20">
+                  {slot.teamName.toUpperCase()}
+                </text>
+                {slot.teamTag && (
+                  <text x={slot.logoUrl ? 320 : 280} y="37" fill="#FFD200" fontFamily="monospace" fontWeight="800" fontSize="13">
+                    [{slot.teamTag.toUpperCase()}]
+                  </text>
+                )}
+                {/* Status Indicator */}
+                <text x="780" y="37" textAnchor="end" fill="#A0AEC0" fontFamily="monospace" fontWeight="700" fontSize="12" letterSpacing="1">
+                  {slot.isConfirmed ? 'CONFIRMED' : 'OPEN'}
+                </text>
+                <circle cx="815" cy="32" r="6" fill={slot.isConfirmed ? '#10B981' : '#4B5563'} />
+              </g>
+            );
+          })}
+        </g>
+      ) : (
+        <g transform={`translate(${(width - 940) / 2}, 240)`}>
+          {slots.slice(0, 12).map((slot, idx) => {
+            const col = idx < 6 ? 0 : 1;
+            const row = idx % 6;
+            const xPos = col * 485;
+            const yPos = row * 155;
+            const slotFormatted = slot.slotNumber.toString().padStart(2, '0');
 
-              {/* Slot Number Pill */}
-              <rect x="20" y="25" width="85" height="85" rx="16" fill="#FFD200" fillOpacity="0.15" stroke="#FFD200" strokeWidth="1.5" />
-              <text x="62" y="78" textAnchor="middle" fill="#FFD200" fontFamily="monospace" fontWeight="900" fontSize="32">
-                {slotFormatted}
-              </text>
+            return (
+              <g key={idx} transform={`translate(${xPos}, ${yPos})`}>
+                <rect
+                  width="455"
+                  height="135"
+                  rx="20"
+                  fill="#121626"
+                  stroke={slot.isConfirmed ? '#FFD200' : '#ffffff'}
+                  strokeOpacity={slot.isConfirmed ? 0.6 : 0.15}
+                  strokeWidth={slot.isConfirmed ? 1.5 : 1}
+                />
 
-              {/* Team Logo (if present) */}
-              {slot.logoUrl ? (
-                <image href={slot.logoUrl} x="120" y="30" width="40" height="40" preserveAspectRatio="xMidYMid meet" />
-              ) : null}
+                {/* Slot Number Pill */}
+                <rect x="20" y="25" width="85" height="85" rx="16" fill="#FFD200" fillOpacity="0.15" stroke="#FFD200" strokeWidth="1.5" />
+                <text x="62" y="78" textAnchor="middle" fill="#FFD200" fontFamily="monospace" fontWeight="900" fontSize="32">
+                  {slotFormatted}
+                </text>
 
-              {/* Team Name */}
-              <text x={slot.logoUrl ? 170 : 125} y="62" fill={slot.isConfirmed ? '#FFFFFF' : '#718096'} fontFamily="sans-serif" fontWeight="900" fontSize="24">
-                {slot.teamName.toUpperCase()}
-              </text>
-              <text x={slot.logoUrl ? 170 : 125} y="92" fill="#A0AEC0" fontFamily="monospace" fontWeight="700" fontSize="13" letterSpacing="1">
-                {slot.isConfirmed ? `SLOT ${slotFormatted} • CONFIRMED` : 'WAITING FOR SQUAD'}
-              </text>
+                {/* Team Logo (if present) */}
+                {slot.logoUrl ? (
+                  <image href={slot.logoUrl} x="120" y="30" width="40" height="40" preserveAspectRatio="xMidYMid meet" />
+                ) : null}
 
-              {/* Status Dot */}
-              <circle cx="420" cy="67" r="8" fill={slot.isConfirmed ? '#10B981' : '#4B5563'} />
-            </g>
-          );
-        })}
-      </g>
+                {/* Team Name */}
+                <text x={slot.logoUrl ? 170 : 125} y="62" fill={slot.isConfirmed ? '#FFFFFF' : '#718096'} fontFamily="sans-serif" fontWeight="900" fontSize="24">
+                  {slot.teamName.toUpperCase()}
+                </text>
+                <text x={slot.logoUrl ? 170 : 125} y="92" fill="#A0AEC0" fontFamily="monospace" fontWeight="700" fontSize="13" letterSpacing="1">
+                  {slot.isConfirmed ? `SLOT ${slotFormatted} • CONFIRMED` : 'WAITING FOR SQUAD'}
+                </text>
+
+                {/* Status Dot */}
+                <circle cx="420" cy="67" r="8" fill={slot.isConfirmed ? '#10B981' : '#4B5563'} />
+              </g>
+            );
+          })}
+        </g>
+      )}
 
       {/* Footer */}
       <g transform={`translate(${width / 2}, ${height - 40})`}>

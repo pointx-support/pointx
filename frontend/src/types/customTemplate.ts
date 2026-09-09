@@ -249,6 +249,7 @@ export interface SlotsListRenderData {
 export interface VictoryCertificateRenderData {
   tournamentTitle: string;
   tournamentDate: string;
+  tournamentTime?: string;
   organizerName: string;
   organizerLogo?: string;
   organizerSignature?: string;
@@ -269,6 +270,9 @@ export interface CustomGraphicsTemplate {
   description: string;
   category?: GraphicTemplateCategory;
   templateType?: TemplateType;
+  defaultLayout?: string;
+  elements?: Record<string, any>;
+  variables?: string[];
   imageUrl: string;
   aspectRatio: '16:9' | '4:5' | '1:1' | '9:16';
   alignment: TemplateAlignmentConfig;

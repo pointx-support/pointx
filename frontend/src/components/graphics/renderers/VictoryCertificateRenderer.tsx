@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import type { VictoryCertificateRenderData } from '../../../types/customTemplate';
 
 export interface VictoryCertificateRendererProps {
@@ -20,7 +20,7 @@ export const VictoryCertificateRenderer: React.FC<VictoryCertificateRendererProp
   const width = isLandscape ? 1920 : 1080;
   const height = isLandscape ? 1080 : 1350;
 
-  const { winner, tournamentTitle, tournamentDate, organizerName, organizerSignature, awardTitle, awardSubtitle, certificateId } = data;
+  const { winner, tournamentTitle, tournamentDate, tournamentTime, organizerName, organizerSignature, awardTitle, awardSubtitle, certificateId } = data;
   const filterStyle = hueRotate ? { filter: `hue-rotate(${hueRotate}deg)` } : undefined;
 
   return (
@@ -142,14 +142,19 @@ export const VictoryCertificateRenderer: React.FC<VictoryCertificateRendererProp
           </text>
         </g>
 
-        {/* Right: Date & Verification ID */}
+        {/* Right: Date, Time & Verification ID */}
         <g transform={`translate(${width - 670}, 0)`}>
           <line x1="0" y1="50" x2="320" y2="50" stroke="#FFD200" strokeWidth="2" />
-          <text x="160" y="38" textAnchor="middle" fill="#E2E8F0" fontFamily="monospace" fontWeight="700" fontSize="18">
+          <text x="160" y="28" textAnchor="middle" fill="#E2E8F0" fontFamily="monospace" fontWeight="700" fontSize="17">
             {tournamentDate}
           </text>
+          {tournamentTime && (
+            <text x="160" y="46" textAnchor="middle" fill="#FFD200" fontFamily="monospace" fontWeight="600" fontSize="12" letterSpacing="1">
+              {tournamentTime}
+            </text>
+          )}
           <text x="160" y="80" textAnchor="middle" fill="#718096" fontFamily="sans-serif" fontWeight="800" fontSize="13" letterSpacing="2">
-            DATE OF ISSUANCE
+            DATE & TIME OF ACCREDITATION
           </text>
           {certificateId && (
             <text x="160" y="105" textAnchor="middle" fill="#4B5563" fontFamily="monospace" fontWeight="700" fontSize="11" letterSpacing="1">

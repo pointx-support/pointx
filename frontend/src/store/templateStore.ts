@@ -825,9 +825,18 @@ export interface TemplateStoreState {
   setActiveTemplateId: (id: string) => void;
   addTemplate: (template: CustomGraphicsTemplate) => void;
   syncTemplates: (incoming: CustomGraphicsTemplate[]) => void;
-  createCustomTemplate: (name: string, imageUrl: string, baseAlignment?: TemplateAlignmentConfig, category?: GraphicTemplateCategory, templateType?: TemplateType) => string;
+  createCustomTemplate: (
+    name: string,
+    imageUrl: string,
+    baseAlignment?: TemplateAlignmentConfig,
+    category?: GraphicTemplateCategory,
+    templateType?: TemplateType,
+    defaultLayout?: string,
+    elements?: Record<string, any>,
+    variables?: string[]
+  ) => string;
   updateTemplateAlignment: (id: string, alignment: Partial<TemplateAlignmentConfig>) => void;
-  updateTemplateMetadata: (id: string, metadata: { name?: string; description?: string; imageUrl?: string; aspectRatio?: '16:9' | '4:5' | '1:1' | '9:16'; category?: GraphicTemplateCategory }) => void;
+  updateTemplateMetadata: (id: string, metadata: { name?: string; description?: string; imageUrl?: string; aspectRatio?: '16:9' | '4:5' | '1:1' | '9:16'; category?: GraphicTemplateCategory; defaultLayout?: string; elements?: Record<string, any>; variables?: string[] }) => void;
   publishTemplate: (id: string) => void;
   unpublishTemplate: (id: string) => void;
   deleteTemplate: (id: string) => void;
@@ -866,7 +875,7 @@ export const useTemplateStore = create<TemplateStoreState>()(
       },
 
       syncTemplates: (incoming: CustomGraphicsTemplate[]) => {
-        if (!Array.isArray(incoming) || incoming.length === 0) return;
+        if (!Array.isArray(incoming)) return;
         set((state) => {
           const incomingMap = new Map<string, CustomGraphicsTemplate>();
           incoming.forEach((t) => {
@@ -875,30 +884,54 @@ export const useTemplateStore = create<TemplateStoreState>()(
             incomingMap.set(id, { ...t, id, templateType: safeType });
           });
 
-          const updated = state.templates.map((t) => {
-            if (incomingMap.has(t.id)) {
-              const match = incomingMap.get(t.id)!;
-              incomingMap.delete(t.id);
-              return match;
+          // Builtin templates baseline
+          const builtInIds = new Set(BUILTIN_TEMPLATES.map((b) => b.id));
+          const builtIns = BUILTIN_TEMPLATES.map((b) => {
+            if (incomingMap.has(b.id)) {
+              const serverVersion = incomingMap.get(b.id)!;
+              incomingMap.delete(b.id);
+              return serverVersion;
             }
-            return t;
+            const existing = state.templates.find((t) => t.id === b.id);
+            return existing || b;
           });
 
+          // All remaining server templates are authorized custom templates
+          const authorizedCustom = Array.from(incomingMap.values()).filter(
+            (t) => !builtInIds.has(t.id)
+          );
+
+          const combined = [...builtIns, ...authorizedCustom];
+          const activeStillExists = combined.some((t) => t.id === state.activeTemplateId);
+
           return {
-            templates: [...updated, ...Array.from(incomingMap.values())],
+            templates: combined,
+            activeTemplateId: activeStillExists ? state.activeTemplateId : combined[0]?.id || BUILTIN_TEMPLATES[0].id,
           };
         });
       },
 
-      createCustomTemplate: (name: string, imageUrl: string, baseAlignment?: TemplateAlignmentConfig, category: GraphicTemplateCategory = 'standings', templateType?: TemplateType) => {
+      createCustomTemplate: (
+        name: string,
+        imageUrl: string,
+        baseAlignment?: TemplateAlignmentConfig,
+        category: GraphicTemplateCategory = 'standings',
+        templateType?: TemplateType,
+        defaultLayout?: string,
+        elements?: Record<string, any>,
+        variables?: string[]
+      ) => {
         const id = `custom-tmpl-${Date.now()}`;
         const resolvedType = templateType || normalizeTemplateType(category);
         const newTemplate: CustomGraphicsTemplate = {
           id,
-          name: name.trim() || 'Custom Tournament Template',
-          description: 'Custom tournament background calibrated by Admin.',
+          name,
+          description: 'Custom esports template',
           category,
           templateType: resolvedType,
+          defaultLayout: defaultLayout || 'default',
+          elements: elements || {},
+          variables: variables || [],
           imageUrl,
           aspectRatio: baseAlignment?.aspectRatio || '16:9',
           alignment: baseAlignment || { ...DEFAULT_LEGIT_ALIGNMENT },

@@ -28,9 +28,11 @@ export async function listTemplates(req: Request, res: Response, next: NextFunct
 export async function getSingleTemplate(req: Request, res: Response, next: NextFunction) {
   try {
     const id = req.params.id as string;
-    const user = (req as AuthenticatedRequest).user;
+    const authReq = req as AuthorizedTenantRequest;
+    const user = authReq.user;
+    const orgIds = authReq.authorizedOrganizationIds || [];
     const requiredSection = (req.query.section || req.query.templateType) as string | undefined;
-    const template = await getTemplateById(id, user, requiredSection);
+    const template = await getTemplateById(id, user, requiredSection, orgIds);
     if (!template) {
       return res.status(404).json({ success: false, error: 'Template not found.' });
     }
@@ -57,19 +59,23 @@ export async function getTemplateSectionData(req: Request, res: Response, next: 
       return res.status(400).json({ success: false, error: 'tournamentId query parameter is required.' });
     }
 
-    const user = (req as AuthenticatedRequest).user;
+    const authReq = req as AuthorizedTenantRequest;
+    const user = authReq.user;
+    const orgIds = authReq.authorizedOrganizationIds || [];
     const teamId = req.query.teamId as string | undefined;
     const recipientId = (req.query.recipientId || req.query.winnerTeamId) as string | undefined;
     const awardTitle = req.query.awardTitle as string | undefined;
+    const tournamentDate = (req.query.tournamentDate || req.query.date) as string | undefined;
+    const tournamentTime = (req.query.tournamentTime || req.query.time) as string | undefined;
 
-    const authReq = req as AuthorizedTenantRequest;
-    const orgIds = authReq.authorizedOrganizationIds || [];
     const data = await buildSectionDataForTemplate(id, tournamentId, {
       user,
       orgIds,
       teamId,
       recipientId,
       awardTitle,
+      tournamentDate,
+      tournamentTime,
     });
 
     return res.status(200).json({ success: true, data });
@@ -97,7 +103,10 @@ export async function createNewTemplate(req: AuthorizedTenantRequest, res: Respo
     const orgId = req.primaryOrganizationId?.toString() || (req.body.organizationId as string);
     const template = await createTemplate(req.user._id.toString(), req.body, req.user.role, orgId);
     return res.status(201).json({ success: true, data: template.toJSON() });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.statusCode === 400 || error.statusCode === 403) {
+      return res.status(error.statusCode).json({ success: false, error: error.message });
+    }
     next(error);
   }
 }
@@ -123,7 +132,10 @@ export async function updateExistingTemplate(req: AuthorizedTenantRequest, res: 
       'TEMPLATE_UPDATED'
     ).catch((err) => console.warn('[RealtimeSync] Template update broadcast error:', err));
     return res.status(200).json({ success: true, data: templateData });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.statusCode === 400 || error.statusCode === 403) {
+      return res.status(error.statusCode).json({ success: false, error: error.message });
+    }
     next(error);
   }
 }

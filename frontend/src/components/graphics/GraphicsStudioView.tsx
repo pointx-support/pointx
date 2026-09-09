@@ -28,13 +28,11 @@ import {
   Monitor,
   ArrowLeft,
   LayoutGrid,
-  Plus,
   Maximize2,
   ZoomIn,
   ZoomOut,
   Palette,
   RotateCcw,
-  Edit3,
   X,
   Tv
 } from 'lucide-react';
@@ -93,6 +91,12 @@ export const GraphicsStudioView: React.FC = () => {
   const [winnerTeamId, setWinnerTeamId] = useState<string>(currentTournament.teams[0]?.id || '');
   const [awardTitle, setAwardTitle] = useState<string>('CHAMPION');
   const [awardSubtitle, setAwardSubtitle] = useState<string>('For Outstanding Battle Royale Performance');
+  const [certificateDate, setCertificateDate] = useState<string>(
+    (currentTournament as any).startDate || new Date().toISOString().split('T')[0]
+  );
+  const [certificateTime, setCertificateTime] = useState<string>(
+    (currentTournament as any).startTime || '07:30 PM IST'
+  );
   const [selectedScope, setSelectedScope] = useState<'overall' | number>('overall');
   const [formatFilter, setFormatFilter] = useState<'all' | 'portrait' | 'landscape'>('all');
   const [customOrgName, setCustomOrgName] = useState(currentTournament.organizer || 'PointX Arena');
@@ -353,20 +357,6 @@ export const GraphicsStudioView: React.FC = () => {
 
         {/* Primary Export Actions Toolbar (Active Across All Categories) */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {isAdmin && (
-            <Button
-              variant="outline"
-              size="md"
-              onClick={() => {
-                useAdminStore.getState().setActiveAdminTab('templates');
-                setActiveTab('admin-dashboard' as any);
-              }}
-              leftIcon={<Sliders className="h-4 w-4 text-[var(--accent-primary)]" />}
-            >
-              Admin Template Studio
-            </Button>
-          )}
-
           <Button
             variant="outline"
             size="md"
@@ -515,6 +505,21 @@ export const GraphicsStudioView: React.FC = () => {
                   onChange={(e) => setAwardSubtitle(e.target.value)}
                   placeholder="e.g. For Outstanding Battle Royale Performance"
                 />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label="Certificate Date"
+                    type="date"
+                    value={certificateDate}
+                    onChange={(e) => setCertificateDate(e.target.value)}
+                  />
+                  <Input
+                    label="Tournament Time"
+                    type="text"
+                    value={certificateTime}
+                    onChange={(e) => setCertificateTime(e.target.value)}
+                    placeholder="e.g. 07:30 PM IST / 18:00 UTC"
+                  />
+                </div>
               </div>
             )}
 
@@ -682,6 +687,8 @@ export const GraphicsStudioView: React.FC = () => {
                     winnerTeamId,
                     awardTitle,
                     awardSubtitle,
+                    tournamentDate: certificateDate,
+                    tournamentTime: certificateTime,
                     standingsData,
                   }}
                   hueRotate={hueRotate}
@@ -746,21 +753,6 @@ export const GraphicsStudioView: React.FC = () => {
                   <Monitor className="h-3 w-3" />
                   <span>16:9</span>
                 </button>
-
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      useAdminStore.getState().setActiveAdminTab('templates');
-                      setActiveTab('admin-dashboard' as any);
-                    }}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-[var(--accent-primary)]/15 border border-[var(--accent-primary)]/30 text-[var(--accent-primary)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] transition-all cursor-pointer shadow-xs"
-                    title="Add or Edit Templates in Admin Studio"
-                  >
-                    <Plus className="h-3 w-3" />
-                    <span>Add</span>
-                  </button>
-                )}
               </div>
             </div>
 
@@ -903,21 +895,6 @@ export const GraphicsStudioView: React.FC = () => {
                   Fit
                 </button>
               </div>
-
-              {/* 🔒 ADMIN ONLY: EDIT TEMPLATE IN PRECISION STUDIO */}
-              {isAdmin && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => {
-                    setIsFullScreenOpen(false);
-                    setActiveTab('template-studio');
-                  }}
-                  leftIcon={<Edit3 className="h-4 w-4" />}
-                >
-                  Edit in Template Studio
-                </Button>
-              )}
 
               {/* Direct Export from Fullscreen */}
               <Button

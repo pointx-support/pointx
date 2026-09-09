@@ -12,7 +12,6 @@ import { BroadcastControlView } from '../broadcast/BroadcastControlView';
 import { SettingsView } from '../settings/SettingsView';
 import { MyAccountView } from '../account/MyAccountView';
 import { MyOrganizationView } from '../organization/MyOrganizationView';
-import { AdminTemplateStudio } from '../graphics/AdminTemplateStudio';
 import { Button } from '../ui/Button';
 import { UserCheck, ArrowLeft } from 'lucide-react';
 
@@ -28,13 +27,12 @@ export const TournamentWorkspace: React.FC<TournamentWorkspaceProps> = ({
   const { currentTournament, activeTab, goBackTab, previousTab } = useTournamentStore();
   const effectiveTournament = tournament || currentTournament;
 
-  const previousTabLabel = {
+  const tabLabels: Record<string, string> = {
     standings: 'Point Table',
     matches: 'Matches',
     teams: 'Teams & Slots',
     overview: 'Overview',
     graphics: 'Graphics Studio',
-    'template-studio': 'Template Studio',
     broadcast: 'OBS Broadcast',
     statistics: 'Statistics',
     players: 'Players',
@@ -43,7 +41,8 @@ export const TournamentWorkspace: React.FC<TournamentWorkspaceProps> = ({
     settings: 'Settings',
     organization: 'My Organisation',
     account: 'Account'
-  }[previousTab || 'overview'] || 'Previous Section';
+  };
+  const previousTabLabel = tabLabels[previousTab || 'overview'] || 'Previous Section';
 
   const renderContent = (tab: string) => {
     switch (tab) {
@@ -107,8 +106,6 @@ export const TournamentWorkspace: React.FC<TournamentWorkspaceProps> = ({
         return <StatisticsView />;
       case 'graphics':
         return <GraphicsView />;
-      case 'template-studio':
-        return <AdminTemplateStudio onClose={goBackTab} />;
       case 'broadcast':
         return <BroadcastControlView />;
       case 'scoring':

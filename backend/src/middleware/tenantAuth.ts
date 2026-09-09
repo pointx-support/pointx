@@ -95,6 +95,44 @@ export async function requireOrganizationContext(
 }
 
 /**
+ * Resolves user's authorized organizations if authenticated, but does not reject unauthenticated requests.
+ */
+export async function optionalOrganizationContext(
+  req: AuthorizedTenantRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    if (!req.user) {
+      return next();
+    }
+
+    if (req.user.role === 'admin') {
+      req.authorizedOrganizationIds = ['*'];
+      req.primaryOrganizationId = req.user.primaryOrganizationId?.toString();
+      return next();
+    }
+
+    const memberships = await OrganizationMembership.find({
+      userId: req.user._id,
+    });
+
+    if (memberships.length > 0) {
+      req.authorizedOrganizationIds = memberships.map((m) => m.organizationId.toString());
+      req.primaryOrganizationId =
+        req.user.primaryOrganizationId?.toString() || memberships[0].organizationId.toString();
+    } else if (req.user.primaryOrganizationId) {
+      req.authorizedOrganizationIds = [req.user.primaryOrganizationId.toString()];
+      req.primaryOrganizationId = req.user.primaryOrganizationId.toString();
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * Require and verify that the requested tournament belongs to one of the
  * authenticated user's authorized organizations.
  *

@@ -4,6 +4,66 @@ import { User } from '../models/User';
 import { getTournamentById } from './tournamentService';
 import { calculateStandings } from './scoringEngine';
 
+import { OrganizationMembership } from '../models/OrganizationMembership';
+import { Organization } from '../models/Organization';
+
+export async function getUserAuthorizedOrgTargets(
+  userId?: any,
+  primaryOrgId?: any,
+  organizationName?: string,
+  extraOrgIds?: (string | mongoose.Types.ObjectId)[]
+): Promise<string[]> {
+  const targets = new Set<string>();
+  if (primaryOrgId) targets.add(primaryOrgId.toString());
+  if (organizationName && organizationName.trim()) {
+    targets.add(organizationName.trim());
+    targets.add(organizationName.trim().toLowerCase());
+  }
+  if (userId) {
+    targets.add(userId.toString());
+    try {
+      const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
+      if (userObjectId) {
+        const memberships = await OrganizationMembership.find({ userId: userObjectId });
+        for (const m of memberships) {
+          if (m.organizationId) {
+            targets.add(m.organizationId.toString());
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[templateService] Error querying user organization memberships:', err);
+    }
+  }
+  if (Array.isArray(extraOrgIds)) {
+    for (const id of extraOrgIds) {
+      if (id) targets.add(id.toString());
+    }
+  }
+
+  // Also resolve organization customIds or names for all matched organization IDs
+  const orgObjectIds = Array.from(targets)
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+
+  if (orgObjectIds.length > 0) {
+    try {
+      const orgDocs = await Organization.find({ _id: { $in: orgObjectIds } }, { name: 1, customId: 1 });
+      for (const org of orgDocs) {
+        if (org.name) {
+          targets.add(org.name);
+          targets.add(org.name.toLowerCase());
+        }
+        if ((org as any).customId) {
+          targets.add((org as any).customId);
+        }
+      }
+    } catch {}
+  }
+
+  return Array.from(targets);
+}
+
 export async function migrateExistingTemplates(): Promise<{ migrated: number; needsReview: number }> {
   try {
     const rawTemplates = await CustomTemplate.collection.find({}).toArray();
@@ -39,7 +99,7 @@ export interface GetTemplatesOptions {
 }
 
 export async function getTemplates(
-  user?: { _id?: any; role?: string; organizationName?: string },
+  user?: { _id?: any; role?: string; organizationName?: string; primaryOrganizationId?: any },
   options?: GetTemplatesOptions,
   orgIds?: (string | mongoose.Types.ObjectId)[]
 ): Promise<ICustomTemplate[]> {
@@ -70,11 +130,9 @@ export async function getTemplates(
   // Authenticated organizer: can access:
   // 1. Built-in templates
   // 2. Globally published templates
-  // 3. Restricted templates where their userId or organizationName is in allowedOrganizationIds
-  // 4. Templates they created themselves
-  const userIdStr = user._id.toString();
-  const orgName = (user.organizationName || '').trim();
-  const allowedTargets = [userIdStr, orgName].filter(Boolean);
+  // 3. Restricted templates where their organization is in allowedOrganizationIds
+  // 4. Templates they created themselves (userId: user._id)
+  const allowedTargets = await getUserAuthorizedOrgTargets(user._id, user.primaryOrganizationId, user.organizationName, orgIds);
 
   const query: any = {
     ...sectionFilter,
@@ -85,13 +143,9 @@ export async function getTemplates(
       {
         visibility: 'ORGANIZATION_RESTRICTED',
         isPublished: true,
-        $or: [
-          { allowedOrganizationIds: { $in: allowedTargets } },
-          { allowedOrganizationIds: { $in: (orgIds || []).map(String) } },
-        ],
+        allowedOrganizationIds: { $in: allowedTargets },
       },
       { userId: user._id },
-      { organizationId: { $in: (orgIds || []).map((id) => mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id) } },
     ],
   };
 
@@ -100,8 +154,9 @@ export async function getTemplates(
 
 export async function getTemplateById(
   templateId: string,
-  user?: { _id?: any; role?: string; organizationName?: string },
-  requiredSection?: string
+  user?: { _id?: any; role?: string; organizationName?: string; primaryOrganizationId?: any },
+  requiredSection?: string,
+  orgIds?: (string | mongoose.Types.ObjectId)[]
 ): Promise<ICustomTemplate | null> {
   const query: any = {
     $or: [{ customId: templateId }],
@@ -155,7 +210,7 @@ export async function getTemplateById(
     return template;
   }
 
-  // Organization-restricted check
+  // Organization-restricted check - FAIL CLOSED
   if (template.visibility === 'ORGANIZATION_RESTRICTED') {
     if (!user || !user._id) {
       const err: any = new Error('Forbidden: Authentication required to access this organization template.');
@@ -163,10 +218,9 @@ export async function getTemplateById(
       throw err;
     }
 
-    const userIdStr = user._id.toString();
-    const orgName = (user.organizationName || '').trim();
-    const isAllowed = template.allowedOrganizationIds.some(
-      (id) => id === userIdStr || (orgName && id.toLowerCase() === orgName.toLowerCase())
+    const allowedTargets = await getUserAuthorizedOrgTargets(user._id, user.primaryOrganizationId, user.organizationName, orgIds);
+    const isAllowed = template.allowedOrganizationIds.some((id) =>
+      allowedTargets.includes(id) || (typeof id === 'string' && allowedTargets.includes(id.toLowerCase()))
     );
 
     if (!isAllowed) {
@@ -178,7 +232,10 @@ export async function getTemplateById(
     return template;
   }
 
-  return template;
+  // Default fail closed for any unhandled visibility state
+  const err: any = new Error('Forbidden: You do not have permission to access this template.');
+  err.statusCode = 403;
+  throw err;
 }
 
 export async function createTemplate(
@@ -193,7 +250,16 @@ export async function createTemplate(
     ? data.allowedOrganizationIds.map(String)
     : [];
 
+  if (visibility === 'ORGANIZATION_RESTRICTED' && allowedOrganizationIds.length === 0) {
+    const err: any = new Error('At least one organization must be selected for organization-restricted templates.');
+    err.statusCode = 400;
+    throw err;
+  }
+
   const templateType = normalizeTemplateType(data.templateType || data.category);
+  const defaultLayout = data.defaultLayout || 'default';
+  const elements = data.elements && typeof data.elements === 'object' ? data.elements : {};
+  const variables = Array.isArray(data.variables) ? data.variables : [];
 
   return CustomTemplate.create({
     ...data,
@@ -204,6 +270,10 @@ export async function createTemplate(
     allowedOrganizationIds,
     templateType,
     category: data.category || templateType,
+    alignment: data.alignment || {},
+    defaultLayout,
+    elements,
+    variables,
     active: data.active !== undefined ? !!data.active : true,
     version: 1,
     isBuiltIn: role === 'admin' ? !!data.isBuiltIn : false,
@@ -218,6 +288,16 @@ export async function updateTemplate(
   role?: string,
   orgIds?: (string | mongoose.Types.ObjectId)[]
 ): Promise<ICustomTemplate | null> {
+  if (updates.visibility === 'ORGANIZATION_RESTRICTED') {
+    const orgIdsList = Array.isArray(updates.allowedOrganizationIds)
+      ? updates.allowedOrganizationIds
+      : [];
+    if (orgIdsList.length === 0) {
+      const err: any = new Error('At least one organization must be selected for organization-restricted templates.');
+      err.statusCode = 400;
+      throw err;
+    }
+  }
   const query: any = {
     $or: [{ customId: templateId }],
   };
@@ -340,10 +420,12 @@ export async function buildSectionDataForTemplate(
     teamId?: string;
     recipientId?: string;
     awardTitle?: string;
+    tournamentDate?: string;
+    tournamentTime?: string;
   }
 ): Promise<{ templateType: TemplateType; [key: string]: any }> {
   // 1. Retrieve template with authorization check
-  const template = await getTemplateById(templateId, options?.user);
+  const template = await getTemplateById(templateId, options?.user, undefined, options?.orgIds);
   if (!template) {
     const err: any = new Error('Template not found.');
     err.statusCode = 404;
@@ -565,7 +647,8 @@ export async function buildSectionDataForTemplate(
         awardTitle: options?.awardTitle?.trim() || 'CHAMPION',
         position: '1ST PLACE',
         tournamentName: tournament.title,
-        tournamentDate: new Date().toISOString().split('T')[0],
+        tournamentDate: options?.tournamentDate?.trim() || (tournament as any).startDate || new Date().toISOString().split('T')[0],
+        tournamentTime: options?.tournamentTime?.trim() || (tournament as any).startTime || '18:00 UTC',
         organizationName: tournament.organizer || 'PointX Arena',
         organizationLogo: tournament.organizerLogoUrl,
         certificateId: `CERT-${tournament.customId || tournament._id}-${winnerTeam.id || '1'}`,

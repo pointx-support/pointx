@@ -241,5 +241,45 @@ describe('Custom Organization Template Access Control & IDOR Prevention', () => 
     expect(noneRes.body.success).toBe(true);
     expect(noneRes.body.data.length).toBe(0);
   });
+
+  it('6. should reject ORGANIZATION_RESTRICTED template creation with 400 if allowedOrganizationIds is empty', async () => {
+    const res = await request(app)
+      .post('/api/templates')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Invalid Restricted Template',
+        imageUrl: 'https://cloudinary.com/test.png',
+        visibility: 'ORGANIZATION_RESTRICTED',
+        allowedOrganizationIds: [],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toContain('At least one organization must be selected');
+  });
+
+  it('7. should persist defaultLayout, elements, and variables when creating template', async () => {
+    const res = await request(app)
+      .post('/api/templates')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Certificate of Valor',
+        imageUrl: 'https://cloudinary.com/cert.png',
+        templateType: 'VICTORY_CERTIFICATE',
+        defaultLayout: 'modern_diploma',
+        elements: {
+          recipient: { x: 960, y: 540, fontSize: 48, fill: '#FFD700' },
+          date: { x: 500, y: 800, fontSize: 24, fill: '#FFFFFF' },
+        },
+        variables: ['recipientName', 'tournamentDate', 'tournamentTime'],
+        visibility: 'GLOBAL',
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.defaultLayout).toBe('modern_diploma');
+    expect(res.body.data.elements.recipient.fontSize).toBe(48);
+    expect(res.body.data.variables).toContain('tournamentTime');
+  });
 });
 

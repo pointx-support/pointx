@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import type { TopFraggersRenderData } from '../../../types/customTemplate';
 
 export interface TopFraggersRendererProps {
@@ -6,6 +6,7 @@ export interface TopFraggersRendererProps {
   artworkUrl?: string;
   aspectRatio?: '16:9' | '4:5' | '1:1' | '9:16';
   hueRotate?: number;
+  layoutMode?: 'podium' | 'horizontal_cards' | 'vertical_cards' | string;
   svgRef?: React.RefObject<SVGSVGElement | null>;
 }
 
@@ -14,6 +15,7 @@ export const TopFraggersRenderer: React.FC<TopFraggersRendererProps> = ({
   artworkUrl,
   aspectRatio = '4:5',
   hueRotate = 0,
+  layoutMode = 'vertical_cards',
   svgRef
 }) => {
   const isLandscape = aspectRatio === '16:9';
@@ -29,6 +31,8 @@ export const TopFraggersRenderer: React.FC<TopFraggersRendererProps> = ({
     { color: '#E2E8F0', title: '2ND RUNNER', border: '#CBD5E1', bg: '#171C2E' },
     { color: '#CD7F32', title: '3RD PLACE', border: '#D97706', bg: '#141828' }
   ];
+
+  const top3 = players.slice(0, 3);
 
   return (
     <svg
@@ -125,90 +129,219 @@ export const TopFraggersRenderer: React.FC<TopFraggersRendererProps> = ({
         </text>
       </g>
 
-      {/* Exactly Top 3 Players Stack (Gracefully handles < 3) */}
-      <g transform={`translate(${(width - 860) / 2}, 260)`}>
-        {players.slice(0, 3).map((p, idx) => {
-          const cfg = rankBadges[idx] || rankBadges[2];
-          const yOffset = idx * 240;
+      {/* 2. PODIUM LAYOUT (1st Center Stage, 2nd Left, 3rd Right) */}
+      {layoutMode === 'podium' ? (
+        <g transform={`translate(${width / 2}, 300)`}>
+          {/* Reorder players for podium: [2nd (left), 1st (center), 3rd (right)] */}
+          {[
+            { p: top3[1], rankIdx: 1, xOffset: -320, yOffset: 70, w: 290, h: 420 },
+            { p: top3[0], rankIdx: 0, xOffset: -160, yOffset: 0, w: 320, h: 490 },
+            { p: top3[2], rankIdx: 2, xOffset: 190, yOffset: 110, w: 290, h: 380 },
+          ].map((item, idx) => {
+            if (!item.p) return null;
+            const p = item.p;
+            const cfg = rankBadges[item.rankIdx] || rankBadges[2];
+            const isMVP = item.rankIdx === 0;
 
-          return (
-            <g key={p.id || idx} transform={`translate(0, ${yOffset})`}>
-              {/* Outer Card */}
-              <rect
-                width="860"
-                height="215"
-                rx="24"
-                fill={cfg.bg}
-                stroke={cfg.border}
-                strokeWidth={idx === 0 ? 3 : 1.5}
-                strokeOpacity={idx === 0 ? 1 : 0.8}
-              />
+            return (
+              <g key={p.id || idx} transform={`translate(${item.xOffset}, ${item.yOffset})`}>
+                <rect
+                  width={item.w}
+                  height={item.h}
+                  rx="24"
+                  fill={cfg.bg}
+                  stroke={cfg.border}
+                  strokeWidth={isMVP ? 3.5 : 1.5}
+                  filter={isMVP ? 'url(#tfGlow)' : undefined}
+                />
 
-              {/* Rank Badge #1, #2, #3 */}
-              <rect x="25" y="30" width="85" height="85" rx="20" fill={cfg.color} fillOpacity="0.2" stroke={cfg.color} strokeWidth="2.5" />
-              <text x="67" y="85" textAnchor="middle" fill={cfg.color} fontFamily="sans-serif" fontWeight="900" fontSize="38">
-                #{p.rank}
-              </text>
-              <text x="67" y="145" textAnchor="middle" fill={cfg.color} fontFamily="monospace" fontWeight="900" fontSize="12" letterSpacing="1">
-                {cfg.title}
-              </text>
-
-              {/* Avatar Photo Frame */}
-              <g transform="translate(180, 107)">
-                <circle r="60" fill="#0C0F1A" stroke={cfg.color} strokeWidth="3" />
-                <circle r="52" fill="#182035" />
-                {p.avatarUrl ? (
-                  <clipPath id={`avatarClip-${idx}`}>
-                    <circle r="52" />
-                  </clipPath>
-                ) : null}
-                {p.avatarUrl ? (
-                  <image href={p.avatarUrl} x="-52" y="-52" width="104" height="104" clipPath={`url(#avatarClip-${idx})`} preserveAspectRatio="xMidYMid slice" />
-                ) : (
-                  <text x="0" y="14" textAnchor="middle" fontSize="36">{idx === 0 ? '👑' : idx === 1 ? '🥈' : '🥉'}</text>
-                )}
-              </g>
-
-              {/* Player Name & Team */}
-              <text x="270" y="85" fill="#FFFFFF" fontFamily="sans-serif" fontWeight="900" fontSize="36" letterSpacing="1">
-                {p.name.toUpperCase()}
-              </text>
-              <text x="270" y="125" fill={cfg.color} fontFamily="sans-serif" fontWeight="800" fontSize="20" letterSpacing="2">
-                {p.teamName.toUpperCase()} {p.teamTag ? `[${p.teamTag}]` : ''}
-              </text>
-
-              {/* Stat HUD (Damage & Kills) */}
-              <g transform="translate(560, 45)">
-                {/* Damage Box */}
-                <g transform="translate(0, 0)">
-                  <text x="0" y="24" fill="#94A3B8" fontFamily="monospace" fontWeight="700" fontSize="12" letterSpacing="1">
-                    TOTAL DAMAGE
-                  </text>
-                  <text x="0" y="65" fill="#E2E8F0" fontFamily="sans-serif" fontWeight="900" fontSize="32">
-                    {p.damage}
+                {/* Pedestal Crown / Medal */}
+                <g transform={`translate(${item.w / 2}, 45)`}>
+                  <circle r="36" fill="#0C0F1A" stroke={cfg.color} strokeWidth="3" />
+                  <text x="0" y="12" textAnchor="middle" fontSize="32">
+                    {item.rankIdx === 0 ? '👑' : item.rankIdx === 1 ? '🥈' : '🥉'}
                   </text>
                 </g>
 
-                {/* Kills Box */}
-                <g transform="translate(140, -10)">
-                  <rect width="135" height="145" rx="18" fill="#0B0E1B" stroke="url(#tfCrimsonGrad)" strokeWidth="2" />
-                  <text x="67" y="42" textAnchor="middle" fill="#FF4B2B" fontFamily="monospace" fontWeight="800" fontSize="12" letterSpacing="2">
-                    KILLS
-                  </text>
-                  <text x="67" y="105" textAnchor="middle" fill="#FFFFFF" fontFamily="sans-serif" fontWeight="900" fontSize="54">
+                {/* Player Name */}
+                <text x={item.w / 2} y="135" textAnchor="middle" fill="#FFFFFF" fontFamily="sans-serif" fontWeight="900" fontSize="24">
+                  {p.name.toUpperCase()}
+                </text>
+
+                {/* Team Tag */}
+                <text x={item.w / 2} y="165" textAnchor="middle" fill="#A0AEC0" fontFamily="monospace" fontWeight="700" fontSize="13">
+                  {p.teamName.toUpperCase()} {p.teamTag ? `[${p.teamTag}]` : ''}
+                </text>
+
+                {/* Kill Counter Box */}
+                <g transform={`translate(${(item.w - 180) / 2}, 205)`}>
+                  <rect width="180" height="90" rx="18" fill="#0E121E" stroke={cfg.color} strokeWidth="1.5" />
+                  <text x="90" y="55" textAnchor="middle" fill={cfg.color} fontFamily="sans-serif" fontWeight="900" fontSize="54">
                     {p.totalKills}
                   </text>
+                  <text x="90" y="78" textAnchor="middle" fill="#A0AEC0" fontFamily="monospace" fontWeight="800" fontSize="11" letterSpacing="2">
+                    KILLS
+                  </text>
+                </g>
+
+                {/* Rank Pill */}
+                <g transform={`translate(${(item.w - 140) / 2}, ${item.h - 55})`}>
+                  <rect width="140" height="34" rx="10" fill={cfg.color} fillOpacity="0.2" stroke={cfg.color} strokeWidth="1.5" />
+                  <text x="70" y="22" textAnchor="middle" fill={cfg.color} fontFamily="monospace" fontWeight="900" fontSize="12" letterSpacing="1.5">
+                    {cfg.title}
+                  </text>
                 </g>
               </g>
-            </g>
-          );
-        })}
-      </g>
+            );
+          })}
+        </g>
+      ) : layoutMode === 'horizontal_cards' ? (
+        /* 3. 3 HORIZONTAL SIDE-BY-SIDE CARDS */
+        <g transform={`translate(${(width - 960) / 2}, 260)`}>
+          {top3.map((p, idx) => {
+            const cfg = rankBadges[idx] || rankBadges[2];
+            const xOffset = idx * 330;
 
-      {/* Footer */}
-      <g transform={`translate(${width / 2}, ${height - 50})`}>
+            return (
+              <g key={p.id || idx} transform={`translate(${xOffset}, 0)`}>
+                <rect
+                  width="300"
+                  height="520"
+                  rx="24"
+                  fill={cfg.bg}
+                  stroke={cfg.border}
+                  strokeWidth={idx === 0 ? 3 : 1.5}
+                />
+
+                {/* Rank Badge Header */}
+                <g transform="translate(150, 60)">
+                  <circle r="40" fill="#0C0F1A" stroke={cfg.color} strokeWidth="3" />
+                  <text x="0" y="14" textAnchor="middle" fontSize="36">
+                    {idx === 0 ? '👑' : idx === 1 ? '🥈' : '🥉'}
+                  </text>
+                </g>
+
+                <text x="150" y="145" textAnchor="middle" fill={cfg.color} fontFamily="monospace" fontWeight="900" fontSize="14" letterSpacing="2">
+                  {cfg.title}
+                </text>
+
+                {/* Player Name */}
+                <text x="150" y="195" textAnchor="middle" fill="#FFFFFF" fontFamily="sans-serif" fontWeight="900" fontSize="24">
+                  {p.name.toUpperCase()}
+                </text>
+
+                {/* Team Info */}
+                <text x="150" y="225" textAnchor="middle" fill="#A0AEC0" fontFamily="monospace" fontWeight="700" fontSize="13">
+                  {p.teamName.toUpperCase()}
+                </text>
+
+                {/* Kills Box */}
+                <g transform="translate(45, 270)">
+                  <rect width="210" height="110" rx="18" fill="#0C0F1A" stroke={cfg.color} strokeWidth="1.5" />
+                  <text x="105" y="68" textAnchor="middle" fill={cfg.color} fontFamily="sans-serif" fontWeight="900" fontSize="58">
+                    {p.totalKills}
+                  </text>
+                  <text x="105" y="95" textAnchor="middle" fill="#A0AEC0" fontFamily="monospace" fontWeight="800" fontSize="12" letterSpacing="2">
+                    TOTAL ELIMINATIONS
+                  </text>
+                </g>
+
+                {/* Damage & Avg Kills Sub-stats */}
+                <g transform="translate(45, 415)">
+                  <text x="105" y="25" textAnchor="middle" fill="#E2E8F0" fontFamily="monospace" fontWeight="700" fontSize="14">
+                    DMG: {p.damage ? p.damage.toLocaleString() : '1,850'}
+                  </text>
+                  <text x="105" y="48" textAnchor="middle" fill="#718096" fontFamily="monospace" fontWeight="700" fontSize="12">
+                    AVG KILLS: {p.avgKills ? p.avgKills.toFixed(1) : (p.totalKills / 3).toFixed(1)}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+        </g>
+      ) : (
+        /* 4. VERTICAL STACKED CARDS (Default) */
+        <g transform={`translate(${(width - 860) / 2}, 260)`}>
+          {top3.map((p, idx) => {
+            const cfg = rankBadges[idx] || rankBadges[2];
+            const yOffset = idx * 240;
+
+            return (
+              <g key={p.id || idx} transform={`translate(0, ${yOffset})`}>
+                <rect
+                  width="860"
+                  height="215"
+                  rx="24"
+                  fill={cfg.bg}
+                  stroke={cfg.border}
+                  strokeWidth={idx === 0 ? 3 : 1.5}
+                  strokeOpacity={idx === 0 ? 1 : 0.8}
+                />
+
+                {/* Rank Badge */}
+                <rect x="25" y="30" width="85" height="85" rx="20" fill={cfg.color} fillOpacity="0.2" stroke={cfg.color} strokeWidth="2.5" />
+                <text x="67" y="85" textAnchor="middle" fill={cfg.color} fontFamily="sans-serif" fontWeight="900" fontSize="38">
+                  #{p.rank}
+                </text>
+                <text x="67" y="145" textAnchor="middle" fill={cfg.color} fontFamily="monospace" fontWeight="900" fontSize="12" letterSpacing="1">
+                  {cfg.title}
+                </text>
+
+                {/* Avatar / Icon */}
+                <g transform="translate(180, 107)">
+                  <circle r="60" fill="#0C0F1A" stroke={cfg.color} strokeWidth="3" />
+                  <circle r="52" fill="#182035" />
+                  {p.avatarUrl ? (
+                    <image href={p.avatarUrl} x="-52" y="-52" width="104" height="104" preserveAspectRatio="xMidYMid slice" />
+                  ) : (
+                    <text x="0" y="14" textAnchor="middle" fontSize="36">{idx === 0 ? '👑' : idx === 1 ? '🥈' : '🥉'}</text>
+                  )}
+                </g>
+
+                {/* Player & Team Identity */}
+                <g transform="translate(270, 75)">
+                  <text x="0" y="0" fill="#FFFFFF" fontFamily="sans-serif" fontWeight="900" fontSize="36" letterSpacing="1">
+                    {p.name.toUpperCase()}
+                  </text>
+                  <g transform="translate(0, 30)">
+                    {p.teamLogo && (
+                      <image href={p.teamLogo} x="0" y="-18" width="24" height="24" preserveAspectRatio="xMidYMid meet" />
+                    )}
+                    <text x={p.teamLogo ? 32 : 0} y="0" fill="#CBD5E1" fontFamily="sans-serif" fontWeight="700" fontSize="18">
+                      {p.teamName.toUpperCase()}
+                    </text>
+                    {p.teamTag && (
+                      <text x={(p.teamLogo ? 32 : 0) + (p.teamName.length * 11) + 10} y="0" fill={cfg.color} fontFamily="monospace" fontWeight="800" fontSize="16">
+                        [{p.teamTag.toUpperCase()}]
+                      </text>
+                    )}
+                  </g>
+                </g>
+
+                {/* Elimination Stat Box */}
+                <g transform="translate(640, 28)">
+                  <rect width="190" height="155" rx="20" fill="#0E1220" stroke={cfg.color} strokeWidth="1.5" />
+                  <text x="95" y="75" textAnchor="middle" fill={cfg.color} fontFamily="sans-serif" fontWeight="900" fontSize="64" letterSpacing="-1">
+                    {p.totalKills}
+                  </text>
+                  <text x="95" y="105" textAnchor="middle" fill="#A0AEC0" fontFamily="monospace" fontWeight="900" fontSize="13" letterSpacing="2">
+                    TOTAL KILLS
+                  </text>
+                  <line x1="25" y1="118" x2="165" y2="118" stroke="#ffffff" strokeOpacity="0.1" />
+                  <text x="95" y="138" textAnchor="middle" fill="#718096" fontFamily="monospace" fontWeight="700" fontSize="11">
+                    DMG: {p.damage ? p.damage.toLocaleString() : 'N/A'}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+        </g>
+      )}
+
+      {/* Footer System Attribution */}
+      <g transform={`translate(${width / 2}, ${height - 40})`}>
         <text x="0" y="0" textAnchor="middle" fill="#718096" fontFamily="sans-serif" fontWeight="700" fontSize="13" letterSpacing="2">
-          POINTX ESPORTS • OFFICIAL MVP TOP FRAGGERS ASSET
+          POINTX ESPORTS • AUTHORITATIVE TOURNAMENT FRAGGERS ENGINE
         </text>
       </g>
     </svg>
