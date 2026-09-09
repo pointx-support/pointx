@@ -70,6 +70,10 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   // FIFO Command Queue for sequential background delivery without drops
   const commandQueueRef = useRef<Array<{ commandType: string; targetTeamId?: string; payload?: any }>>([]);
   const isProcessingQueueRef = useRef<boolean>(false);
+  const connectionRef = useRef<BroadcastSessionConnection | null>(null);
+
+  // Rapid Action Coalescing for Kills: debounces rapid clicks into a single delta command
+  const pendingKillDeltasRef = useRef<Map<string, { delta: number; timer: any }>>(new Map());
 
   // Match Report Modal State
   const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
@@ -125,6 +129,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         });
 
         if (!isCancelled) {
+          connectionRef.current = conn;
           setConnection(conn);
         }
       } catch (err: any) {
@@ -142,6 +147,10 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       isCancelled = true;
       if (conn) {
         conn.disconnect();
+      }
+      connectionRef.current = null;
+      for (const pending of pendingKillDeltasRef.current.values()) {
+        if (pending.timer) clearTimeout(pending.timer);
       }
     };
   }, [effectiveSessionId, effectiveTournamentId, effectiveMatchId]);
@@ -182,15 +191,16 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
           if (t.teamId !== targetTeamId) return t;
           const teamCopy: BroadcastSquadTeam = { ...t };
           if (commandType === 'ADD_KILL') {
-            teamCopy.kills = (teamCopy.kills || 0) + 1;
-            teamCopy.killPoints = (teamCopy.killPoints || 0) + 1;
-            teamCopy.totalPoints = (teamCopy.totalPoints || 0) + 1;
+            const delta = Number(payload?.delta ?? 1);
+            teamCopy.kills = (teamCopy.kills || 0) + delta;
+            teamCopy.killPoints = (teamCopy.killPoints || 0) + delta;
+            teamCopy.totalPoints = (teamCopy.totalPoints || 0) + delta;
           } else if (commandType === 'REMOVE_KILL') {
-            if (teamCopy.kills > 0) {
-              teamCopy.kills -= 1;
-              teamCopy.killPoints = Math.max(0, teamCopy.killPoints - 1);
-              teamCopy.totalPoints = Math.max(0, teamCopy.totalPoints - 1);
-            }
+            const delta = Number(payload?.delta ?? 1);
+            const actualDelta = Math.min(teamCopy.kills || 0, delta);
+            teamCopy.kills = Math.max(0, (teamCopy.kills || 0) - delta);
+            teamCopy.killPoints = Math.max(0, (teamCopy.killPoints || 0) - actualDelta);
+            teamCopy.totalPoints = Math.max(0, (teamCopy.totalPoints || 0) - actualDelta);
           } else if (commandType === 'SET_PLAYER_STATUS') {
             const { playerIndex, status } = payload || {};
             if (playerIndex !== undefined && status) {
@@ -224,14 +234,15 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
 
   // Sequential queue processor: runs in background, sends commands one by one to prevent race conditions
   const processQueue = useCallback(async () => {
-    if (isProcessingQueueRef.current || !connection) return;
+    const conn = connectionRef.current || connection;
+    if (isProcessingQueueRef.current || !conn) return;
     if (commandQueueRef.current.length === 0) return;
 
     isProcessingQueueRef.current = true;
     while (commandQueueRef.current.length > 0) {
       const nextCmd = commandQueueRef.current[0];
       try {
-        await connection.sendCommand(nextCmd.commandType, nextCmd.targetTeamId, nextCmd.payload);
+        await conn.sendCommand(nextCmd.commandType, nextCmd.targetTeamId, nextCmd.payload);
       } catch (err: any) {
         console.error('[RemoteCommand Error]', nextCmd, err);
       }
@@ -240,19 +251,77 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
     isProcessingQueueRef.current = false;
   }, [connection]);
 
-  // Command dispatcher: instant local feedback + FIFO network queue
-  const executeCommand = useCallback(
-    (commandType: string, targetTeamId?: string, payload?: any) => {
-      // 1. Instant local optimistic update
-      applyOptimisticUpdate(commandType, targetTeamId, payload);
+  // Flush pending kill accumulation for a specific team
+  const flushPendingKill = useCallback(
+    (targetTeamId: string) => {
+      const pending = pendingKillDeltasRef.current.get(targetTeamId);
+      if (!pending) return;
+      if (pending.timer) clearTimeout(pending.timer);
+      pendingKillDeltasRef.current.delete(targetTeamId);
 
-      // 2. Queue for sequential background delivery
-      commandQueueRef.current.push({ commandType, targetTeamId, payload });
+      if (pending.delta === 0) return;
 
-      // 3. Trigger queue processor
+      const cmdType = pending.delta > 0 ? 'ADD_KILL' : 'REMOVE_KILL';
+      const absDelta = Math.abs(pending.delta);
+      const commandId = `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      commandQueueRef.current.push({
+        commandType: cmdType,
+        targetTeamId,
+        payload: { delta: absDelta, commandId },
+      });
       processQueue();
     },
-    [applyOptimisticUpdate, processQueue]
+    [processQueue]
+  );
+
+  // Flush all pending kills across all teams immediately
+  const flushAllPendingKills = useCallback(() => {
+    const teamIds = Array.from(pendingKillDeltasRef.current.keys());
+    for (const tId of teamIds) {
+      flushPendingKill(tId);
+    }
+  }, [flushPendingKill]);
+
+  // Command dispatcher: instant local feedback + rapid action coalescing for kills
+  const executeCommand = useCallback(
+    (commandType: string, targetTeamId?: string, payload?: any) => {
+      // 1. Instant local optimistic update for immediate tactile response
+      applyOptimisticUpdate(commandType, targetTeamId, payload);
+
+      // 2. Rapid Action Coalescing for rapid +1 / -1 kill clicks (120ms aggregation window)
+      if ((commandType === 'ADD_KILL' || commandType === 'REMOVE_KILL') && targetTeamId) {
+        const rawDelta = Number(payload?.delta ?? 1);
+        const signedDelta = commandType === 'ADD_KILL' ? rawDelta : -rawDelta;
+        const existing = pendingKillDeltasRef.current.get(targetTeamId);
+
+        if (existing?.timer) {
+          clearTimeout(existing.timer);
+        }
+
+        const newDelta = (existing ? existing.delta : 0) + signedDelta;
+        const timer = setTimeout(() => {
+          flushPendingKill(targetTeamId);
+        }, 120);
+
+        pendingKillDeltasRef.current.set(targetTeamId, { delta: newDelta, timer });
+        return;
+      }
+
+      // 3. For any other command (WIPE_SQUAD, FINISH_MATCH, SET_PLAYER_STATUS, etc.):
+      // Flush pending kill increments first so elimination/match end incorporates all clicks
+      flushAllPendingKills();
+
+      const commandId = payload?.commandId || `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      commandQueueRef.current.push({
+        commandType,
+        targetTeamId,
+        payload: { ...(payload || {}), commandId },
+      });
+
+      processQueue();
+    },
+    [applyOptimisticUpdate, flushAllPendingKills, flushPendingKill, processQueue]
   );
 
   const handlePlayerToggle = (teamId: string, playerIndex: number, currentStatus: PlayerState) => {
@@ -660,7 +729,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
                       <div>
                         <div className="text-xs font-mono font-black text-amber-400">
                           {totalPoints} PTS
-                          {isMatchFinished && placementPoints > 0 && (
+                          {placementPoints > 0 && (
                             <span className="text-[10px] text-emerald-400 font-bold ml-1">
                               (+{placementPoints}pl)
                             </span>

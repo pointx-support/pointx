@@ -339,6 +339,12 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     expect(liveAlpha.placementPoints).toBe(0);
     expect(liveAlpha.totalPoints).toBe(3);
 
+    // Verify wiped squad has placement points awarded immediately
+    const liveCharlie = liveState.body.state.teams.find((t: any) => t.teamId === 'team-charlie');
+    expect(liveCharlie.isWiped).toBe(true);
+    expect(liveCharlie.placement).toBe(4);
+    expect(liveCharlie.placementPoints).toBe(7); // 4th place points awarded immediately upon wipe!
+
     // 3. Finish match
     const finishRes = await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
@@ -365,5 +371,245 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     const match = freshTour!.matches.find((m: any) => m.id === 'match-apex-1');
     expect(match.status).toBe('Completed');
     expect(match.results.length).toBeGreaterThan(0);
+  });
+
+  it('8. should support rapid coalesced kill commands with delta', async () => {
+    const initRes = await request(app)
+      .post('/api/broadcast/sessions')
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ tournamentId: testTournament.customId });
+
+    const sessionId = initRes.body.sessionId;
+
+    // Send coalesced +6 kills in one atomic command
+    const resAdd = await request(app)
+      .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({
+        commandType: 'ADD_KILL',
+        targetTeamId: 'team-alpha',
+        payload: { delta: 6 },
+      });
+
+    expect(resAdd.status).toBe(200);
+    expect(resAdd.body.success).toBe(true);
+    expect(resAdd.body.delta).toBe(6);
+    expect(resAdd.body.kills).toBe(6);
+
+    const alpha = resAdd.body.state.teams.find((t: any) => t.teamId === 'team-alpha');
+    expect(alpha.kills).toBe(6);
+
+    // Send coalesced -2 kills
+    const resRemove = await request(app)
+      .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({
+        commandType: 'REMOVE_KILL',
+        targetTeamId: 'team-alpha',
+        payload: { delta: 2 },
+      });
+
+    expect(resRemove.status).toBe(200);
+    expect(resRemove.body.kills).toBe(4);
+    const alphaAfter = resRemove.body.state.teams.find((t: any) => t.teamId === 'team-alpha');
+    expect(alphaAfter.kills).toBe(4);
+  });
+
+  it('9. should ensure command idempotency using commandId', async () => {
+    const initRes = await request(app)
+      .post('/api/broadcast/sessions')
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ tournamentId: testTournament.customId });
+
+    const sessionId = initRes.body.sessionId;
+    const commandId = 'cmd-idempotency-test-xyz';
+
+    // First execution
+    const res1 = await request(app)
+      .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({
+        commandId,
+        commandType: 'ADD_KILL',
+        targetTeamId: 'team-bravo',
+        payload: { delta: 3 },
+      });
+
+    expect(res1.status).toBe(200);
+    expect(res1.body.kills).toBe(3);
+    const rev1 = res1.body.revision;
+
+    // Duplicate execution with identical commandId
+    const res2 = await request(app)
+      .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({
+        commandId,
+        commandType: 'ADD_KILL',
+        targetTeamId: 'team-bravo',
+        payload: { delta: 3 },
+      });
+
+    expect(res2.status).toBe(200);
+    expect(res2.body.revision).toBe(rev1); // Unchanged revision!
+    expect(res2.body.kills).toBe(3); // Not 6! Idempotent deduplication succeeded
+  });
+
+  it('10. should correctly calculate 12-team elimination sequence placement points immediately', async () => {
+    // Create a realistic 12-team tournament
+    const twelveTeams = Array.from({ length: 12 }, (_, i) => ({
+      id: `team-${i + 1}`,
+      name: `Squad ${i + 1}`,
+      tag: `SQ${i + 1}`,
+      slotNumber: i + 1,
+    }));
+
+    const twelveTour = await Tournament.create({
+      customId: 'tour-12-squad-ff',
+      userId: organizerUser._id,
+      title: 'Free Fire 12 Squad Cup',
+      organizer: 'Apex Gaming Federation',
+      game: 'Free Fire',
+      status: 'Live',
+      structure: { teamCount: 12, matchCount: 1, slotsPerMatch: 12 },
+      scoringPreset: {
+        id: 'preset-ff-official-v1',
+        name: 'Official Free Fire Scoring',
+        version: 1,
+        killPoints: 1,
+        placementPoints: {
+          '1': 12,
+          '2': 9,
+          '3': 8,
+          '4': 7,
+          '5': 6,
+          '6': 5,
+          '7': 4,
+          '8': 3,
+          '9': 2,
+          '10': 1,
+          '11': 0,
+          '12': 0,
+        },
+        booyahBonus: 0,
+        tieBreakers: ['total_points', 'total_booyahs', 'placement_points', 'kill_points'],
+      },
+      teams: twelveTeams,
+      matches: [
+        {
+          id: 'match-12-1',
+          customId: 'match-12-1',
+          tournamentId: 'tour-12-squad-ff',
+          matchNumber: 1,
+          status: 'Live',
+          results: [],
+        },
+      ],
+    });
+
+    const initRes = await request(app)
+      .post('/api/broadcast/sessions')
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ tournamentId: twelveTour.customId });
+
+    const sessionId = initRes.body.sessionId;
+
+    // Expected placement and points mapping for elimination order 1..11
+    const expectedScoring = [
+      { teamId: 'team-1', expectedPlacement: 12, expectedPoints: 0 },
+      { teamId: 'team-2', expectedPlacement: 11, expectedPoints: 0 },
+      { teamId: 'team-3', expectedPlacement: 10, expectedPoints: 1 },
+      { teamId: 'team-4', expectedPlacement: 9, expectedPoints: 2 },
+      { teamId: 'team-5', expectedPlacement: 8, expectedPoints: 3 },
+      { teamId: 'team-6', expectedPlacement: 7, expectedPoints: 4 },
+      { teamId: 'team-7', expectedPlacement: 6, expectedPoints: 5 },
+      { teamId: 'team-8', expectedPlacement: 5, expectedPoints: 6 },
+      { teamId: 'team-9', expectedPlacement: 4, expectedPoints: 7 },
+      { teamId: 'team-10', expectedPlacement: 3, expectedPoints: 8 },
+      { teamId: 'team-11', expectedPlacement: 2, expectedPoints: 9 },
+    ];
+
+    // Wipe squads one by one
+    for (const exp of expectedScoring) {
+      const wipeRes = await request(app)
+        .post(`/api/broadcast/sessions/${sessionId}/commands`)
+        .set('Authorization', `Bearer ${organizerToken}`)
+        .send({ commandType: 'WIPE_SQUAD', targetTeamId: exp.teamId });
+
+      expect(wipeRes.status).toBe(200);
+
+      const wipedTeam = wipeRes.body.state.teams.find((t: any) => t.teamId === exp.teamId);
+      expect(wipedTeam.isWiped).toBe(true);
+      expect(wipedTeam.placement).toBe(exp.expectedPlacement);
+      expect(wipedTeam.placementPoints).toBe(exp.expectedPoints);
+      expect(wipedTeam.totalPoints).toBe(exp.expectedPoints); // 0 kills + placement points
+    }
+
+    // Attempt double wipe on team-1 to verify it does not corrupt elimination order
+    await request(app)
+      .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ commandType: 'WIPE_SQUAD', targetTeamId: 'team-1' });
+
+    const finalStateRes = await request(app).get(`/api/broadcast/sessions/${sessionId}`);
+    const state = finalStateRes.body.state;
+
+    // Verify team-1 is still 12th place (not moved to the end)
+    const team1 = state.teams.find((t: any) => t.teamId === 'team-1');
+    expect(team1.placement).toBe(12);
+
+    // Verify last surviving team (team-12) has automatically achieved Booyah (1st place, 12 pts)
+    const team12 = state.teams.find((t: any) => t.teamId === 'team-12');
+    expect(team12.isWiped).toBe(false);
+    expect(team12.isBooyah).toBe(true);
+    expect(team12.placement).toBe(1);
+    expect(team12.placementPoints).toBe(12);
+    expect(team12.totalPoints).toBe(12);
+
+    // Verify official website results are still untouched until submit-report is called
+    const tourBeforeSubmit = await Tournament.findOne({ customId: twelveTour.customId });
+    expect(tourBeforeSubmit!.matches[0].status).not.toBe('Completed');
+    expect(tourBeforeSubmit!.matches[0].results.length).toBe(0);
+
+    // Submit match report
+    const submitRes = await request(app)
+      .post(`/api/broadcast/sessions/${sessionId}/submit-report`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({});
+
+    expect(submitRes.status).toBe(200);
+    expect(submitRes.body.success).toBe(true);
+
+    const tourAfterSubmit = await Tournament.findOne({ customId: twelveTour.customId });
+    expect(tourAfterSubmit!.matches[0].status).toBe('Completed');
+    expect(tourAfterSubmit!.matches[0].results.length).toBe(12);
+  });
+
+  it('11. should handle concurrent commands without lost updates', async () => {
+    const initRes = await request(app)
+      .post('/api/broadcast/sessions')
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ tournamentId: testTournament.customId });
+
+    const sessionId = initRes.body.sessionId;
+
+    // Fire 6 concurrent kill commands simultaneously
+    const promises = Array.from({ length: 6 }, (_, i) =>
+      request(app)
+        .post(`/api/broadcast/sessions/${sessionId}/commands`)
+        .set('Authorization', `Bearer ${organizerToken}`)
+        .send({
+          commandType: 'ADD_KILL',
+          targetTeamId: 'team-alpha',
+          payload: { commandId: `concurrent-cmd-${i}` },
+        })
+    );
+
+    const results = await Promise.all(promises);
+    results.forEach((r) => expect(r.status).toBe(200));
+
+    const finalState = await request(app).get(`/api/broadcast/sessions/${sessionId}`);
+    const alpha = finalState.body.state.teams.find((t: any) => t.teamId === 'team-alpha');
+    expect(alpha.kills).toBe(6);
   });
 });

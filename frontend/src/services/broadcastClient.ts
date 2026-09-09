@@ -133,24 +133,17 @@ export function connectBroadcastSession(
             const incomingRev = Number(message.revision);
             const incomingState = message.state || message.payload || message.data;
 
-            if (incomingRev === currentRevision + 1) {
-              // Exact next sequential revision: apply cleanly
+            if (incomingRev > currentRevision) {
+              // Strictly newer revision: apply authoritative state immediately without unnecessary HTTP fetching
               currentRevision = incomingRev;
               if (incomingState) {
                 callbacks.onState(incomingState);
+              } else {
+                syncAuthoritativeSnapshot();
               }
               updateStatus('LIVE');
-            } else if (incomingRev > currentRevision + 1) {
-              // Gap detected! Client missed one or more updates -> pull full authoritative snapshot
-              console.warn(
-                `[BroadcastSync] Gap detected! Expected rev ${currentRevision + 1}, got ${incomingRev}. Fetching authoritative snapshot...`
-              );
-              syncAuthoritativeSnapshot();
             } else {
-              // Stale or duplicate revision (incomingRev <= currentRevision)
-              if (incomingState) {
-                callbacks.onState(incomingState);
-              }
+              // Stale or duplicate revision (incomingRev <= currentRevision) -> ignore to prevent rollbacks
             }
           }
         } catch (err) {
@@ -205,8 +198,10 @@ export function connectBroadcastSession(
       if (!res.success || !resolvedState) {
         throw new Error(res.error || `Command ${commandType} failed`);
       }
-      currentRevision = res.revision;
-      callbacks.onState(resolvedState);
+      if (res.revision >= currentRevision) {
+        currentRevision = res.revision;
+        callbacks.onState(resolvedState);
+      }
       return { revision: res.revision, state: resolvedState };
     },
     submitMatchReport: async (overrides?: any[]) => {
@@ -215,8 +210,10 @@ export function connectBroadcastSession(
       if (!res.success || !resolvedState) {
         throw new Error(res.error || 'Failed to submit match report');
       }
-      currentRevision = res.revision;
-      callbacks.onState(resolvedState);
+      if (res.revision >= currentRevision) {
+        currentRevision = res.revision;
+        callbacks.onState(resolvedState);
+      }
       return { success: true, state: resolvedState };
     },
     fetchAuthoritativeSnapshot: syncAuthoritativeSnapshot as any,

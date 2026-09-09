@@ -34,6 +34,12 @@ export interface BroadcastCommand {
 const sessionCommandLocks = new Map<string, Promise<any>>();
 
 /**
+ * In-memory idempotency cache for command deduplication.
+ */
+const processedCommandIds = new Map<string, { timestamp: number; result: any }>();
+const COMMAND_ID_TTL_MS = 60000;
+
+/**
  * Get or create a Broadcast Session for a given tournament and match.
  */
 export async function getOrCreateBroadcastSession(
@@ -147,7 +153,7 @@ export async function getOrCreateBroadcastSession(
         kills: res?.kills !== undefined ? Number(res.kills) : 0,
         bonusPoints: res?.bonusPoints !== undefined ? Number(res.bonusPoints) : 0,
         isBooyah: !!res?.isBooyah,
-        manualPlacement: res?.placement !== undefined ? Number(res.placement) : undefined,
+        manualPlacement: isAlreadyFinished && res?.placement !== undefined ? Number(res.placement) : undefined,
       };
     });
 
@@ -181,7 +187,7 @@ export async function getOrCreateBroadcastSession(
           kills: res?.kills !== undefined ? Number(res.kills) : 0,
           bonusPoints: res?.bonusPoints !== undefined ? Number(res.bonusPoints) : 0,
           isBooyah: !!res?.isBooyah,
-          manualPlacement: res?.placement !== undefined ? Number(res.placement) : undefined,
+          manualPlacement: isAlreadyFinished && res?.placement !== undefined ? Number(res.placement) : undefined,
         };
       });
       session.markModified('teamStats');
@@ -285,6 +291,10 @@ export async function getAuthoritativeBroadcastState(sessionId: string): Promise
     let placement = stats.manualPlacement;
     let isBooyah = !!stats.isBooyah;
 
+    const singleSurvivingTeamId = aliveTeams.length === 1
+      ? (aliveTeams[0].id || aliveTeams[0].customId || (aliveTeams[0]._id ? String(aliveTeams[0]._id) : ''))
+      : null;
+
     if (placement === undefined) {
       if (isWiped) {
         const elimIndex = eliminatedOrder.indexOf(teamId);
@@ -294,7 +304,7 @@ export async function getAuthoritativeBroadcastState(sessionId: string): Promise
           placement = totalTeams;
         }
       } else {
-        if (aliveTeams.length === 1 && aliveTeams[0].id === team.id) {
+        if (aliveTeams.length === 1 && singleSurvivingTeamId === teamId) {
           placement = 1;
           isBooyah = true;
         } else {
@@ -307,8 +317,12 @@ export async function getAuthoritativeBroadcastState(sessionId: string): Promise
     let killPoints = kills * (scoringConfig.killPoints ?? 1);
     let totalPoints = killPoints + bonusPoints;
 
-    // Placements points are STRICTLY DEFERRED until match is finished!
-    if (isMatchFinished) {
+    // Placements points are awarded immediately when:
+    // 1. Squad is wiped (placement fixed via elimination order: totalTeams - elimIndex)
+    // 2. Only 1 squad survives (Booyah = 1st place)
+    // 3. Match is finished
+    const shouldAwardPlacement = isWiped || (aliveTeams.length === 1 && singleSurvivingTeamId === teamId) || isMatchFinished;
+    if (shouldAwardPlacement) {
       const calc = calculateTeamMatchScore(
         { teamId, kills, placement: placement || 1, booyah: isBooyah, bonusPoints },
         scoringConfig
@@ -422,11 +436,22 @@ export async function executeBroadcastCommand(
   command: BroadcastCommand,
   user?: { _id?: any; role?: string; organizationName?: string }
 ): Promise<any> {
+  // Idempotency: return cached response if commandId has already been processed recently
+  if (command.commandId && processedCommandIds.has(command.commandId)) {
+    const cached = processedCommandIds.get(command.commandId)!;
+    if (Date.now() - cached.timestamp < COMMAND_ID_TTL_MS) {
+      return cached.result;
+    }
+    processedCommandIds.delete(command.commandId);
+  }
+
   const currentLock = sessionCommandLocks.get(sessionId) || Promise.resolve();
-  const nextLock = currentLock.then(async () => {
-    return await executeBroadcastCommandInternal(sessionId, command, user);
-  });
-  sessionCommandLocks.set(sessionId, nextLock.catch(() => {}));
+  const nextLock = currentLock
+    .catch(() => {})
+    .then(async () => {
+      return await executeBroadcastCommandInternal(sessionId, command, user);
+    });
+  sessionCommandLocks.set(sessionId, nextLock);
   return await nextLock;
 }
 
@@ -514,7 +539,8 @@ async function executeBroadcastCommandInternal(
     case 'ADD_KILL': {
       if (!targetTeamId) throw new Error('targetTeamId is required for ADD_KILL');
       const stats = ensureTeamStats(targetTeamId);
-      stats.kills = (stats.kills || 0) + 1;
+      const delta = Math.max(1, Number(payload?.delta ?? 1));
+      stats.kills = (stats.kills || 0) + delta;
       session.markModified('teamStats');
       break;
     }
@@ -522,7 +548,8 @@ async function executeBroadcastCommandInternal(
     case 'REMOVE_KILL': {
       if (!targetTeamId) throw new Error('targetTeamId is required for REMOVE_KILL');
       const stats = ensureTeamStats(targetTeamId);
-      stats.kills = Math.max(0, (stats.kills || 0) - 1);
+      const delta = Math.max(1, Number(payload?.delta ?? 1));
+      stats.kills = Math.max(0, (stats.kills || 0) - delta);
       session.markModified('teamStats');
       break;
     }
@@ -707,11 +734,31 @@ async function executeBroadcastCommandInternal(
     timestamp: Date.now(),
   });
 
-  return {
+  const result = {
     success: true,
+    delta: payload?.delta !== undefined ? Number(payload.delta) : 1,
+    kills: targetTeamId && session.teamStats ? session.teamStats[targetTeamId]?.kills : undefined,
     revision: session.revision,
+    teamId: targetTeamId,
+    matchId: session.matchId,
+    sessionId: session.sessionId,
     state: authoritativeState,
   };
+
+  if (command.commandId) {
+    processedCommandIds.set(command.commandId, {
+      timestamp: Date.now(),
+      result,
+    });
+    if (processedCommandIds.size > 500) {
+      const cutoff = Date.now() - COMMAND_ID_TTL_MS;
+      for (const [id, val] of processedCommandIds.entries()) {
+        if (val.timestamp < cutoff) processedCommandIds.delete(id);
+      }
+    }
+  }
+
+  return result;
 }
 
 /**
