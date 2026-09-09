@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '../middleware/auth';
+import { AuthorizedTenantRequest } from '../middleware/tenantAuth';
 import {
   getOrCreateBroadcastSession,
   getAuthoritativeBroadcastState,
@@ -7,14 +7,19 @@ import {
   submitMatchReportToWebsite,
 } from '../services/broadcastSessionService';
 
-export async function createOrGetSession(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function createOrGetSession(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     const { tournamentId, matchId } = req.body;
     if (!tournamentId) {
       return res.status(400).json({ success: false, error: 'tournamentId is required.' });
     }
 
-    const session = await getOrCreateBroadcastSession(tournamentId, matchId, req.user);
+    const session = await getOrCreateBroadcastSession(
+      tournamentId,
+      matchId,
+      req.user,
+      req.authorizedOrganizationIds
+    );
     const authoritativeState = await getAuthoritativeBroadcastState(session.sessionId);
 
     return res.status(200).json({
@@ -26,6 +31,9 @@ export async function createOrGetSession(req: AuthenticatedRequest, res: Respons
   } catch (error: any) {
     if (error.statusCode === 404) {
       return res.status(404).json({ success: false, error: error.message });
+    }
+    if (error.statusCode === 403) {
+      return res.status(403).json({ success: false, error: error.message });
     }
     next(error);
   }
@@ -51,7 +59,7 @@ export async function getSessionAuthoritativeState(req: Request, res: Response, 
   }
 }
 
-export async function postSessionCommand(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function postSessionCommand(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     const sessionId = req.params.sessionId as string;
     const { commandType, targetTeamId, payload, commandId } = req.body;
@@ -71,6 +79,9 @@ export async function postSessionCommand(req: AuthenticatedRequest, res: Respons
 
     return res.status(200).json(result);
   } catch (error: any) {
+    if (error.statusCode === 401) {
+      return res.status(401).json({ success: false, error: error.message });
+    }
     if (error.statusCode === 403) {
       return res.status(403).json({ success: false, error: error.message });
     }
@@ -81,7 +92,7 @@ export async function postSessionCommand(req: AuthenticatedRequest, res: Respons
   }
 }
 
-export async function submitReport(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function submitReport(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     const sessionId = req.params.sessionId as string;
     const { results, overrides } = req.body || {};
@@ -101,6 +112,9 @@ export async function submitReport(req: AuthenticatedRequest, res: Response, nex
 
     return res.status(200).json(result);
   } catch (error: any) {
+    if (error.statusCode === 401) {
+      return res.status(401).json({ success: false, error: error.message });
+    }
     if (error.statusCode === 403) {
       return res.status(403).json({ success: false, error: error.message });
     }

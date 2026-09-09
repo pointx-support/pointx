@@ -149,6 +149,7 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
   it('3. should handle rapid sequential kills without losing updates or race conditions', async () => {
     const initRes = await request(app)
       .post('/api/broadcast/sessions')
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({ tournamentId: testTournament.customId });
 
     const sessionId = initRes.body.sessionId;
@@ -157,7 +158,8 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     for (let i = 1; i <= 5; i++) {
       const res = await request(app)
         .post(`/api/broadcast/sessions/${sessionId}/commands`)
-        .send({
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({
           commandType: 'ADD_KILL',
           targetTeamId: 'team-charlie',
         });
@@ -175,6 +177,7 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
   it('4. should decrement kills atomically via REMOVE_KILL but never drop below 0', async () => {
     const initRes = await request(app)
       .post('/api/broadcast/sessions')
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({ tournamentId: testTournament.customId });
 
     const sessionId = initRes.body.sessionId;
@@ -182,14 +185,17 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     // Add 2 kills
     await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({ commandType: 'ADD_KILL', targetTeamId: 'team-delta' });
     await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({ commandType: 'ADD_KILL', targetTeamId: 'team-delta' });
 
     // Remove 1 kill
     const removeRes = await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({ commandType: 'REMOVE_KILL', targetTeamId: 'team-delta' });
 
     const delta = removeRes.body.state.teams.find((t: any) => t.teamId === 'team-delta');
@@ -198,9 +204,11 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     // Remove 3 kills (should clamp to 0)
     await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({ commandType: 'REMOVE_KILL', targetTeamId: 'team-delta' });
     const clampedRes = await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({ commandType: 'REMOVE_KILL', targetTeamId: 'team-delta' });
 
     const deltaClamped = clampedRes.body.state.teams.find((t: any) => t.teamId === 'team-delta');
@@ -210,6 +218,7 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
   it('5. should update individual player status and wipe/revive squads cleanly', async () => {
     const initRes = await request(app)
       .post('/api/broadcast/sessions')
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({ tournamentId: testTournament.customId });
 
     const sessionId = initRes.body.sessionId;
@@ -217,6 +226,7 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     // Knock Player 1 (index 0)
     const knockRes = await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({
         commandType: 'SET_PLAYER_STATUS',
         targetTeamId: 'team-alpha',
@@ -230,6 +240,7 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     // Wipe Squad
     const wipeRes = await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({
         commandType: 'WIPE_SQUAD',
         targetTeamId: 'team-alpha',
@@ -243,6 +254,7 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     // Revive Squad
     const reviveRes = await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({
         commandType: 'REVIVE_SQUAD',
         targetTeamId: 'team-alpha',
@@ -257,6 +269,7 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
   it('6. should execute broadcast modes, table visibility, and +1 Pt All Teams', async () => {
     const initRes = await request(app)
       .post('/api/broadcast/sessions')
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({ tournamentId: testTournament.customId });
 
     const sessionId = initRes.body.sessionId;
@@ -264,6 +277,7 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     // Toggle Table Visibility
     const hideRes = await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({
         commandType: 'SET_TABLE_VISIBILITY',
         payload: { visible: false },
@@ -273,6 +287,7 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     // Set Mode to FIRE on team-bravo
     const fireRes = await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({
         commandType: 'SET_MODE',
         targetTeamId: 'team-bravo',
@@ -284,6 +299,7 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     // Add +1 Point to All Teams
     const ptsRes = await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({ commandType: 'ADD_POINT_ALL_TEAMS' });
 
     // Each team gets +1 bonus point
@@ -297,6 +313,7 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
   it('7. should calculate placement points when match finishes and publish verified report to website', async () => {
     const initRes = await request(app)
       .post('/api/broadcast/sessions')
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({ tournamentId: testTournament.customId });
 
     const sessionId = initRes.body.sessionId;
@@ -304,13 +321,15 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     // 1. Wipe team-charlie (will finish 3rd/4th)
     await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({ commandType: 'WIPE_SQUAD', targetTeamId: 'team-charlie' });
 
     // 2. Add 3 kills to team-alpha
     for (let i = 0; i < 3; i++) {
       await request(app)
         .post(`/api/broadcast/sessions/${sessionId}/commands`)
-        .send({ commandType: 'ADD_KILL', targetTeamId: 'team-alpha' });
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ commandType: 'ADD_KILL', targetTeamId: 'team-alpha' });
     }
 
     // While live: alpha has 3 kills, 0 placement points
@@ -323,6 +342,7 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     // 3. Finish match
     const finishRes = await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/commands`)
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({ commandType: 'FINISH_MATCH' });
     expect(finishRes.status).toBe(200);
     expect(finishRes.body.state.isMatchFinished).toBe(true);
@@ -334,6 +354,7 @@ describe('Broadcast Session Engine & Authoritative Command System', () => {
     // 4. Submit match report to website
     const submitRes = await request(app)
       .post(`/api/broadcast/sessions/${sessionId}/submit-report`)
+      .set('Authorization', `Bearer ${organizerToken}`)
       .send({});
     expect(submitRes.status).toBe(200);
     expect(submitRes.body.success).toBe(true);

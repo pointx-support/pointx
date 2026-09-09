@@ -50,6 +50,7 @@ export function normalizeTemplateType(val?: string): TemplateType {
 export interface ICustomTemplate extends Document {
   customId: string;
   userId?: mongoose.Types.ObjectId;
+  organizationId?: mongoose.Types.ObjectId;
   name: string;
   description: string;
   imageUrl: string;
@@ -72,6 +73,7 @@ const CustomTemplateSchema = new Schema<ICustomTemplate>(
   {
     customId: { type: String, required: true, unique: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', index: true },
     name: { type: String, required: true, trim: true, maxlength: 120 },
     description: { type: String, default: '', maxlength: 1000 },
     imageUrl: { type: String, required: true },

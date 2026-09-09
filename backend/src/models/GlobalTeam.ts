@@ -15,6 +15,7 @@ export interface IGlobalPlayer {
 export interface IGlobalTeam extends Document {
   customId: string;
   userId?: mongoose.Types.ObjectId;
+  organizationId?: mongoose.Types.ObjectId;
   name: string;
   tag: string;
   logoUrl?: string;
@@ -46,6 +47,7 @@ const GlobalTeamSchema = new Schema<IGlobalTeam>(
   {
     customId: { type: String, required: true, unique: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', index: true },
     name: { type: String, required: true, trim: true, maxlength: 100 },
     tag: { type: String, required: true, trim: true, maxlength: 10 },
     logoUrl: { type: String, default: '' },

@@ -21,10 +21,21 @@ function safeCompare(a: string, b: string): boolean {
 
 // 1. Get Authoritative Live State for OBS, Remote & Dashboard
 router.get('/state', optionalAuthenticate, async (req: AuthenticatedRequest, res: Response) => {
-  const tournamentId = (req.query.tournamentId as string) || 'default';
+  const tournamentId = (req.query.tournamentId as string);
+  const tokenHeader = (req.headers['x-broadcast-token'] as string) || (req.query.token as string);
+
+  if (!tournamentId || tournamentId === 'default') {
+    return res.status(200).json({
+      success: true,
+      data: null,
+      revision: 0,
+      timestamp: Date.now(),
+    });
+  }
+
   const state = await getOrCreateAuthoritativeState(tournamentId);
 
-  if (!state.tournament && !state.isExplicitlyInitialized && tournamentId !== 'default') {
+  if (!state.tournament && !state.isExplicitlyInitialized) {
     return res.status(404).json({
       success: false,
       error: 'TOURNAMENT_NOT_FOUND',
@@ -32,14 +43,29 @@ router.get('/state', optionalAuthenticate, async (req: AuthenticatedRequest, res
     });
   }
 
+  // Tenant authorization check:
+  // 1. Super admin: allowed full access
+  // 2. Tournament owner / member: allowed full access
+  // 3. Valid broadcast token: allowed sanitized broadcast view (for OBS browser source)
+  const isOwnerOrAdmin = req.user && (
+    req.user.role === 'admin' ||
+    (state.tournament?.userId && String(state.tournament.userId) === String(req.user._id)) ||
+    (req.user.primaryOrganizationId && state.tournament?.organizationId && String(state.tournament.organizationId) === String(req.user.primaryOrganizationId))
+  );
+
+  const isValidSessionToken = tokenHeader && state.sessionToken && tokenHeader === state.sessionToken;
+
+  if (!isOwnerOrAdmin && !isValidSessionToken && req.user) {
+    // User B trying to access User A's tournament state without permission
+    return res.status(404).json({
+      success: false,
+      error: 'TOURNAMENT_NOT_FOUND',
+    });
+  }
+
   const now = Date.now();
   state.connectedDevices = state.connectedDevices.filter(
     (d) => now - d.lastActive < 5 * 60 * 1000
-  );
-
-  const isOwnerOrAdmin = req.user && (
-    req.user.role === 'admin' ||
-    (state.tournament?.userId && String(state.tournament.userId) === String(req.user._id))
   );
 
   const dataToSend = isOwnerOrAdmin ? state : sanitizeStateForBroadcast(state);
@@ -108,11 +134,11 @@ router.post('/state', optionalAuthenticate, async (req: AuthenticatedRequest, re
   const isOwnerOrAdmin = req.user && (
     req.user.role === 'admin' ||
     (state.tournament?.userId && String(state.tournament.userId) === String(req.user._id)) ||
-    !state.tournament?.userId
+    (req.user.primaryOrganizationId && state.tournament?.organizationId && String(state.tournament.organizationId) === String(req.user.primaryOrganizationId))
   );
   const isValidSessionToken = tokenHeader && state.sessionToken && tokenHeader === state.sessionToken;
   const isVerifiedDevice = deviceId && state.connectedDevices.some(
-    (d) => d.deviceId === deviceId && (d.verified || !state.pinCode || state.pinCode === '1234') && !d.isBlocked && !state.blockedDeviceIds.includes(d.deviceId)
+    (d) => d.deviceId === deviceId && d.verified && !d.isBlocked && !state.blockedDeviceIds.includes(d.deviceId)
   );
 
   if (!isOwnerOrAdmin && !isValidSessionToken && !isVerifiedDevice) {

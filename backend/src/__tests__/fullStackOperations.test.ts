@@ -184,7 +184,9 @@ describe('PointX Full-Stack Operations — Tournaments, Squads, Media & Admin AP
     expect(addPlayerRes.body.data.name).toBe('Niku');
 
     // 3. Search Teams
-    const searchRes = await request(app).get('/api/teams?q=GodLike');
+    const searchRes = await request(app)
+      .get('/api/teams?q=GodLike')
+      .set('Authorization', `Bearer ${organizerToken}`);
     expect(searchRes.status).toBe(200);
     expect(searchRes.body.data).toHaveLength(1);
     expect(searchRes.body.data[0].players).toHaveLength(1);

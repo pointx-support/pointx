@@ -2,11 +2,33 @@ import mongoose from 'mongoose';
 import { Tournament, ITournament } from '../models/Tournament';
 import { AuditActivity } from '../models/AuditActivity';
 import { registerServerDeletedMatch, updateAuthoritativeState } from './realtimeSync';
+import { ensureUserOrganization } from './tenantMigrationService';
+import { User } from '../models/User';
 
-export async function getTournamentsByUser(userId: string): Promise<ITournament[]> {
+export async function getTournamentsByUser(
+  userId: string,
+  authorizedOrgIds?: string[]
+): Promise<ITournament[]> {
   const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
+
+  if (authorizedOrgIds && authorizedOrgIds.length > 0) {
+    if (authorizedOrgIds.includes('*')) {
+      return Tournament.find({}).sort({ createdAt: -1 });
+    }
+    const orgObjectIds = authorizedOrgIds
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    return Tournament.find({
+      $or: [
+        { organizationId: { $in: orgObjectIds } },
+        ...(userObjectId ? [{ userId: userObjectId }] : []),
+      ],
+    }).sort({ createdAt: -1 });
+  }
+
   const userCondition: any = userObjectId
-    ? { $or: [{ userId: userObjectId }, { userId: userId }] }
+    ? { $or: [{ userId: userObjectId }, { userId }] }
     : { userId };
 
   return Tournament.find(userCondition).sort({ createdAt: -1 });
@@ -21,7 +43,12 @@ export async function getTournamentsForOrganizer(organizerUserId: string): Promi
   return Tournament.find(userCondition).sort({ createdAt: -1 });
 }
 
-export async function getTournamentById(idOrCustomId: string, userId?: string, role?: string): Promise<ITournament | null> {
+export async function getTournamentById(
+  idOrCustomId: string,
+  userIdOrOrgIds?: string | string[],
+  role?: string,
+  explicitUserId?: string
+): Promise<ITournament | null> {
   const idQueries: any[] = [{ customId: idOrCustomId }];
   if (idOrCustomId.match(/^[0-9a-fA-F]{24}$/)) {
     idQueries.push({ _id: idOrCustomId });
@@ -29,11 +56,35 @@ export async function getTournamentById(idOrCustomId: string, userId?: string, r
 
   const baseQuery: any = { $or: idQueries };
 
-  if (userId && role !== 'admin') {
-    const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
+  if (role === 'admin') {
+    return Tournament.findOne(baseQuery);
+  }
+
+  // Handle authorized organization IDs array or single userId string
+  if (Array.isArray(userIdOrOrgIds) && userIdOrOrgIds.length > 0) {
+    if (userIdOrOrgIds.includes('*')) {
+      return Tournament.findOne(baseQuery);
+    }
+    const orgObjectIds = userIdOrOrgIds
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+    const userObjectId = explicitUserId && mongoose.Types.ObjectId.isValid(explicitUserId)
+      ? new mongoose.Types.ObjectId(explicitUserId)
+      : null;
+
+    baseQuery.$and = [
+      {
+        $or: [
+          { organizationId: { $in: orgObjectIds } },
+          ...(userObjectId ? [{ userId: userObjectId }] : []),
+        ],
+      },
+    ];
+  } else if (typeof userIdOrOrgIds === 'string' && userIdOrOrgIds) {
+    const userObjectId = mongoose.Types.ObjectId.isValid(userIdOrOrgIds) ? new mongoose.Types.ObjectId(userIdOrOrgIds) : null;
     const userCondition = userObjectId
-      ? { $or: [{ userId: userObjectId }, { userId: userId }] }
-      : { userId };
+      ? { $or: [{ userId: userObjectId }, { userId: userIdOrOrgIds }] }
+      : { userId: userIdOrOrgIds };
     baseQuery.$and = [userCondition];
   }
 
@@ -47,13 +98,38 @@ export async function getPublicTournamentForBroadcast(idOrCustomId: string): Pro
   if (idOrCustomId.match(/^[0-9a-fA-F]{24}$/)) {
     query.$or.push({ _id: idOrCustomId });
   }
-  return Tournament.findOne(query);
+  const tour = await Tournament.findOne(query);
+  if (!tour) return null;
+
+  // Sanitize internal security fields before returning publicly
+  if (tour.broadcastToken) {
+    tour.broadcastToken.tokenHash = undefined as any;
+  }
+
+  return tour;
 }
 
-export async function createTournament(userId: string, data: any): Promise<ITournament> {
+export async function createTournament(
+  userId: string,
+  data: any,
+  explicitOrgId?: string
+): Promise<ITournament> {
   const customId = data.id || `tour-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
   const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
-  
+
+  // Resolve organization ID
+  let targetOrgId = explicitOrgId;
+  if (!targetOrgId && data.organizationId) {
+    targetOrgId = data.organizationId;
+  }
+  if (!targetOrgId) {
+    const user = await User.findById(userId);
+    if (user) {
+      const org = await ensureUserOrganization(user);
+      targetOrgId = org._id.toString();
+    }
+  }
+
   const effectiveTeams = Array.isArray(data.teams) ? data.teams : [];
   const initialMatches = data.matches !== undefined
     ? data.matches
@@ -84,6 +160,7 @@ export async function createTournament(userId: string, data: any): Promise<ITour
     ...data,
     customId,
     userId: userObjectId,
+    organizationId: targetOrgId ? new mongoose.Types.ObjectId(targetOrgId) : undefined,
     teams: effectiveTeams,
     matches: initialMatches,
   });
@@ -93,7 +170,7 @@ export async function createTournament(userId: string, data: any): Promise<ITour
     userId: String(userId),
     action: 'Tournament Created',
     category: 'tournament',
-    details: `Created "${tournament.title}" with ${tournament.structure?.slotsPerMatch || 12} slots.`,
+    details: `Created "${tournament.title}" with ${tournament.structure?.slotsPerMatch || 12} slots in organization ${targetOrgId || 'default'}.`,
   });
 
   return tournament;
@@ -108,33 +185,12 @@ export function isDemoTournamentId(id: string): boolean {
   );
 }
 
-export async function updateTournament(tournamentId: string, userId: string, data: any, role?: string): Promise<ITournament | null> {
-  const idQueries: any[] = [{ customId: tournamentId }];
-  if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
-    idQueries.push({ _id: tournamentId });
-  }
-
-  const query: any = { $or: idQueries };
-
-  if (role !== 'admin') {
-    const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
-    query.$and = [userObjectId ? { $or: [{ userId: userObjectId }, { userId: userId }] } : { userId }];
-  }
-
-  const updated = await Tournament.findOneAndUpdate(
-    query,
-    { $set: data },
-    { returnDocument: 'after', runValidators: true }
-  );
-
-  return updated;
-}
-
-export async function deleteMatchFromTournament(
+export async function updateTournament(
   tournamentId: string,
-  matchId: string,
   userId: string,
-  role?: string
+  data: any,
+  role?: string,
+  authorizedOrgIds?: string[]
 ): Promise<ITournament | null> {
   const idQueries: any[] = [{ customId: tournamentId }];
   if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -145,7 +201,68 @@ export async function deleteMatchFromTournament(
 
   if (role !== 'admin') {
     const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
-    query.$and = [userObjectId ? { $or: [{ userId: userObjectId }, { userId: userId }] } : { userId }];
+    if (authorizedOrgIds && authorizedOrgIds.length > 0 && !authorizedOrgIds.includes('*')) {
+      const orgObjectIds = authorizedOrgIds
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+      query.$and = [
+        {
+          $or: [
+            { organizationId: { $in: orgObjectIds } },
+            ...(userObjectId ? [{ userId: userObjectId }] : []),
+          ],
+        },
+      ];
+    } else {
+      query.$and = [userObjectId ? { $or: [{ userId: userObjectId }, { userId }] } : { userId }];
+    }
+  }
+
+  // Protect against changing ownership through arbitrary update payloads
+  const sanitized = { ...data };
+  delete sanitized.userId;
+  delete sanitized.organizationId;
+
+  const updated = await Tournament.findOneAndUpdate(
+    query,
+    { $set: sanitized },
+    { returnDocument: 'after', runValidators: true }
+  );
+
+  return updated;
+}
+
+export async function deleteMatchFromTournament(
+  tournamentId: string,
+  matchId: string,
+  userId: string,
+  role?: string,
+  authorizedOrgIds?: string[]
+): Promise<ITournament | null> {
+  const idQueries: any[] = [{ customId: tournamentId }];
+  if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
+    idQueries.push({ _id: tournamentId });
+  }
+
+  const query: any = { $or: idQueries };
+
+  if (role !== 'admin') {
+    const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
+    if (authorizedOrgIds && authorizedOrgIds.length > 0 && !authorizedOrgIds.includes('*')) {
+      const orgObjectIds = authorizedOrgIds
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+      query.$and = [
+        {
+          $or: [
+            { organizationId: { $in: orgObjectIds } },
+            ...(userObjectId ? [{ userId: userObjectId }] : []),
+          ],
+        },
+      ];
+    } else {
+      query.$and = [userObjectId ? { $or: [{ userId: userObjectId }, { userId }] } : { userId }];
+    }
   }
 
   // Atomically pull match from matches array in MongoDB
@@ -188,9 +305,10 @@ export async function updateMatchScoreAtomic(
     penaltyPoints?: number;
   },
   userId: string,
-  role?: string
+  role?: string,
+  authorizedOrgIds?: string[]
 ): Promise<{ tournament: ITournament; calculatedResult: any } | null> {
-  const tournament = await getTournamentById(tournamentId, userId, role);
+  const tournament = await getTournamentById(tournamentId, authorizedOrgIds || userId, role, userId);
   if (!tournament) return null;
 
   const { updateMatchScoreServer } = await import('./realtimeSync');
@@ -198,7 +316,12 @@ export async function updateMatchScoreAtomic(
   return { tournament, calculatedResult: result.calculatedResult };
 }
 
-export async function deleteTournament(tournamentId: string, userId: string, role?: string): Promise<boolean> {
+export async function deleteTournament(
+  tournamentId: string,
+  userId: string,
+  role?: string,
+  authorizedOrgIds?: string[]
+): Promise<boolean> {
   const idQueries: any[] = [{ customId: tournamentId }];
   if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
     idQueries.push({ _id: tournamentId });
@@ -208,18 +331,41 @@ export async function deleteTournament(tournamentId: string, userId: string, rol
 
   if (role !== 'admin') {
     const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null;
-    query.$and = [userObjectId ? { $or: [{ userId: userObjectId }, { userId: userId }] } : { userId }];
+    if (authorizedOrgIds && authorizedOrgIds.length > 0 && !authorizedOrgIds.includes('*')) {
+      const orgObjectIds = authorizedOrgIds
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+      query.$and = [
+        {
+          $or: [
+            { organizationId: { $in: orgObjectIds } },
+            ...(userObjectId ? [{ userId: userObjectId }] : []),
+          ],
+        },
+      ];
+    } else {
+      query.$and = [userObjectId ? { $or: [{ userId: userObjectId }, { userId }] } : { userId }];
+    }
   }
 
   const res = await Tournament.deleteOne(query);
   return res.deletedCount > 0;
 }
 
-export async function cloneTournament(sourceId: string, userId: string, options: any, role?: string): Promise<ITournament | null> {
-  const source = await getTournamentById(sourceId, userId, role);
+export async function cloneTournament(
+  sourceId: string,
+  userId: string,
+  options: any,
+  role?: string,
+  authorizedOrgIds?: string[],
+  targetOrgId?: string
+): Promise<ITournament | null> {
+  const source = await getTournamentById(sourceId, authorizedOrgIds || userId, role, userId);
   if (!source) return null;
 
   const newId = `tour-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+  const effectiveOrgId = targetOrgId || source.organizationId?.toString();
+
   const clonedTeams = options.copyTeams
     ? source.teams.map((t: any, idx: number) => ({
         ...t,
@@ -233,6 +379,7 @@ export async function cloneTournament(sourceId: string, userId: string, options:
   const cloned = await Tournament.create({
     customId: newId,
     userId,
+    organizationId: effectiveOrgId ? new mongoose.Types.ObjectId(effectiveOrgId) : source.organizationId,
     title: options.newTitle?.trim() || `${source.title} (Clone)`,
     organizer: source.organizer,
     game: source.game,
@@ -250,10 +397,24 @@ export async function cloneTournament(sourceId: string, userId: string, options:
   return cloned;
 }
 
-export async function importTournaments(userId: string, incoming: any[]): Promise<number> {
+export async function importTournaments(
+  userId: string,
+  incoming: any[],
+  targetOrgId?: string
+): Promise<number> {
   if (!Array.isArray(incoming) || incoming.length === 0) return 0;
   const batch = incoming.slice(0, 50);
   let count = 0;
+
+  // Resolve user organization if not explicitly supplied
+  let orgId = targetOrgId;
+  if (!orgId) {
+    const user = await User.findById(userId);
+    if (user) {
+      const org = await ensureUserOrganization(user);
+      orgId = org._id.toString();
+    }
+  }
 
   for (const item of batch) {
     if (item && typeof item === 'object' && typeof item.title === 'string' && item.title.trim()) {
@@ -269,6 +430,7 @@ export async function importTournaments(userId: string, incoming: any[]): Promis
         teams: Array.isArray(item.teams) ? item.teams.slice(0, 50) : [],
         customId,
         userId,
+        organizationId: orgId ? new mongoose.Types.ObjectId(orgId) : undefined,
       };
       await Tournament.create(safeData);
       count++;

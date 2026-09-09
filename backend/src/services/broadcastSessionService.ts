@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { BroadcastSession, IBroadcastSession, PlayerState, BroadcastMode } from '../models/BroadcastSession';
 import { Tournament, ITournament } from '../models/Tournament';
+import { OrganizationMembership } from '../models/OrganizationMembership';
 import { calculateTeamMatchScore, normalizeScoringConfig } from './scoringEngine';
 import { broadcastToSession } from './realtimeSync';
 
@@ -38,9 +39,16 @@ const sessionCommandLocks = new Map<string, Promise<any>>();
 export async function getOrCreateBroadcastSession(
   tournamentId: string,
   requestedMatchId?: string,
-  user?: { _id?: any; role?: string; organizationName?: string }
+  user?: { _id?: any; role?: string; organizationName?: string; primaryOrganizationId?: any },
+  authorizedOrgIds?: string[]
 ): Promise<IBroadcastSession> {
   const cleanId = (tournamentId || '').trim();
+  if (!cleanId) {
+    const err: any = new Error('INVALID_TOURNAMENT_ID');
+    err.statusCode = 400;
+    throw err;
+  }
+
   const idQueries: any[] = [
     { customId: cleanId },
     { id: cleanId },
@@ -50,11 +58,30 @@ export async function getOrCreateBroadcastSession(
     idQueries.push({ _id: cleanId });
   }
 
-  let tournament = await Tournament.findOne({ $or: idQueries });
-  if (!tournament && (!cleanId || cleanId === 'default' || cleanId === 'tour-ff-champ-2026')) {
-    tournament = (await Tournament.findOne({ status: { $ne: 'Archived' } }).sort({ updatedAt: -1 }))
-      || (await Tournament.findOne({}).sort({ updatedAt: -1 }));
+  const query: any = { $or: idQueries };
+
+  // Tenant authorization enforcement
+  if (user && user.role !== 'admin') {
+    const userObjectId = user._id && mongoose.Types.ObjectId.isValid(user._id) ? new mongoose.Types.ObjectId(user._id) : null;
+    const orgFilter = (authorizedOrgIds || [])
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    if (user.primaryOrganizationId && mongoose.Types.ObjectId.isValid(user.primaryOrganizationId)) {
+      orgFilter.push(new mongoose.Types.ObjectId(user.primaryOrganizationId));
+    }
+
+    query.$and = [
+      {
+        $or: [
+          { organizationId: { $in: orgFilter } },
+          ...(userObjectId ? [{ userId: userObjectId }] : []),
+        ],
+      },
+    ];
   }
+
+  const tournament = await Tournament.findOne(query);
 
   if (!tournament) {
     const err: any = new Error('TOURNAMENT_NOT_FOUND');
@@ -63,7 +90,7 @@ export async function getOrCreateBroadcastSession(
   }
 
   const effectiveTournamentId = tournament.customId || (tournament as any).id || tournament._id.toString();
-  const orgId = tournament.userId?.toString() || user?._id?.toString() || 'default_org';
+  const orgId = tournament.organizationId?.toString() || tournament.userId?.toString() || user?._id?.toString() || 'default_org';
 
   if (!Array.isArray(tournament.matches)) {
     tournament.matches = [];
@@ -431,11 +458,32 @@ async function executeBroadcastCommandInternal(
     throw err;
   }
 
-  // Authorization check (admin or owner of tournament)
-  if (user && user.role !== 'admin') {
+  // Authorization check: MUST BE AUTHENTICATED
+  if (!user) {
+    const err: any = new Error('Unauthorized: Authentication required to execute remote broadcast commands.');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  // Admin or verified member of tournament organization
+  if (user.role !== 'admin') {
     const userStr = user._id ? user._id.toString() : '';
     const tourOwner = tournament.userId ? tournament.userId.toString() : '';
-    if (tourOwner && userStr && tourOwner !== userStr) {
+    const tourOrg = tournament.organizationId ? tournament.organizationId.toString() : '';
+    const sessionOrg = session.organizationId ? session.organizationId.toString() : '';
+
+    let isAuthorized = false;
+    if (tourOwner && userStr && tourOwner === userStr) isAuthorized = true;
+
+    if (tournament.organizationId) {
+      const isMember = await OrganizationMembership.exists({
+        organizationId: tournament.organizationId,
+        userId: user._id,
+      });
+      if (isMember) isAuthorized = true;
+    }
+
+    if (!isAuthorized && (!sessionOrg || sessionOrg !== tourOrg)) {
       const err: any = new Error('Forbidden: You do not have permission to control this tournament session.');
       err.statusCode = 403;
       throw err;
@@ -703,10 +751,31 @@ export async function submitMatchReportToWebsite(
     throw err;
   }
 
-  if (user && user.role !== 'admin') {
+  // Authorization check: MUST BE AUTHENTICATED
+  if (!user) {
+    const err: any = new Error('Unauthorized: Authentication required to submit match reports.');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  if (user.role !== 'admin') {
     const userStr = user._id ? user._id.toString() : '';
     const tourOwner = tournament.userId ? tournament.userId.toString() : '';
-    if (tourOwner && userStr && tourOwner !== userStr) {
+    const tourOrg = tournament.organizationId ? tournament.organizationId.toString() : '';
+    const sessionOrg = session.organizationId ? session.organizationId.toString() : '';
+
+    let isAuthorized = false;
+    if (tourOwner && userStr && tourOwner === userStr) isAuthorized = true;
+
+    if (tournament.organizationId) {
+      const isMember = await OrganizationMembership.exists({
+        organizationId: tournament.organizationId,
+        userId: user._id,
+      });
+      if (isMember) isAuthorized = true;
+    }
+
+    if (!isAuthorized && (!sessionOrg || sessionOrg !== tourOrg)) {
       const err: any = new Error('Forbidden: You do not have permission to modify this tournament.');
       err.statusCode = 403;
       throw err;

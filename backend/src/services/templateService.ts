@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { CustomTemplate, ICustomTemplate, TemplateType, normalizeTemplateType, VALID_TEMPLATE_TYPES } from '../models/CustomTemplate';
 import { User } from '../models/User';
 import { getTournamentById } from './tournamentService';
@@ -39,7 +40,8 @@ export interface GetTemplatesOptions {
 
 export async function getTemplates(
   user?: { _id?: any; role?: string; organizationName?: string },
-  options?: GetTemplatesOptions
+  options?: GetTemplatesOptions,
+  orgIds?: (string | mongoose.Types.ObjectId)[]
 ): Promise<ICustomTemplate[]> {
   const sectionFilter: any = {};
   if (options?.templateType) {
@@ -83,9 +85,13 @@ export async function getTemplates(
       {
         visibility: 'ORGANIZATION_RESTRICTED',
         isPublished: true,
-        allowedOrganizationIds: { $in: allowedTargets },
+        $or: [
+          { allowedOrganizationIds: { $in: allowedTargets } },
+          { allowedOrganizationIds: { $in: (orgIds || []).map(String) } },
+        ],
       },
       { userId: user._id },
+      { organizationId: { $in: (orgIds || []).map((id) => mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id) } },
     ],
   };
 
@@ -175,7 +181,12 @@ export async function getTemplateById(
   return template;
 }
 
-export async function createTemplate(userId: string, data: any, role?: string): Promise<ICustomTemplate> {
+export async function createTemplate(
+  userId: string,
+  data: any,
+  role?: string,
+  orgId?: string | mongoose.Types.ObjectId
+): Promise<ICustomTemplate> {
   const customId = data.id || `custom-tmpl-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
   const visibility = data.visibility === 'ORGANIZATION_RESTRICTED' ? 'ORGANIZATION_RESTRICTED' : 'GLOBAL';
   const allowedOrganizationIds = Array.isArray(data.allowedOrganizationIds)
@@ -188,6 +199,7 @@ export async function createTemplate(userId: string, data: any, role?: string): 
     ...data,
     customId,
     userId,
+    organizationId: orgId && mongoose.Types.ObjectId.isValid(orgId) ? new mongoose.Types.ObjectId(orgId) : undefined,
     visibility,
     allowedOrganizationIds,
     templateType,
@@ -203,7 +215,8 @@ export async function updateTemplate(
   templateId: string,
   userId: string,
   updates: Partial<ICustomTemplate> & Record<string, any>,
-  role?: string
+  role?: string,
+  orgIds?: (string | mongoose.Types.ObjectId)[]
 ): Promise<ICustomTemplate | null> {
   const query: any = {
     $or: [{ customId: templateId }],
@@ -213,9 +226,19 @@ export async function updateTemplate(
   }
 
   if (role !== 'admin') {
-    query.userId = userId;
+    const validOrgIds = (orgIds || []).map((id) =>
+      mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id
+    );
     query.isBuiltIn = { $ne: true };
     delete (updates as any).isBuiltIn;
+    query.$and = [
+      {
+        $or: [
+          { userId: userId },
+          { organizationId: { $in: validOrgIds } },
+        ],
+      },
+    ];
   }
 
   const processedUpdates: any = { ...updates };
@@ -237,7 +260,8 @@ export async function updateTemplate(
 export async function deleteTemplate(
   templateId: string,
   userId?: string,
-  role?: string
+  role?: string,
+  orgIds?: (string | mongoose.Types.ObjectId)[]
 ): Promise<boolean> {
   const query: any = {
     $or: [{ customId: templateId }],
@@ -247,8 +271,18 @@ export async function deleteTemplate(
   }
 
   if (role !== 'admin') {
-    query.userId = userId;
+    const validOrgIds = (orgIds || []).map((id) =>
+      mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id
+    );
     query.isBuiltIn = { $ne: true };
+    query.$and = [
+      {
+        $or: [
+          { userId: userId },
+          { organizationId: { $in: validOrgIds } },
+        ],
+      },
+    ];
   }
 
   const res = await CustomTemplate.deleteOne(query);
@@ -302,6 +336,7 @@ export async function buildSectionDataForTemplate(
   tournamentId: string,
   options?: {
     user?: { _id?: any; role?: string; organizationName?: string };
+    orgIds?: (string | mongoose.Types.ObjectId)[];
     teamId?: string;
     recipientId?: string;
     awardTitle?: string;
@@ -322,8 +357,14 @@ export async function buildSectionDataForTemplate(
     throw err;
   }
 
-  // 2. Retrieve tournament
-  const tournament = await getTournamentById(tournamentId, options?.user?._id?.toString(), options?.user?.role);
+  // 2. Retrieve tournament with strict tenant authorization check
+  const tournamentScope = options?.user?.role === 'admin'
+    ? undefined
+    : (options?.orgIds && options.orgIds.length > 0
+        ? (options.orgIds as string[])
+        : options?.user?._id?.toString());
+
+  const tournament = await getTournamentById(tournamentId, tournamentScope, options?.user?.role);
   if (!tournament) {
     const err: any = new Error('Tournament not found.');
     err.statusCode = 404;

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { AuthorizedTenantRequest } from '../middleware/tenantAuth';
 import {
   getTemplates,
   getTemplateById,
@@ -13,9 +14,11 @@ import { updateAuthoritativeState } from '../services/realtimeSync';
 
 export async function listTemplates(req: Request, res: Response, next: NextFunction) {
   try {
-    const user = (req as AuthenticatedRequest).user;
+    const authReq = req as AuthorizedTenantRequest;
+    const user = authReq.user;
+    const orgIds = authReq.authorizedOrganizationIds || [];
     const section = (req.query.section || req.query.templateType || req.query.category) as string | undefined;
-    const templates = await getTemplates(user, section ? { templateType: section } : undefined);
+    const templates = await getTemplates(user, section ? { templateType: section } : undefined, orgIds);
     return res.status(200).json({ success: true, data: templates.map((t) => t.toJSON()) });
   } catch (error) {
     next(error);
@@ -59,8 +62,11 @@ export async function getTemplateSectionData(req: Request, res: Response, next: 
     const recipientId = (req.query.recipientId || req.query.winnerTeamId) as string | undefined;
     const awardTitle = req.query.awardTitle as string | undefined;
 
+    const authReq = req as AuthorizedTenantRequest;
+    const orgIds = authReq.authorizedOrganizationIds || [];
     const data = await buildSectionDataForTemplate(id, tournamentId, {
       user,
+      orgIds,
       teamId,
       recipientId,
       awardTitle,
@@ -85,21 +91,23 @@ export async function listOrganizationsForTemplatePicker(req: AuthenticatedReque
   }
 }
 
-export async function createNewTemplate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function createNewTemplate(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
-    const template = await createTemplate(req.user._id.toString(), req.body, req.user.role);
+    const orgId = req.primaryOrganizationId?.toString() || (req.body.organizationId as string);
+    const template = await createTemplate(req.user._id.toString(), req.body, req.user.role, orgId);
     return res.status(201).json({ success: true, data: template.toJSON() });
   } catch (error) {
     next(error);
   }
 }
 
-export async function updateExistingTemplate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function updateExistingTemplate(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
-    const updated = await updateTemplate(id, req.user._id.toString(), req.body, req.user.role);
+    const orgIds = req.authorizedOrganizationIds || [];
+    const updated = await updateTemplate(id, req.user._id.toString(), req.body, req.user.role, orgIds);
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Template not found or cannot be edited.' });
     }
@@ -120,11 +128,12 @@ export async function updateExistingTemplate(req: AuthenticatedRequest, res: Res
   }
 }
 
-export async function deleteExistingTemplate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function deleteExistingTemplate(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
-    const deleted = await deleteTemplate(id, req.user._id.toString(), req.user.role);
+    const orgIds = req.authorizedOrganizationIds || [];
+    const deleted = await deleteTemplate(id, req.user._id.toString(), req.user.role, orgIds);
     if (!deleted) {
       return res.status(404).json({ success: false, error: 'Template not found or cannot be deleted.' });
     }

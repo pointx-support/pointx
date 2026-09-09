@@ -4,6 +4,7 @@ import { env } from './config/env';
 import { ensureSuperAdminAccount } from './services/adminService';
 import { setupRealtimeSyncServer } from './services/realtimeSync';
 import { migrateExistingTemplates } from './services/templateService';
+import { runTenantMigration } from './services/tenantMigrationService';
 
 async function startServer() {
   try {
@@ -28,6 +29,12 @@ async function startServer() {
       .then(async () => {
         console.log(`🗄  Database: MongoDB Connected successfully`);
         await ensureSuperAdminAccount();
+        try {
+          const tenantStats = await runTenantMigration();
+          console.log(`🏢 [Tenant Migration] Complete: ${tenantStats.usersMigrated} users, ${tenantStats.tournamentsMigrated} tournaments, ${tenantStats.teamsMigrated} teams updated.`);
+        } catch (mErr) {
+          console.error('[Tenant Migration Error]', mErr);
+        }
         const migrationResult = await migrateExistingTemplates();
         if (migrationResult.migrated > 0 || migrationResult.needsReview > 0) {
           console.log(`🎨 [Template Migration] Migrated: ${migrationResult.migrated}, Needs Review: ${migrationResult.needsReview}`);

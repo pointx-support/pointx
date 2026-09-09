@@ -176,11 +176,7 @@ export async function getOrCreateAuthoritativeState(tournamentId: string): Promi
         doc = await Tournament.findOne({ $or: idQueries }).lean();
       }
 
-      // If not found by specific ID, only fallback to demo/active tournament if tourId was 'default'
-      if (!doc && tourId === 'default') {
-        doc = await Tournament.findOne({ status: { $ne: 'Archived' } }).sort({ updatedAt: -1 }).lean()
-          || await Tournament.findOne({}).sort({ updatedAt: -1 }).lean();
-      }
+      // No cross-tenant fallback: never load another tenant's tournament for 'default'
 
       if (doc) {
         if (doc.matches && Array.isArray(doc.matches)) {
@@ -232,7 +228,6 @@ export function sanitizeStateForBroadcast(state: TournamentSyncState): any {
 export function getRoomAliases(tournamentId: string, tournamentDoc?: any): string[] {
   const rooms = new Set<string>();
   if (tournamentId) rooms.add(tournamentId);
-  rooms.add('default');
   if (tournamentDoc) {
     if (tournamentDoc.customId) rooms.add(tournamentDoc.customId);
     if (tournamentDoc._id) rooms.add(String(tournamentDoc._id));
@@ -738,11 +733,9 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
           const clientRole = parsed.role || meta?.role;
 
           const isVerifiedRemote = clientDeviceId && state.connectedDevices.some(
-            (d) => d.deviceId === clientDeviceId && (d.verified || !state.pinCode || state.pinCode === '1234') && !d.isBlocked && !state.blockedDeviceIds.includes(d.deviceId)
+            (d) => d.deviceId === clientDeviceId && d.verified && !d.isBlocked && !state.blockedDeviceIds.includes(d.deviceId)
           );
-          const hasValidToken = (clientToken && clientToken === state.sessionToken) ||
-            clientRole === 'dashboard' ||
-            (!state.tournament?.userId && (clientRole === 'remote' || isVerifiedRemote));
+          const hasValidToken = (clientToken && clientToken === state.sessionToken) || isVerifiedRemote;
 
           if (clientRole === 'obs' && !parsed.role && !hasValidToken && !isVerifiedRemote) {
             ws.send(JSON.stringify({ type: 'ERROR', error: 'OBS clients are read-only.' }));

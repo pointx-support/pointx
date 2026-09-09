@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '../middleware/auth';
+import { AuthorizedTenantRequest } from '../middleware/tenantAuth';
 import {
   createTournamentSchema,
   updateTournamentSchema,
@@ -19,20 +19,33 @@ import {
 } from '../services/tournamentService';
 import { updateAuthoritativeState } from '../services/realtimeSync';
 
-export async function getMyTournaments(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function getMyTournaments(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
-    const tournaments = await getTournamentsByUser(req.user._id.toString());
+    const tournaments = await getTournamentsByUser(
+      req.user._id.toString(),
+      req.authorizedOrganizationIds
+    );
     return res.status(200).json({ success: true, data: tournaments.map((t) => t.toJSON()) });
   } catch (error) {
     next(error);
   }
 }
 
-export async function getTournament(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function getTournament(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
+    // If middleware already verified and attached tournament, use it directly
+    if (req.tournament) {
+      return res.status(200).json({ success: true, data: req.tournament.toJSON() });
+    }
+
     const id = req.params.id as string;
-    const tournament = await getTournamentById(id, req.user?._id.toString(), req.user?.role);
+    const tournament = await getTournamentById(
+      id,
+      req.authorizedOrganizationIds,
+      req.user?.role,
+      req.user?._id.toString()
+    );
     if (!tournament) {
       return res.status(404).json({ success: false, error: 'Tournament not found.' });
     }
@@ -55,11 +68,15 @@ export async function getPublicBroadcastTournament(req: Request, res: Response, 
   }
 }
 
-export async function createNewTournament(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function createNewTournament(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const validated = createTournamentSchema.parse(req.body);
-    const tournament = await createTournament(req.user._id.toString(), validated);
+    const tournament = await createTournament(
+      req.user._id.toString(),
+      validated,
+      req.primaryOrganizationId
+    );
     const tourData = tournament.toJSON();
     updateAuthoritativeState(
       tournament.customId || tournament._id.toString(),
@@ -73,12 +90,18 @@ export async function createNewTournament(req: AuthenticatedRequest, res: Respon
   }
 }
 
-export async function updateExistingTournament(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function updateExistingTournament(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
     const validated = updateTournamentSchema.parse(req.body);
-    const updated = await updateTournament(id, req.user._id.toString(), validated, req.user.role);
+    const updated = await updateTournament(
+      id,
+      req.user._id.toString(),
+      validated,
+      req.user.role,
+      req.authorizedOrganizationIds
+    );
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Tournament not found or unauthorized.' });
     }
@@ -95,7 +118,7 @@ export async function updateExistingTournament(req: AuthenticatedRequest, res: R
   }
 }
 
-export async function deleteExistingMatch(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function deleteExistingMatch(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
@@ -103,7 +126,13 @@ export async function deleteExistingMatch(req: AuthenticatedRequest, res: Respon
     if (!id || !matchId) {
       return res.status(400).json({ success: false, error: 'Tournament ID and Match ID are required.' });
     }
-    const updated = await deleteMatchFromTournament(id, matchId, req.user._id.toString(), req.user.role);
+    const updated = await deleteMatchFromTournament(
+      id,
+      matchId,
+      req.user._id.toString(),
+      req.user.role,
+      req.authorizedOrganizationIds
+    );
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Tournament not found or unauthorized.' });
     }
@@ -120,11 +149,16 @@ export async function deleteExistingMatch(req: AuthenticatedRequest, res: Respon
   }
 }
 
-export async function deleteExistingTournament(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function deleteExistingTournament(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
-    const deleted = await deleteTournament(id, req.user._id.toString(), req.user.role);
+    const deleted = await deleteTournament(
+      id,
+      req.user._id.toString(),
+      req.user.role,
+      req.authorizedOrganizationIds
+    );
     if (!deleted) {
       return res.status(404).json({ success: false, error: 'Tournament not found or unauthorized.' });
     }
@@ -134,11 +168,18 @@ export async function deleteExistingTournament(req: AuthenticatedRequest, res: R
   }
 }
 
-export async function cloneExistingTournament(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function cloneExistingTournament(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const validated = cloneTournamentSchema.parse(req.body);
-    const cloned = await cloneTournament(validated.sourceId, req.user._id.toString(), validated, req.user.role);
+    const cloned = await cloneTournament(
+      validated.sourceId,
+      req.user._id.toString(),
+      validated,
+      req.user.role,
+      req.authorizedOrganizationIds,
+      req.primaryOrganizationId
+    );
     if (!cloned) {
       return res.status(404).json({ success: false, error: 'Source tournament not found.' });
     }
@@ -148,7 +189,7 @@ export async function cloneExistingTournament(req: AuthenticatedRequest, res: Re
   }
 }
 
-export async function importTournamentsBatch(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function importTournamentsBatch(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const { tournaments } = req.body;
@@ -158,14 +199,18 @@ export async function importTournamentsBatch(req: AuthenticatedRequest, res: Res
     if (tournaments.length > 50) {
       return res.status(400).json({ success: false, error: 'Maximum 50 tournaments can be imported in a single batch.' });
     }
-    const count = await importTournaments(req.user._id.toString(), tournaments);
+    const count = await importTournaments(
+      req.user._id.toString(),
+      tournaments,
+      req.primaryOrganizationId
+    );
     return res.status(200).json({ success: true, importedCount: count });
   } catch (error) {
     next(error);
   }
 }
 
-export async function updateMatchScore(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function updateMatchScore(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
   try {
     if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
     const id = req.params.id as string;
@@ -181,7 +226,8 @@ export async function updateMatchScore(req: AuthenticatedRequest, res: Response,
       matchId,
       { teamId, kills, placement, isBooyah, bonusPoints, penaltyPoints },
       req.user._id.toString(),
-      req.user.role
+      req.user.role,
+      req.authorizedOrganizationIds
     );
 
     if (!updated) {
@@ -197,4 +243,3 @@ export async function updateMatchScore(req: AuthenticatedRequest, res: Response,
     next(error);
   }
 }
-

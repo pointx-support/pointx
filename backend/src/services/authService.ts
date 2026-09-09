@@ -13,6 +13,7 @@ import {
   getPasswordChangedConfirmationEmailTemplate,
 } from './emailService';
 import { getMaintenanceStatus } from '../middleware/maintenance';
+import { ensureUserOrganization } from './tenantMigrationService';
 
 // OTP Configuration: Exactly 5 minutes (300 seconds)
 export const OTP_EXPIRATION_SECONDS = 300;
@@ -276,6 +277,13 @@ export async function verifySignupOtp(data: {
     await user.save();
   }
 
+  // Ensure organization and membership are created for newly verified user
+  try {
+    await ensureUserOrganization(user);
+  } catch (orgErr) {
+    console.error('[TenantProvisioning] Failed to ensure organization during signup:', orgErr);
+  }
+
   // Clean up used OTPs for signup
   await OtpVerification.deleteMany({ email, purpose: 'signup' });
 
@@ -466,6 +474,13 @@ export async function loginUser(data: {
   user.lastLoginAt = new Date();
   user.loginCount = (user.loginCount || 0) + 1;
   await user.save();
+
+  // Ensure organization and membership are up to date on login
+  try {
+    await ensureUserOrganization(user);
+  } catch (orgErr) {
+    console.error('[TenantProvisioning] Failed to ensure organization on login:', orgErr);
+  }
 
   // Create session
   const { deviceName, browser } = parseUserAgent(data.userAgent);

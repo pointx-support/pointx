@@ -9,15 +9,16 @@ import {
   deleteExistingTemplate,
 } from '../controllers/templateController';
 import { authenticate, optionalAuthenticate, requireOnboarded } from '../middleware/auth';
+import { requireOrganizationContext } from '../middleware/tenantAuth';
 
 const router = Router();
 
 router.get('/', optionalAuthenticate, listTemplates);
 router.get('/organizations', authenticate, listOrganizationsForTemplatePicker);
-router.get('/:id/data', optionalAuthenticate, getTemplateSectionData);
+router.get('/:id/data', authenticate, requireOrganizationContext, getTemplateSectionData);
 router.get('/:id', optionalAuthenticate, getSingleTemplate);
-router.post('/', authenticate, requireOnboarded, createNewTemplate);
-router.put('/:id', authenticate, requireOnboarded, updateExistingTemplate);
-router.delete('/:id', authenticate, requireOnboarded, deleteExistingTemplate);
+router.post('/', authenticate, requireOnboarded, requireOrganizationContext, createNewTemplate);
+router.put('/:id', authenticate, requireOnboarded, requireOrganizationContext, updateExistingTemplate);
+router.delete('/:id', authenticate, requireOnboarded, requireOrganizationContext, deleteExistingTemplate);
 
 export default router;

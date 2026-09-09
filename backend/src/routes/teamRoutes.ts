@@ -9,16 +9,20 @@ import {
   deletePlayer,
 } from '../controllers/teamController';
 import { authenticate, requireOnboarded } from '../middleware/auth';
+import { requireOrganizationContext } from '../middleware/tenantAuth';
 
 const router = Router();
 
-router.get('/', listTeams);
-router.post('/', authenticate, requireOnboarded, createTeam);
-router.put('/:id', authenticate, requireOnboarded, updateTeam);
-router.delete('/:id', authenticate, requireOnboarded, deleteTeam);
+// All team operations require authentication and organization context
+router.use(authenticate, requireOnboarded, requireOrganizationContext);
 
-router.post('/:id/players', authenticate, requireOnboarded, addPlayer);
-router.put('/:id/players/:playerId', authenticate, requireOnboarded, updatePlayer);
-router.delete('/:id/players/:playerId', authenticate, requireOnboarded, deletePlayer);
+router.get('/', listTeams);
+router.post('/', createTeam);
+router.put('/:id', updateTeam);
+router.delete('/:id', deleteTeam);
+
+router.post('/:id/players', addPlayer);
+router.put('/:id/players/:playerId', updatePlayer);
+router.delete('/:id/players/:playerId', deletePlayer);
 
 export default router;

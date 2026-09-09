@@ -19,6 +19,7 @@ export interface IUser extends Document {
   status: UserStatus;
   isEmailVerified: boolean;
   organizationName: string;
+  primaryOrganizationId?: mongoose.Types.ObjectId;
   organizationLogoUrl?: string;
   defaultTournamentTitle?: string;
   tournamentLogoUrl?: string;
@@ -70,6 +71,7 @@ const UserSchema = new Schema<IUser>(
     },
     isEmailVerified: { type: Boolean, default: false },
     organizationName: { type: String, default: '', trim: true, maxlength: 150 },
+    primaryOrganizationId: { type: Schema.Types.ObjectId, ref: 'Organization', index: true },
     organizationLogoUrl: { type: String, default: '' },
     defaultTournamentTitle: { type: String, default: '' },
     tournamentLogoUrl: { type: String, default: '' },

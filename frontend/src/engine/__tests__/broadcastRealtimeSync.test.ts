@@ -111,7 +111,7 @@ describe('PointX OBS Real-Time Synchronization Engine', () => {
 
     expect(aliases).toContain('tour-ff-championship-2026');
     expect(aliases).toContain('65e8a2b3c4d5e6f7a8b9c0d1');
-    expect(aliases).toContain('default');
+    expect(aliases).not.toContain('default');
     expect(new Set(aliases).size).toBe(aliases.length);
   });
 

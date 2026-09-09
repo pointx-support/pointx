@@ -3,6 +3,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface ITournament extends Document {
   customId: string;
   userId: mongoose.Types.ObjectId;
+  organizationId: mongoose.Types.ObjectId;
   title: string;
   organizer: string;
   organizerLogoUrl?: string;
@@ -44,6 +45,7 @@ const TournamentSchema = new Schema<ITournament>(
   {
     customId: { type: String, required: true, unique: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', index: true },
     title: { type: String, required: true, trim: true, maxlength: 200 },
     organizer: { type: String, default: '', trim: true, maxlength: 150 },
     organizerLogoUrl: { type: String, default: '' },
@@ -98,6 +100,8 @@ const TournamentSchema = new Schema<ITournament>(
 
 TournamentSchema.index({ userId: 1, status: 1 });
 TournamentSchema.index({ userId: 1, createdAt: -1 });
+TournamentSchema.index({ organizationId: 1, status: 1 });
+TournamentSchema.index({ organizationId: 1, createdAt: -1 });
 TournamentSchema.index({ updatedAt: -1 });
 TournamentSchema.index({ status: 1, updatedAt: -1 });
 
