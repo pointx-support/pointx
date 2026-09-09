@@ -34,6 +34,7 @@ import {
   connectBroadcastSession,
 } from '../../services/broadcastClient';
 import type { BroadcastSessionConnection } from '../../services/broadcastClient';
+import { CanonicalLiveStore, type CanonicalLiveMatchState } from '../../services/canonicalLiveStore';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useToast } from '../ui/Toast';
 import { Modal } from '../ui/Modal';
@@ -62,6 +63,11 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
     propTournamentId || urlParams?.get('tournamentId') || urlParams?.get('tournament') || storeTournament?.id || '';
   const effectiveMatchId = propMatchId || urlParams?.get('matchId') || urlParams?.get('match') || undefined;
 
+  const [canonicalState, setCanonicalState] = useState<CanonicalLiveMatchState | null>(null);
+  const [activeMatchId, setActiveMatchId] = useState<string>(effectiveMatchId || 'm1');
+  const [pointRushThresholdInput, setPointRushThresholdInput] = useState<number>(50);
+  const [isSwitchingMatch, setIsSwitchingMatch] = useState<boolean>(false);
+
   const [state, setState] = useState<AuthoritativeBroadcastState | null>(null);
   const [syncStatus, setSyncStatus] = useState<BroadcastSyncStatus>('CONNECTING');
   const [loading, setLoading] = useState<boolean>(true);
@@ -80,6 +86,45 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
   const [isSubmittingReport, setIsSubmittingReport] = useState<boolean>(false);
   const [reportOverrides, setReportOverrides] = useState<Record<string, { placement?: number; kills?: number }>>({});
+  // Connect to Centralized Canonical Live Store for Immediate WebSocket Live State
+  useEffect(() => {
+    let isCancelled = false;
+    const liveStore = CanonicalLiveStore.getInstance();
+    if (effectiveTournamentId) {
+      liveStore.setMatchContext('org-default', effectiveTournamentId, activeMatchId);
+    }
+
+    const unsubLive = liveStore.subscribe((cState) => {
+      if (!isCancelled && cState) {
+        setCanonicalState(cState);
+        setLoading(false);
+        setError(null);
+        setSyncStatus('LIVE');
+        if (cState.pointRushThreshold) {
+          setPointRushThresholdInput(cState.pointRushThreshold);
+        }
+      }
+    });
+
+    const unsubNext = liveStore.subscribeNextMatch((nextData) => {
+      setIsSwitchingMatch(false);
+      if (!isCancelled && nextData && nextData.nextMatchId) {
+        setActiveMatchId(nextData.nextMatchId);
+        liveStore.setMatchContext('org-default', effectiveTournamentId, nextData.nextMatchId);
+        showToast({
+          type: 'success',
+          title: 'Switched to Next Match',
+          message: `Match ${nextData.nextMatchNumber} is now active.`,
+        });
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+      unsubLive();
+      unsubNext();
+    };
+  }, [effectiveTournamentId, activeMatchId, showToast]);
 
   useEffect(() => {
     let conn: BroadcastSessionConnection | null = null;
@@ -265,6 +310,12 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
 
       if (pending.delta === 0) return;
 
+      const liveStore = CanonicalLiveStore.getInstance();
+      liveStore.sendCommand('ADD_KILLS', {
+        teamId: targetTeamId,
+        delta: pending.delta,
+      });
+
       const cmdType = pending.delta > 0 ? 'ADD_KILL' : 'REMOVE_KILL';
       const absDelta = Math.abs(pending.delta);
       const commandId = `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -290,8 +341,10 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   // Command dispatcher: instant local feedback + rapid action coalescing for kills
   const executeCommand = useCallback(
     (commandType: string, targetTeamId?: string, payload?: any) => {
-      // 1. Instant local optimistic update for immediate tactile response
+      // 1. Instant local optimistic update for immediate tactile response (<16ms)
       applyOptimisticUpdate(commandType, targetTeamId, payload);
+
+      const liveStore = CanonicalLiveStore.getInstance();
 
       // 2. Rapid Action Coalescing for rapid +1 / -1 kill clicks (120ms aggregation window)
       if ((commandType === 'ADD_KILL' || commandType === 'REMOVE_KILL') && targetTeamId) {
@@ -312,9 +365,31 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         return;
       }
 
-      // 3. For any other command (WIPE_SQUAD, FINISH_MATCH, SET_PLAYER_STATUS, etc.):
-      // Flush pending kill increments first so elimination/match end incorporates all clicks
+      // 3. For any other command: flush pending kill increments first so all clicks persist
       flushAllPendingKills();
+
+      // Dispatch to Live State Store over WebSocket
+      if (commandType === 'SET_PLAYER_STATUS' && targetTeamId) {
+        const pIndex = payload?.playerIndex ?? 0;
+        const pId = `${targetTeamId}-p${pIndex + 1}`;
+        liveStore.sendCommand('SET_PLAYER_STATUS', { teamId: targetTeamId, playerId: pId, status: payload.status });
+      } else if (commandType === 'WIPE_SQUAD' && targetTeamId) {
+        liveStore.sendCommand('WIPE_SQUAD', { teamId: targetTeamId });
+      } else if (commandType === 'REVIVE_SQUAD' && targetTeamId) {
+        liveStore.sendCommand('REVIVE_SQUAD', { teamId: targetTeamId });
+      } else if (commandType === 'RESET_ALIVE') {
+        liveStore.sendCommand('RESET_ALIVE', {});
+      } else if (commandType === 'SET_TABLE_VISIBILITY') {
+        liveStore.sendCommand('SET_TABLE_VISIBILITY', { visible: payload.visible });
+      } else if (commandType === 'SET_POINT_RUSH_THRESHOLD') {
+        liveStore.sendCommand('SET_POINT_RUSH_THRESHOLD', { threshold: payload.threshold });
+      } else if (commandType === 'FINISH_MATCH') {
+        liveStore.sendCommand('FINALIZE_MATCH', {});
+      } else if (commandType === 'REOPEN_MATCH') {
+        liveStore.sendCommand('REOPEN_MATCH', {});
+      } else if (commandType === 'NEXT_MATCH') {
+        liveStore.sendCommand('NEXT_MATCH', {});
+      }
 
       const commandId = payload?.commandId || `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       commandQueueRef.current.push({
@@ -344,7 +419,8 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
 
   const handleToggleFinishMatch = () => {
     if (!state) return;
-    if (state.isMatchFinished) {
+    const isFinished = canonicalState ? canonicalState.isMatchFinished : state.isMatchFinished;
+    if (isFinished) {
       executeCommand('REOPEN_MATCH');
       showToast({
         type: 'info',
@@ -359,6 +435,27 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         message: 'Placement points computed! Review Match Report before pushing to website.',
       });
     }
+  };
+
+  const handleNextMatch = () => {
+    setIsSwitchingMatch(true);
+    executeCommand('NEXT_MATCH');
+    showToast({
+      type: 'info',
+      title: 'Switching Match...',
+      message: 'Transitioning to next match...',
+    });
+  };
+
+  const handleSavePointRushThreshold = (val: number) => {
+    const threshold = Math.max(1, Math.min(999, Math.floor(val)));
+    setPointRushThresholdInput(threshold);
+    executeCommand('SET_POINT_RUSH_THRESHOLD', undefined, { threshold });
+    showToast({
+      type: 'success',
+      title: 'Threshold Updated',
+      message: `Point Rush threshold set to ${threshold} pts.`,
+    });
   };
 
   const [isRefreshingObs, setIsRefreshingObs] = useState<boolean>(false);
@@ -446,14 +543,68 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
     tournament,
     match,
     availableMatches,
-    teams,
-    revision,
-    tableVisible,
-    pointRushEnabled,
-    aliveSquadsCount,
-    isMatchFinished = false,
+    teams: rawTeams,
+    revision: fallbackRevision,
+    tableVisible: fallbackTableVisible,
+    pointRushEnabled: fallbackPointRushEnabled,
+    isMatchFinished: fallbackIsMatchFinished = false,
     isSubmittedToWebsite = false,
   } = state;
+
+  const revision = canonicalState ? canonicalState.revision : fallbackRevision;
+  const tableVisible = canonicalState ? canonicalState.tableVisible : fallbackTableVisible;
+  const pointRushEnabled = fallbackPointRushEnabled;
+  const isMatchFinished = canonicalState ? canonicalState.isMatchFinished : fallbackIsMatchFinished;
+
+  // Real-time authoritative live teams mapped from CanonicalLiveStore
+  const teams: BroadcastSquadTeam[] = rawTeams.map((t) => {
+    const cTeam = canonicalState?.teams ? canonicalState.teams[t.teamId] : undefined;
+    if (!cTeam) {
+      return {
+        ...t,
+        isFireActive: canonicalState?.fireTeamId ? canonicalState.fireTeamId === t.teamId : t.isFireActive,
+      };
+    }
+
+    let squadPlayers: [PlayerState, PlayerState, PlayerState, PlayerState] = t.squadPlayers;
+    if (cTeam.players) {
+      const playerList = Object.values(cTeam.players);
+      if (playerList.length > 0) {
+        squadPlayers = [
+          (playerList[0]?.status as PlayerState) || 'alive',
+          (playerList[1]?.status as PlayerState) || 'alive',
+          (playerList[2]?.status as PlayerState) || 'alive',
+          (playerList[3]?.status as PlayerState) || 'alive',
+        ];
+      }
+    }
+
+    const kills = cTeam.kills !== undefined ? cTeam.kills : t.kills;
+    const placement = cTeam.placement ?? t.placement;
+    const placementPoints = cTeam.placementPoints ?? t.placementPoints;
+    const totalPoints = cTeam.points !== undefined ? cTeam.points : (kills + placementPoints);
+    const aliveCount = squadPlayers.filter((p) => p === 'alive' || p === 'knock').length;
+    const isWiped = aliveCount === 0;
+
+    return {
+      ...t,
+      name: cTeam.name || t.name,
+      tag: cTeam.tag || t.tag,
+      slotNumber: cTeam.slotNumber ?? t.slotNumber,
+      logoUrl: cTeam.logoUrl || t.logoUrl,
+      kills,
+      placement,
+      placementPoints,
+      totalPoints,
+      isWiped,
+      alivePlayersCount: aliveCount,
+      squadPlayers,
+      isFireActive: canonicalState?.fireTeamId ? canonicalState.fireTeamId === t.teamId : t.isFireActive,
+      isPointRushActive: cTeam.pointRushEnabled !== undefined ? cTeam.pointRushEnabled : t.isPointRushActive,
+    };
+  });
+
+  const aliveSquadsCount = teams.filter((t) => !t.isWiped).length;
 
   const obsUrl = `${window.location.origin}/obs?tournamentId=${encodeURIComponent(tournament.id)}&matchId=${encodeURIComponent(match.id)}`;
 
@@ -634,6 +785,27 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
               <span>{pointRushEnabled ? 'Point Rush: ON' : 'Point Rush: OFF'}</span>
             </button>
 
+            {/* Point Rush Threshold Input */}
+            <div className="flex items-center gap-1 bg-[#1a0e30] border border-amber-500/30 px-2 py-1 rounded text-xs font-mono">
+              <span className="text-amber-400 text-[10px] font-bold uppercase tracking-wider">Rush Threshold:</span>
+              <input
+                type="number"
+                min="1"
+                max="999"
+                value={pointRushThresholdInput}
+                onChange={(e) => setPointRushThresholdInput(Number(e.target.value) || 0)}
+                onBlur={(e) => handleSavePointRushThreshold(Number(e.target.value) || 50)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSavePointRushThreshold(pointRushThresholdInput);
+                  }
+                }}
+                className="w-12 bg-[#0e071a] border border-amber-500/50 rounded px-1.5 py-0.5 text-amber-300 text-center font-bold text-xs focus:outline-none focus:ring-1 focus:ring-amber-400"
+                title="Teams with points >= threshold get Point Rush status"
+              />
+              <span className="text-slate-400 text-[10px]">pts</span>
+            </div>
+
             {/* +1 Pt All Teams */}
             <button
               type="button"
@@ -670,7 +842,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
             </button>
           </div>
 
-          {/* Finish / Reopen Match Button */}
+          {/* Finish / Reopen Match & Next Match Buttons */}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -693,6 +865,19 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
                   <span>Finish Match (Award Placements)</span>
                 </>
               )}
+            </button>
+
+            {/* NEXT MATCH → Button */}
+            <button
+              type="button"
+              style={{ touchAction: 'manipulation' }}
+              onClick={handleNextMatch}
+              disabled={isSwitchingMatch}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black transition-all active:scale-95 cursor-pointer shadow-lg shadow-emerald-950/40 disabled:opacity-50"
+              title="Save current match and advance cleanly to the next scheduled match"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-yellow-300" />
+              <span>{isSwitchingMatch ? 'Switching...' : 'NEXT MATCH →'}</span>
             </button>
           </div>
         </div>
@@ -754,10 +939,24 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
                         )}
                       </div>
 
-                      {/* Team Tag & Name */}
+                      {/* Team Tag & Name & Badges */}
                       <div className="min-w-0">
-                        <div className="font-black text-sm text-white truncate uppercase tracking-wide">
-                          {tag}
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-black text-sm text-white truncate uppercase tracking-wide">
+                            {tag}
+                          </span>
+                          {isFireActive && (
+                            <span className="px-1.5 py-0.5 rounded bg-orange-600 text-white font-mono text-[9px] font-black uppercase tracking-wider flex items-center gap-0.5 animate-pulse">
+                              <Flame className="h-2.5 w-2.5" />
+                              FIRE
+                            </span>
+                          )}
+                          {isPointRushActive && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500 text-black font-mono text-[9px] font-black uppercase tracking-wider flex items-center gap-0.5">
+                              <Crosshair className="h-2.5 w-2.5" />
+                              RUSH
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-slate-400 truncate max-w-[120px]">{name}</div>
                       </div>

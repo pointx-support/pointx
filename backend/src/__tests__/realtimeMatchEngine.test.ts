@@ -277,4 +277,106 @@ describe('PointX Rebuilt Realtime Match Control & Ultra-Lightweight Delta Suite'
     expect(t1Res.kills).toBe(15);
     expect(t1Res.totalPoints).toBe(25);
   });
+
+  it('9. Monotonic Revision: Every applied command increments revision strictly monotonically', async () => {
+    const store = LiveStateStore.getInstance();
+    const orgId = 'org-apex';
+    const tourId = 'tour-ff-rev';
+    const matchId = 'm_rev_test';
+
+    const state = await store.getOrCreateLiveState(orgId, tourId, matchId);
+    state.teams['t1'] = { teamId: 't1', kills: 0, points: 0, placementPoints: 0, killPoints: 0, players: {}, pointRushEnabled: false };
+    const r0 = state.revision;
+
+    const res1 = await store.applyCommand({
+      commandId: 'cmd_rev_1',
+      command: 'ADD_KILLS',
+      organizationId: orgId,
+      tournamentId: tourId,
+      matchId,
+      payload: { teamId: 't1', delta: 1 },
+    });
+    expect(res1.state.revision).toBe(r0 + 1);
+
+    const res2 = await store.applyCommand({
+      commandId: 'cmd_rev_2',
+      command: 'ADD_KILLS',
+      organizationId: orgId,
+      tournamentId: tourId,
+      matchId,
+      payload: { teamId: 't1', delta: 2 },
+    });
+    expect(res2.state.revision).toBe(r0 + 2);
+    expect(res2.patch.revision).toBe(r0 + 2);
+  });
+
+  it('10. RESET_ALIVE: Resets all players across all teams to alive and clears eliminationOrder', async () => {
+    const store = LiveStateStore.getInstance();
+    const orgId = 'org-apex';
+    const tourId = 'tour-ff-reset';
+    const matchId = 'm_reset_alive_test';
+
+    const state = await store.getOrCreateLiveState(orgId, tourId, matchId);
+    state.teams['team-dead'] = {
+      teamId: 'team-dead',
+      kills: 3,
+      points: 3,
+      placementPoints: 0,
+      killPoints: 3,
+      players: {
+        'p1': { status: 'eliminated', updatedAt: Date.now() },
+        'p2': { status: 'knock', updatedAt: Date.now() },
+      },
+      pointRushEnabled: false,
+    };
+    state.eliminationOrder = ['team-dead'];
+
+    const res = await store.applyCommand({
+      commandId: 'cmd_reset',
+      command: 'RESET_ALIVE',
+      organizationId: orgId,
+      tournamentId: tourId,
+      matchId,
+      payload: {},
+    });
+
+    expect(res.state.eliminationOrder).toEqual([]);
+    expect(res.state.teams['team-dead'].players['p1'].status).toBe('alive');
+    expect(res.state.teams['team-dead'].players['p2'].status).toBe('alive');
+  });
+
+  it('11. SET_TABLE_VISIBILITY: Toggles tableVisible immediately in live state', async () => {
+    const store = LiveStateStore.getInstance();
+    const orgId = 'org-apex';
+    const tourId = 'tour-ff-vis';
+    const matchId = 'm_vis_test';
+
+    const state = await store.getOrCreateLiveState(orgId, tourId, matchId);
+    state.tableVisible = true;
+
+    const res = await store.applyCommand({
+      commandId: 'cmd_hide',
+      command: 'SET_TABLE_VISIBILITY',
+      organizationId: orgId,
+      tournamentId: tourId,
+      matchId,
+      payload: { visible: false },
+    });
+
+    expect(res.state.tableVisible).toBe(false);
+    expect(res.patch.tableVisible).toBe(false);
+  });
+
+  it('12. Fire Tie-Breaker: When kills are tied, the team with earliest kill timestamp retains Fire', async () => {
+    const store = LiveStateStore.getInstance();
+    const now = Date.now();
+
+    const teams: any = {
+      'tA': { teamId: 'tA', kills: 5, lastKillTimestamp: now - 5000, players: {} },
+      'tB': { teamId: 'tB', kills: 5, lastKillTimestamp: now - 1000, players: {} },
+    };
+
+    const leader = store.calculateFireTeamId(teams);
+    expect(leader).toBe('tA'); // tA scored earlier
+  });
 });

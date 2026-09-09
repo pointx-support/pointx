@@ -89,7 +89,21 @@ async function executeMongoPersistence(state: CanonicalLiveMatchState, _scoringP
       }
     );
 
-    // Also update BroadcastSession
+    // Also update BroadcastSession for legacy consumers and reports
+    const squadsObj: Record<string, any> = {};
+    const teamStatsObj: Record<string, any> = {};
+    for (const [teamId, liveTeam] of Object.entries(state.teams)) {
+      const pArr = Object.values(liveTeam.players).map((p) => p.status);
+      while (pArr.length < 4) pArr.push('alive');
+      squadsObj[teamId] = pArr.slice(0, 4);
+      teamStatsObj[teamId] = {
+        kills: liveTeam.kills,
+        bonusPoints: liveTeam.bonusPoints || 0,
+        isBooyah: liveTeam.isBooyah || false,
+        manualPlacement: liveTeam.placement,
+      };
+    }
+
     await BroadcastSession.findOneAndUpdate(
       { tournamentId: state.tournamentId, matchId: state.matchId },
       {
@@ -98,6 +112,9 @@ async function executeMongoPersistence(state: CanonicalLiveMatchState, _scoringP
           tableVisible: state.tableVisible,
           pointRushEnabled: Object.values(state.teams).some((t) => t.pointRushEnabled),
           fireTeamIds: state.fireTeamId ? [state.fireTeamId] : [],
+          squads: squadsObj,
+          teamStats: teamStatsObj,
+          eliminatedTeamOrder: state.eliminationOrder || [],
           revision: state.revision,
           isMatchFinished: state.isMatchFinished,
           updatedAt: new Date(),

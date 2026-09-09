@@ -575,7 +575,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       unsub();
       unsubNext();
     };
-  }, [tournament.id, activeMatch.id]);
+  }, [tournament.id, activeMatch.id, showToast, (tournament as any)?.organizationId]);
 
   const handleNextMatchClick = () => {
     haptics.medium();

@@ -798,6 +798,18 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
           broadcastToRooms(aliasRooms, deltaMsg);
           broadcastToSseRooms(aliasRooms, deltaMsg);
 
+          if (updatedLiveState.sessionId) {
+            broadcastToSession(updatedLiveState.sessionId, {
+              type: 'BROADCAST_STATE_UPDATED',
+              sessionId: updatedLiveState.sessionId,
+              revision: updatedLiveState.revision,
+              data: updatedLiveState,
+              state: updatedLiveState,
+              patch,
+              timestamp: updatedLiveState.updatedAt,
+            });
+          }
+
           // Send immediate ACK back to Remote
           ws.send(JSON.stringify({
             type: 'ACK',

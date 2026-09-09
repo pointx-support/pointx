@@ -1,4 +1,4 @@
-import { RealtimeSyncClient } from './broadcastSync';
+import { RealtimeSyncClient, type ConnectionState } from './broadcastSync';
 
 export type PlayerState = 'alive' | 'knock' | 'eliminated';
 
@@ -9,6 +9,10 @@ export interface PlayerLiveStatus {
 
 export interface TeamLiveStatus {
   teamId: string;
+  name?: string;
+  tag?: string;
+  slotNumber?: number;
+  logoUrl?: string;
   kills: number;
   points: number;
   placementPoints: number;
@@ -55,7 +59,7 @@ export interface MatchDeltaPatch {
 }
 
 type StateListener = (state: CanonicalLiveMatchState) => void;
-type NextMatchListener = (data: { nextMatchId: string; nextMatchNumber: number; nextMatch: any }) => void;
+type NextMatchListener = (data: { nextMatchId: string; nextMatchNumber: number; nextMatch: any; initialState?: CanonicalLiveMatchState }) => void;
 
 export class CanonicalLiveStore {
   private static instance: CanonicalLiveStore | null = null;
@@ -81,6 +85,19 @@ export class CanonicalLiveStore {
     const client = RealtimeSyncClient.getInstance();
     client.subscribeRawMessage((msg: any) => {
       this.handleServerMessage(msg);
+    });
+
+    // On reconnect: immediately request the full match state to catch up
+    client.subscribeConnection((status: ConnectionState) => {
+      if (status === 'CONNECTED' && this.activeMatchId) {
+        client.sendRawMessage({
+          type: 'REQUEST_FULL_STATE',
+          organizationId: this.activeOrgId,
+          tournamentId: this.activeTourId,
+          matchId: this.activeMatchId,
+          lastAppliedRevision: this.lastAppliedRevision,
+        });
+      }
     });
   }
 
@@ -256,13 +273,26 @@ export class CanonicalLiveStore {
   }
 
   public sendCommand(
-    command: 'ADD_KILLS' | 'SET_PLAYER_STATUS' | 'WIPE_SQUAD' | 'REVIVE_SQUAD' | 'SET_TABLE_VISIBILITY' | 'SELECT_TEAM' | 'SELECT_PLAYER' | 'SET_POINT_RUSH_THRESHOLD' | 'FINALIZE_MATCH' | 'NEXT_MATCH',
+    command:
+      | 'ADD_KILLS'
+      | 'SET_PLAYER_STATUS'
+      | 'WIPE_SQUAD'
+      | 'REVIVE_SQUAD'
+      | 'RESET_ALIVE'
+      | 'SET_TABLE_VISIBILITY'
+      | 'SELECT_TEAM'
+      | 'SELECT_PLAYER'
+      | 'SET_POINT_RUSH_THRESHOLD'
+      | 'FINALIZE_MATCH'
+      | 'REOPEN_MATCH'
+      | 'NEXT_MATCH'
+      | 'REFRESH_OVERLAY',
     payload: any
   ): string {
     const commandId = `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const client = RealtimeSyncClient.getInstance();
 
-    // Optimistic local update for instant UI feedback (7 + 4 = 11 immediately!)
+    // Optimistic local update for instant UI feedback (e.g. 7 + 4 = 11 immediately!)
     if (this.currentState) {
       if (command === 'ADD_KILLS') {
         const teamId = payload.teamId;
@@ -271,19 +301,62 @@ export class CanonicalLiveStore {
         if (t) {
           t.kills = Math.max(0, t.kills + delta);
           t.killPoints = t.kills * 1;
-          t.points = t.placementPoints + t.killPoints;
+          t.points = t.placementPoints + t.killPoints + (t.bonusPoints || 0) - (t.penaltyPoints || 0);
           t.pointRushEnabled = t.points >= this.currentState.pointRushThreshold;
           this.notify();
         }
       } else if (command === 'SET_PLAYER_STATUS') {
         const { teamId, playerId, status } = payload;
         const t = this.currentState.teams[teamId];
-        if (t && t.players[playerId]) {
-          t.players[playerId].status = status;
+        if (t) {
+          if (!t.players[playerId]) {
+            t.players[playerId] = { status, updatedAt: Date.now() };
+          } else {
+            t.players[playerId].status = status;
+          }
           this.notify();
         }
+      } else if (command === 'WIPE_SQUAD') {
+        const teamId = payload.teamId;
+        const t = this.currentState.teams[teamId];
+        if (t) {
+          for (const pid of Object.keys(t.players)) {
+            t.players[pid].status = 'eliminated';
+          }
+          this.notify();
+        }
+      } else if (command === 'REVIVE_SQUAD') {
+        const teamId = payload.teamId;
+        const t = this.currentState.teams[teamId];
+        if (t) {
+          for (const pid of Object.keys(t.players)) {
+            t.players[pid].status = 'alive';
+          }
+          this.notify();
+        }
+      } else if (command === 'RESET_ALIVE') {
+        for (const t of Object.values(this.currentState.teams)) {
+          for (const pid of Object.keys(t.players)) {
+            t.players[pid].status = 'alive';
+          }
+        }
+        this.currentState.eliminationOrder = [];
+        this.notify();
       } else if (command === 'SET_TABLE_VISIBILITY') {
         this.currentState.tableVisible = Boolean(payload.visible);
+        this.notify();
+      } else if (command === 'SET_POINT_RUSH_THRESHOLD') {
+        const threshold = Number(payload.threshold || 50);
+        this.currentState.pointRushThreshold = threshold;
+        for (const t of Object.values(this.currentState.teams)) {
+          t.pointRushEnabled = t.points >= threshold;
+        }
+        this.notify();
+      } else if (command === 'FINALIZE_MATCH') {
+        this.currentState.isMatchFinished = true;
+        this.notify();
+      } else if (command === 'REOPEN_MATCH') {
+        this.currentState.isMatchFinished = false;
         this.notify();
       }
     }
@@ -311,11 +384,28 @@ export class CanonicalLiveStore {
       this.applyAuthoritativeState(msg.state);
     } else if (msg.type === 'INITIAL_MATCH_STATE' && msg.data) {
       this.applyAuthoritativeState(msg.data);
-    } else if (msg.type === 'NEXT_MATCH_READY' && msg.data) {
+    } else if (msg.type === 'NEXT_MATCH_READY') {
+      const data = msg.data || {
+        nextMatchId: msg.matchId,
+        nextMatchNumber: msg.matchNumber,
+        nextMatch: msg.nextMatch,
+        initialState: msg.initialState,
+      };
+      if (data.initialState) {
+        this.applyAuthoritativeState(data.initialState);
+      }
       for (const listener of this.nextMatchListeners) {
         try {
-          listener(msg.data);
+          listener(data);
         } catch {}
+      }
+    } else if (msg.type === 'BROADCAST_STATE_UPDATED') {
+      if (msg.patch) {
+        this.applyAuthoritativePatch(msg.patch);
+      } else if (msg.state) {
+        this.applyAuthoritativeState(msg.state);
+      } else if (msg.data) {
+        this.applyAuthoritativeState(msg.data);
       }
     }
   }

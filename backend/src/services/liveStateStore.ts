@@ -11,6 +11,10 @@ export interface PlayerLiveStatus {
 
 export interface TeamLiveStatus {
   teamId: string;
+  name?: string;
+  tag?: string;
+  slotNumber?: number;
+  logoUrl?: string;
   kills: number;
   points: number;
   placementPoints: number;
@@ -63,12 +67,15 @@ export interface RemoteCommand {
     | 'SET_PLAYER_STATUS'
     | 'WIPE_SQUAD'
     | 'REVIVE_SQUAD'
+    | 'RESET_ALIVE'
     | 'SET_TABLE_VISIBILITY'
     | 'SELECT_TEAM'
     | 'SELECT_PLAYER'
     | 'SET_POINT_RUSH_THRESHOLD'
     | 'FINALIZE_MATCH'
-    | 'NEXT_MATCH';
+    | 'REOPEN_MATCH'
+    | 'NEXT_MATCH'
+    | 'REFRESH_OVERLAY';
   sessionId?: string;
   organizationId: string;
   tournamentId: string;
@@ -201,7 +208,7 @@ export class LiveStateStore {
       existingMatch.results.forEach((r: any) => resultsMap.set(r.teamId, r));
     }
 
-    effectiveTeams.forEach((t: any) => {
+    effectiveTeams.forEach((t: any, teamIdx: number) => {
       const res = resultsMap.get(t.id);
       const playersObj: Record<string, PlayerLiveStatus> = {};
       const teamPlayers = Array.isArray(t.players) && t.players.length > 0 ? t.players : [{ id: `${t.id}-p1` }, { id: `${t.id}-p2` }, { id: `${t.id}-p3` }, { id: `${t.id}-p4` }];
@@ -216,6 +223,10 @@ export class LiveStateStore {
 
       teamsMap[t.id] = {
         teamId: t.id,
+        name: t.name || `Team ${t.slotNumber || teamIdx + 1}`,
+        tag: t.tag || (t.name ? t.name.slice(0, 4).toUpperCase() : `T${t.slotNumber || teamIdx + 1}`),
+        slotNumber: t.slotNumber || teamIdx + 1,
+        logoUrl: t.logoUrl || '',
         kills,
         points,
         placementPoints: res?.placementPoints || 0,
@@ -469,9 +480,31 @@ export class LiveStateStore {
         break;
       }
 
+      case 'RESET_ALIVE': {
+        state.eliminationOrder = [];
+        diff.eliminationOrder = [];
+        const updatedTeams: Record<string, Partial<TeamLiveStatus>> = {};
+
+        for (const [tid, team] of Object.entries(state.teams)) {
+          for (const pid of Object.keys(team.players)) {
+            team.players[pid].status = 'alive';
+            team.players[pid].updatedAt = now;
+          }
+          updatedTeams[tid] = { players: team.players };
+        }
+        diff.teams = updatedTeams;
+        break;
+      }
+
       case 'FINALIZE_MATCH': {
         state.isMatchFinished = true;
         diff.isMatchFinished = true;
+        break;
+      }
+
+      case 'REOPEN_MATCH': {
+        state.isMatchFinished = false;
+        diff.isMatchFinished = false;
         break;
       }
     }

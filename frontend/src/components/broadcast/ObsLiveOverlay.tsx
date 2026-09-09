@@ -10,6 +10,7 @@ import {
   fetchSessionState,
   connectBroadcastSession,
 } from '../../services/broadcastClient';
+import { CanonicalLiveStore, type CanonicalLiveMatchState } from '../../services/canonicalLiveStore';
 
 export interface ObsLiveOverlayProps {
   tournamentId?: string;
@@ -33,6 +34,7 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
   const effectiveTournamentId = propTournamentId || urlParams?.get('tournamentId') || urlParams?.get('tournament') || '';
   const effectiveMatchId = propMatchId || urlParams?.get('matchId') || urlParams?.get('match') || undefined;
 
+  const [canonicalState, setCanonicalState] = useState<CanonicalLiveMatchState | null>(null);
   const [state, setState] = useState<AuthoritativeBroadcastState | null>(null);
   const [syncStatus, setSyncStatus] = useState<BroadcastSyncStatus>('CONNECTING');
   const [loading, setLoading] = useState<boolean>(true);
@@ -42,13 +44,31 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
     let connection: { disconnect: () => void } | null = null;
     let isCancelled = false;
 
-    async function init() {
-      setLoading(true);
-      setError(null);
+    // Connect to centralized Realtime Live State Store (Immediate WebSocket Path)
+    const liveStore = CanonicalLiveStore.getInstance();
+    if (effectiveTournamentId) {
+      liveStore.setMatchContext('org-default', effectiveTournamentId, effectiveMatchId || 'm1');
+    }
 
+    const unsubLive = liveStore.subscribe((cState) => {
+      if (!isCancelled && cState) {
+        setCanonicalState(cState);
+        setLoading(false);
+        setError(null);
+        setSyncStatus('LIVE');
+      }
+    });
+
+    const unsubNext = liveStore.subscribeNextMatch((nextData) => {
+      if (!isCancelled && nextData && nextData.nextMatchId) {
+        liveStore.setMatchContext('org-default', effectiveTournamentId, nextData.nextMatchId);
+      }
+    });
+
+    async function init() {
       try {
         let activeSessionId = effectiveSessionId;
-        let initialData: AuthoritativeBroadcastState;
+        let initialData: AuthoritativeBroadcastState | null = null;
 
         if (activeSessionId) {
           initialData = await fetchSessionState(activeSessionId);
@@ -56,52 +76,50 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
           const initRes = await initializeBroadcastSession(effectiveTournamentId, effectiveMatchId);
           activeSessionId = initRes.sessionId;
           initialData = initRes.state;
-        } else {
-          setError('No tournament or session ID specified for OBS overlay.');
-          setLoading(false);
-          return;
         }
 
         if (isCancelled) return;
 
-        setState(initialData);
-        setLoading(false);
-        setSyncStatus('LIVE');
+        if (initialData) {
+          setState(initialData);
+          setLoading(false);
+          setSyncStatus('LIVE');
 
-        // Connect real-time WebSocket room with gap detection
-        connection = connectBroadcastSession(activeSessionId, initialData, {
-          onState: (newState) => {
-            if (!isCancelled && newState && (newState.sessionId || newState.tournamentId)) {
-              setState(newState);
-              setError(null);
-            }
-          },
-          onStatusChange: (status) => {
-            if (!isCancelled) {
-              setSyncStatus(status);
-            }
-          },
-          onOverlayEvent: (evt) => {
-            if (evt?.hardReload) {
-              window.location.reload();
-            } else {
-              fetchSessionState(activeSessionId)
-                .then((fresh) => {
-                  if (!isCancelled && fresh) {
-                    setState(fresh);
-                  }
-                })
-                .catch(() => {
-                  window.location.reload();
-                });
-            }
-          },
-          onError: (err) => {
-            console.warn('[ObsLiveOverlay] Sync error:', err);
-          },
-        });
+          // Connect real-time WebSocket room with gap detection
+          connection = connectBroadcastSession(activeSessionId, initialData, {
+            onState: (newState) => {
+              if (!isCancelled && newState && (newState.sessionId || newState.tournamentId)) {
+                setState(newState);
+                setError(null);
+              }
+            },
+            onStatusChange: (status) => {
+              if (!isCancelled) {
+                setSyncStatus(status);
+              }
+            },
+            onOverlayEvent: (evt) => {
+              if (evt?.hardReload) {
+                window.location.reload();
+              } else {
+                fetchSessionState(activeSessionId)
+                  .then((fresh) => {
+                    if (!isCancelled && fresh) {
+                      setState(fresh);
+                    }
+                  })
+                  .catch(() => {
+                    window.location.reload();
+                  });
+              }
+            },
+            onError: (err) => {
+              console.warn('[ObsLiveOverlay] Sync error:', err);
+            },
+          });
+        }
       } catch (err: any) {
-        if (!isCancelled) {
+        if (!isCancelled && !liveStore.getState()) {
           setError(err.message || 'Failed to connect to broadcast session.');
           setLoading(false);
           setSyncStatus('DISCONNECTED');
@@ -113,13 +131,15 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
 
     return () => {
       isCancelled = true;
+      unsubLive();
+      unsubNext();
       if (connection) {
         connection.disconnect();
       }
     };
   }, [effectiveSessionId, effectiveTournamentId, effectiveMatchId]);
 
-  if (loading) {
+  if (loading && !canonicalState) {
     return (
       <div
         className={`w-full min-h-screen flex items-center justify-center p-8 select-none font-sans ${
@@ -136,7 +156,7 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
     );
   }
 
-  if (error || !state) {
+  if (error && !canonicalState && !state) {
     return (
       <div
         className={`w-full min-h-screen flex items-center justify-center p-8 select-none font-sans ${
@@ -153,12 +173,49 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
     );
   }
 
-  const {
-    teams,
-    tableVisible,
-    activeMode,
-    revision,
-  } = state;
+  const teams = canonicalState
+    ? Object.values(canonicalState.teams)
+        .map((t) => {
+          const squadPlayers: PlayerState[] = t.players
+            ? Object.values(t.players).map((p) => p.status)
+            : ['alive', 'alive', 'alive', 'alive'];
+          while (squadPlayers.length < 4) squadPlayers.push('alive');
+          const isWiped = squadPlayers.every((p) => p === 'eliminated');
+          const isFire = t.teamId === canonicalState.fireTeamId;
+          const isPointRush = t.pointRushEnabled;
+          const isFocused = t.teamId === canonicalState.selectedTeamId;
+
+          return {
+            teamId: t.teamId,
+            name: t.name || `Team ${t.slotNumber || 1}`,
+            tag: t.tag || `T${t.slotNumber || 1}`,
+            slotNumber: t.slotNumber || 1,
+            logoUrl: t.logoUrl || '',
+            kills: t.kills,
+            placement: t.placement || 1,
+            placementPoints: t.placementPoints,
+            killPoints: t.killPoints,
+            totalPoints: t.points,
+            isBooyah: t.isBooyah || false,
+            squadPlayers,
+            alivePlayersCount: squadPlayers.filter((p) => p === 'alive' || p === 'knock').length,
+            isWiped,
+            isFireActive: isFire,
+            isPointRushActive: isPointRush,
+            isFocused,
+          };
+        })
+        .sort((a, b) => {
+          if (a.isWiped !== b.isWiped) return a.isWiped ? 1 : -1;
+          if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+          if (b.kills !== a.kills) return b.kills - a.kills;
+          return (a.slotNumber || 1) - (b.slotNumber || 1);
+        })
+    : state?.teams || [];
+
+  const tableVisible = canonicalState ? canonicalState.tableVisible : state?.tableVisible ?? true;
+  const activeMode = state?.activeMode || 'NORMAL';
+  const revision = canonicalState ? canonicalState.revision : state?.revision ?? 1;
 
   return (
     <div
