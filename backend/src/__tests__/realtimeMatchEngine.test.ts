@@ -212,6 +212,13 @@ describe('PointX Rebuilt Realtime Match Control & Ultra-Lightweight Delta Suite'
           status: 'Completed',
           results: [],
         },
+        // Pre-create match 2 — the service does NOT auto-create matches
+        {
+          id: 'm_tour-next-match-test_2',
+          matchNumber: 2,
+          status: 'Draft',
+          results: [],
+        },
       ],
       teams: [{ id: 'team-1', name: 'Alpha' }],
     });
@@ -219,7 +226,7 @@ describe('PointX Rebuilt Realtime Match Control & Ultra-Lightweight Delta Suite'
     const nextRes = await getNextMatchForTournament(tour.customId, 'm_tour-next-match-test_1');
     expect(nextRes.hasNext).toBe(true);
     expect(nextRes.nextMatchNumber).toBe(2);
-    expect(nextRes.nextMatchId).toBe(`m_${tour.customId}_2`);
+    expect(nextRes.nextMatchId).toBe('m_tour-next-match-test_2');
 
     const updatedTour = await Tournament.findOne({ customId: tour.customId }).lean();
     expect(updatedTour!.matches.length).toBe(2);
@@ -245,7 +252,8 @@ describe('PointX Rebuilt Realtime Match Control & Ultra-Lightweight Delta Suite'
 
     const nextRes = await getNextMatchForTournament(tour.customId, 'm_final_1');
     expect(nextRes.hasNext).toBe(false);
-    expect(nextRes.message).toContain('final match');
+    // Service returns "latest match" — not "final match"
+    expect(nextRes.message).toContain('latest match');
   });
 
   it('8. Critical Event Flush: flushPersistenceImmediately saves state to MongoDB synchronously', async () => {

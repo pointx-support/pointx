@@ -391,45 +391,11 @@ export async function updateMatchScoreServer(
   );
 
   if (!match) {
-    // Auto-initialize Match 1 if matches is empty or matchId is synthetic
-    if (state.tournament.matches.length === 0 || matchId.startsWith('m_') || matchId === 'default') {
-      const existingMatch1 = state.tournament.matches.find((m: any) => m.matchNumber === 1);
-      if (existingMatch1) {
-        match = existingMatch1;
-      } else {
-        const effectiveTeams = Array.isArray(state.tournament.teams) && state.tournament.teams.length > 0
-          ? state.tournament.teams
-          : [];
-        const now = new Date().toISOString();
-        const effectiveMatchId = matchId && matchId !== 'default' ? matchId : `m_${tourId}_1`;
-        match = {
-          id: effectiveMatchId,
-          customId: effectiveMatchId,
-          tournamentId: tourId,
-          matchNumber: 1,
-          mapName: 'Bermuda',
-          status: 'Live',
-          createdAt: now,
-          updatedAt: now,
-          results: effectiveTeams.map((t: any, idx: number) => ({
-            teamId: t.id || t.customId || (t._id ? String(t._id) : `team-${idx + 1}`),
-            placement: Math.max(1, (effectiveTeams.length || 12) - idx),
-            kills: 0,
-            placementPoints: 0,
-            killPoints: 0,
-            totalPoints: 0,
-            isBooyah: false,
-          })),
-        };
-        state.tournament.matches.push(match);
-      }
+    const fallback = state.tournament.matches.find((m: any) => (m.id || m.customId) === matchId);
+    if (fallback) {
+      match = fallback;
     } else {
-      const fallback = state.tournament.matches.find((m: any) => m.status === 'Live') || state.tournament.matches[0];
-      if (fallback) {
-        match = fallback;
-      } else {
-        throw new Error(`Match "${matchId}" not found in tournament`);
-      }
+      throw new Error(`Match "${matchId}" not found in tournament`);
     }
   }
 

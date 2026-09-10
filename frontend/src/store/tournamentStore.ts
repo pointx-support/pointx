@@ -428,29 +428,7 @@ export const useTournamentStore = create<AppState>((set, get) => ({
 
   createTournament: async (newTour) => {
     const effectiveTeams = Array.isArray(newTour.teams) ? newTour.teams : [];
-    const effectiveMatches = newTour.matches !== undefined
-      ? newTour.matches
-      : [{
-          id: `match-${newTour.id}-1`,
-          tournamentId: newTour.id,
-          matchNumber: 1,
-          customLabel: 'Match 01 — Bermuda',
-          mapName: 'Bermuda',
-          status: 'Live' as const,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          scoringConfigId: newTour.scoringPreset?.id || 'preset-ff-official-v1',
-          scoringVersion: newTour.scoringPreset?.version || 1,
-          results: effectiveTeams.map((t, idx) => ({
-            teamId: t.id,
-            placement: Math.max(1, (effectiveTeams.length || 12) - idx),
-            kills: 0,
-            placementPoints: 0,
-            killPoints: 0,
-            totalPoints: 0,
-            isBooyah: false,
-          })),
-        }];
+    const effectiveMatches = Array.isArray(newTour.matches) ? newTour.matches : [];
 
     const tourWithMatch: Tournament = {
       ...newTour,
@@ -920,40 +898,25 @@ export const useTournamentStore = create<AppState>((set, get) => ({
     });
 
     const matchExists = targetTournament.matches.some((m) => m.id === matchId || (m as any).customId === matchId);
-    let updatedMatches: Match[];
-
-    if (matchExists) {
-      updatedMatches = targetTournament.matches.map((m) =>
-        (m.id === matchId || (m as any).customId === matchId)
-          ? {
-              ...m,
-              customLabel: customLabel !== undefined ? customLabel : m.customLabel,
-              mapName: mapName !== undefined ? mapName : m.mapName,
-              status,
-              results: calculatedTeamResults,
-              scoringConfigId: normalizedPreset.id,
-              scoringVersion: normalizedPreset.version,
-              updatedAt: new Date().toISOString()
-            }
-          : m
-      );
-    } else {
-      const nextNum = targetTournament.matches.length + 1;
-      const newM: Match = {
-        id: matchId,
-        tournamentId,
-        matchNumber: nextNum,
-        customLabel: customLabel || `Match ${nextNum}`,
-        mapName: mapName || 'Bermuda',
-        status,
-        results: calculatedTeamResults,
-        scoringConfigId: normalizedPreset.id,
-        scoringVersion: normalizedPreset.version,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      updatedMatches = [...targetTournament.matches, newM];
+    if (!matchExists) {
+      // Do not fabricate a match if it does not exist in tournament records
+      return;
     }
+
+    const updatedMatches = targetTournament.matches.map((m) =>
+      (m.id === matchId || (m as any).customId === matchId)
+        ? {
+            ...m,
+            customLabel: customLabel !== undefined ? customLabel : m.customLabel,
+            mapName: mapName !== undefined ? mapName : m.mapName,
+            status,
+            results: calculatedTeamResults,
+            scoringConfigId: normalizedPreset.id,
+            scoringVersion: normalizedPreset.version,
+            updatedAt: new Date().toISOString()
+          }
+        : m
+    );
 
     get().updateTournament(tournamentId, { matches: updatedMatches });
   },

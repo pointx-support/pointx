@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { ObsLiveOverlay } from './ObsLiveOverlay';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { useToast } from '../ui/Toast';
 import { broadcastLayoutChange } from '../../services/broadcastSync';
+import { getStoredToken } from '../../services/api';
 import {
   Tv,
   Copy,
@@ -16,7 +17,11 @@ import {
   QrCode,
   Users,
   Ban,
-  KeyRound
+  KeyRound,
+  RefreshCw,
+  Clock,
+  Check,
+  X,
 } from 'lucide-react';
 
 interface RemoteDeviceSession {
@@ -63,9 +68,87 @@ export const BroadcastControlView: React.FC = () => {
   const [blockedDeviceIds, setBlockedDeviceIds] = useState<string[]>([]);
   const [showQrModal, setShowQrModal] = useState(false);
 
+  // Ephemeral Single-Use Remote Pairing Session State (10-min TTL)
+  const [pairingToken, setPairingToken] = useState<string>('');
+  const [pairingUrl, setPairingUrl] = useState<string>('');
+  const [pairingExpiresAt, setPairingExpiresAt] = useState<number>(0);
+  const [remainingTtlSeconds, setRemainingTtlSeconds] = useState<number>(600);
+  const [isGeneratingQr, setIsGeneratingQr] = useState<boolean>(false);
+  const [copiedPairingUrl, setCopiedPairingUrl] = useState<boolean>(false);
+
   const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
   const overlayUrl = `${origin}/?mode=broadcast&tournamentId=${currentTournament.id}&layout=${overlayType}&token=${token}`;
   const remoteUrl = `${origin}/?mode=remote&tournamentId=${currentTournament.id}&token=${token}`;
+
+  // Ephemeral QR Pairing generator
+  const generateNewPairingQr = useCallback(async (quiet = false) => {
+    if (!currentTournament.id) return;
+    setIsGeneratingQr(true);
+    try {
+      const storedJwt = getStoredToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (storedJwt) headers['Authorization'] = `Bearer ${storedJwt}`;
+
+      const res = await fetch('/api/broadcast/remote-pairing', {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          tournamentId: currentTournament.id,
+          sessionId: `session-${currentTournament.id}`,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.data) {
+        setPairingToken(data.data.pairingToken);
+        setPairingUrl(data.data.pairingUrl);
+        const expires = new Date(data.data.expiresAt).getTime();
+        setPairingExpiresAt(expires);
+        setRemainingTtlSeconds(Math.max(0, Math.round((expires - Date.now()) / 1000)));
+        if (!quiet) {
+          showToast({
+            type: 'success',
+            title: 'New QR Code Generated',
+            message: 'Single-use pairing code active. Valid for 10 minutes.',
+          });
+        }
+      } else {
+        if (!quiet) {
+          showToast({
+            type: 'error',
+            title: 'QR Generation Error',
+            message: data.error || 'Failed to generate secure pairing QR code.',
+          });
+        }
+      }
+    } catch (err: any) {
+      if (!quiet) {
+        showToast({
+          type: 'error',
+          title: 'QR Generation Error',
+          message: err.message || 'Network communication error.',
+        });
+      }
+    } finally {
+      setIsGeneratingQr(false);
+    }
+  }, [currentTournament.id, showToast]);
+
+  // Initial pairing code generation on mount
+  useEffect(() => {
+    generateNewPairingQr(true);
+  }, [generateNewPairingQr]);
+
+  // Countdown timer for pairing code
+  useEffect(() => {
+    if (!pairingExpiresAt) return;
+    const timer = setInterval(() => {
+      const remaining = Math.max(0, Math.round((pairingExpiresAt - Date.now()) / 1000));
+      setRemainingTtlSeconds(remaining);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [pairingExpiresAt]);
 
   useEffect(() => {
     if (currentTournament.id) {
@@ -218,8 +301,15 @@ export const BroadcastControlView: React.FC = () => {
     } catch {}
   };
 
-  // QR Code URL for scanning
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(remoteUrl)}&bgcolor=13100f&color=ffd000&margin=8`;
+  // Active ephemeral QR pairing URL (10-min TTL, single-use, 0 sensitive raw credentials)
+  const activeQrTargetUrl = pairingUrl || `${origin}/remote/connect/${pairingToken}`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(activeQrTargetUrl)}&bgcolor=13100f&color=ffd000&margin=8`;
+  const largeQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(activeQrTargetUrl)}&bgcolor=13100f&color=ffd000&margin=12`;
+
+  const ttlMinutes = Math.floor(remainingTtlSeconds / 60);
+  const ttlSecs = remainingTtlSeconds % 60;
+  const formattedTtl = `${ttlMinutes.toString().padStart(2, '0')}:${ttlSecs.toString().padStart(2, '0')}`;
+  const isQrExpired = remainingTtlSeconds <= 0;
 
   return (
     <div className="space-y-6 font-sans">
@@ -408,29 +498,58 @@ export const BroadcastControlView: React.FC = () => {
             </p>
 
             {/* QR Code Quick Scan Card */}
-            <div className="p-3.5 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] flex items-center gap-4">
-              <div className="relative p-1.5 rounded-xl bg-black border border-white/10 shrink-0">
+            <div className="p-4 rounded-2xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] flex flex-col sm:flex-row items-center gap-4">
+              <div
+                onClick={() => setShowQrModal(true)}
+                className="relative p-2 rounded-xl bg-black border border-[var(--accent-primary)]/40 shrink-0 cursor-pointer group shadow-sm hover:scale-105 transition-transform"
+                title="Click to view large QR code"
+              >
                 <img
                   src={qrCodeUrl}
                   alt="Scan Remote QR Code"
-                  className="h-20 w-20 object-contain rounded-lg"
+                  className={`h-24 w-24 object-contain rounded-lg ${isQrExpired ? 'opacity-30 grayscale' : ''}`}
                 />
+                {isQrExpired && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/70 rounded-xl">
+                    <span className="text-[10px] font-mono font-black text-rose-400 bg-black/80 px-1.5 py-0.5 rounded">
+                      EXPIRED
+                    </span>
+                  </div>
+                )}
               </div>
-              <div className="space-y-1">
-                <div className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                  <QrCode className="h-4 w-4 text-[var(--accent-primary)]" />
-                  <span>Scan to Open on Phone</span>
+              <div className="space-y-1.5 flex-1 w-full text-center sm:text-left">
+                <div className="flex items-center justify-center sm:justify-start gap-2">
+                  <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                    <QrCode className="h-4 w-4 text-[var(--accent-primary)]" />
+                    Scan to Open on Phone
+                  </span>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${isQrExpired ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-[#ffd000]/15 text-[#ffd000] border border-[#ffd000]/30'}`}>
+                    <Clock className="h-2.5 w-2.5" />
+                    {isQrExpired ? 'EXPIRED' : `${formattedTtl}`}
+                  </span>
                 </div>
                 <p className="text-[11px] text-[var(--text-secondary)] leading-normal">
-                  Point phone camera at QR code. Protected by 4-digit PIN: <strong className="text-[var(--accent-primary)] font-mono">{pinCode}</strong>.
+                  Protected by 10-min single-use pairing token and PIN: <strong className="text-[var(--accent-primary)] font-mono">{pinCode}</strong>.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setShowQrModal(true)}
-                  className="text-[11px] text-[var(--accent-primary)] font-bold hover:underline cursor-pointer"
-                >
-                  View Large QR Code
-                </button>
+                <div className="flex items-center justify-center sm:justify-start gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowQrModal(true)}
+                    className="text-xs text-[var(--accent-primary)] font-bold hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <span>View Large QR Code</span>
+                    <span>↗</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => generateNewPairingQr(false)}
+                    disabled={isGeneratingQr}
+                    className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-mono flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${isGeneratingQr ? 'animate-spin' : ''}`} />
+                    <span>Generate New QR</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -549,29 +668,133 @@ export const BroadcastControlView: React.FC = () => {
         )}
       </div>
 
-      {/* Large QR Modal */}
+      {/* Large QR Modal - High-Contrast, Screen-Dominant, 1-2 Meter Scannability */}
       {showQrModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="w-full max-w-sm rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-6 shadow-2xl text-center space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-[var(--text-primary)] font-display">Scan Remote QR</h3>
-              <button
-                type="button"
-                onClick={() => setShowQrModal(false)}
-                className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-bold cursor-pointer"
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-xl animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-3xl bg-[#13101d] border border-white/20 p-6 sm:p-8 shadow-[0_0_60px_rgba(0,0,0,0.8)] text-center space-y-5 relative">
+            {/* Close X Button */}
+            <button
+              type="button"
+              onClick={() => setShowQrModal(false)}
+              className="absolute top-4 right-4 h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            {/* Modal Header */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-center gap-2">
+                <span className={`h-2.5 w-2.5 rounded-full ${isQrExpired ? 'bg-rose-500' : 'bg-[#10b981] animate-ping'}`} />
+                <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-[#ffd000]">
+                  POINTX SECURE REMOTE PAIRING
+                </span>
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-white font-display">
+                Scan with Phone Camera
+              </h3>
+              <p className="text-xs text-white/60 max-w-xs mx-auto">
+                Easily scannable from 1–2 meters away. Connects your mobile device as the official match controller.
+              </p>
+            </div>
+
+            {/* Live TTL Countdown Badge */}
+            <div className="flex items-center justify-center">
+              <div
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full font-mono text-xs font-bold ${
+                  isQrExpired
+                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                    : 'bg-[#ffd000]/15 text-[#ffd000] border border-[#ffd000]/30 shadow-[0_0_15px_rgba(255,208,0,0.2)]'
+                }`}
               >
-                Close
-              </button>
+                <Clock className="h-3.5 w-3.5" />
+                <span>
+                  {isQrExpired ? 'QR CODE EXPIRED' : `TTL: ${formattedTtl} REMAINING`}
+                </span>
+                <span className="text-white/40">•</span>
+                <span className="text-white/80 font-normal">Single-Use</span>
+              </div>
             </div>
-            <div className="p-3 bg-black rounded-2xl border border-white/10 flex justify-center">
-              <img src={qrCodeUrl} alt="QR Code" className="h-64 w-64 object-contain rounded-xl" />
+
+            {/* Large High-Contrast QR Code Frame */}
+            <div className="relative p-4 sm:p-5 bg-black rounded-3xl border-2 border-[#ffd000]/50 flex items-center justify-center shadow-[0_0_30px_rgba(255,208,0,0.2)] mx-auto max-w-[340px]">
+              <img
+                src={largeQrCodeUrl}
+                alt="Large Remote QR Code"
+                className={`w-64 h-64 sm:w-72 sm:h-72 object-contain rounded-2xl ${isQrExpired ? 'opacity-20 grayscale' : ''}`}
+              />
+
+              {isGeneratingQr && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 rounded-3xl gap-2">
+                  <RefreshCw className="h-8 w-8 animate-spin text-[#ffd000]" />
+                  <span className="text-xs font-mono font-bold text-white">Generating Fresh QR...</span>
+                </div>
+              )}
+
+              {isQrExpired && !isGeneratingQr && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 rounded-3xl p-4 space-y-3">
+                  <span className="text-sm font-bold text-rose-400">QR Code Expired</span>
+                  <p className="text-[11px] text-white/60">Single-use token expired after 10 minutes.</p>
+                  <Button
+                    variant="booyah"
+                    size="sm"
+                    onClick={() => generateNewPairingQr(false)}
+                    leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
+                  >
+                    Generate Fresh QR
+                  </Button>
+                </div>
+              )}
             </div>
-            <div className="text-xs font-mono text-[var(--text-secondary)]">
-              Security PIN: <strong className="text-[var(--accent-primary)] text-sm">{pinCode}</strong>
+
+            {/* Pairing Code & Security Details */}
+            <div className="space-y-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between font-mono">
+                <span className="text-white/50 text-[11px]">PAIRING CODE:</span>
+                <span className="font-bold text-[#ffd000] text-sm tracking-wider">
+                  {pairingToken ? pairingToken.slice(0, 10).toUpperCase() : '--------'}
+                </span>
+                <span className="text-white/50 text-[11px]">PIN: <strong className="text-white">{pinCode}</strong></span>
+              </div>
+
+              {/* Manual URL entry with Copy button */}
+              <div className="p-2 rounded-xl bg-black/50 border border-white/10 flex items-center justify-between gap-2 text-left font-mono text-[11px]">
+                <span className="text-white/60 truncate select-all">{activeQrTargetUrl}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(activeQrTargetUrl);
+                    setCopiedPairingUrl(true);
+                    setTimeout(() => setCopiedPairingUrl(false), 2000);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold shrink-0 cursor-pointer transition-colors flex items-center gap-1"
+                >
+                  {copiedPairingUrl ? <Check className="h-3 w-3 text-[#10b981]" /> : <Copy className="h-3 w-3" />}
+                  <span>{copiedPairingUrl ? 'Copied' : 'Copy'}</span>
+                </button>
+              </div>
             </div>
-            <Button variant="primary" size="md" onClick={() => setShowQrModal(false)} className="w-full">
-              Done
-            </Button>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3 pt-2">
+              <Button
+                variant="outline"
+                size="md"
+                onClick={() => generateNewPairingQr(false)}
+                disabled={isGeneratingQr}
+                leftIcon={<RefreshCw className={`h-4 w-4 ${isGeneratingQr ? 'animate-spin' : ''}`} />}
+                className="flex-1 font-bold border-white/20 text-white hover:bg-white/10"
+              >
+                Generate New QR
+              </Button>
+              <Button
+                variant="booyah"
+                size="md"
+                onClick={() => setShowQrModal(false)}
+                className="flex-1 font-bold"
+              >
+                Done
+              </Button>
+            </div>
           </div>
         </div>
       )}

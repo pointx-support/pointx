@@ -483,7 +483,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
     return false;
   });
 
-  const activeMatch: Match = React.useMemo(() => {
+  const activeMatch: Match | null = React.useMemo(() => {
     if (tournament.matches && tournament.matches.length > 0) {
       if (selectedMatchNumber !== undefined) {
         const found = tournament.matches.find((m) => m.matchNumber === selectedMatchNumber);
@@ -493,30 +493,12 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       if (live) return live;
       return tournament.matches[tournament.matches.length - 1] || tournament.matches[0];
     }
-    const now = new Date().toISOString();
-    const effectiveTeams = Array.isArray(tournament.teams) ? tournament.teams : [];
-    return {
-      id: `m_${tournament.id}_1`,
-      tournamentId: tournament.id,
-      matchNumber: 1,
-      mapName: 'Bermuda',
-      status: 'Live' as const,
-      createdAt: now,
-      updatedAt: now,
-      results: effectiveTeams.map((t, idx) => ({
-        teamId: t.id,
-        placement: (effectiveTeams.length || 12) - idx,
-        kills: 0,
-        placementPoints: 0,
-        killPoints: 0,
-        totalPoints: 0,
-        isBooyah: false
-      }))
-    };
-  }, [tournament.matches, tournament.teams, tournament.id]);
+    return null;
+  }, [tournament.matches, selectedMatchNumber]);
 
   // Open & Initialize Editable Match Report
   const openMatchReportModal = () => {
+    if (!activeMatch) return;
     const initialData: Record<string, { placement: number; kills: number; bonus: number; penalty: number }> = {};
     tournament.teams.forEach((team, idx) => {
       const res = activeMatch?.results.find((r: TeamMatchResult) => r.teamId === team.id);
@@ -541,6 +523,7 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
   };
 
   React.useEffect(() => {
+    if (!activeMatch) return;
     const store = CanonicalLiveStore.getInstance();
     store.setMatchContext((tournament as any)?.organizationId || 'org-default', tournament.id, activeMatch.id);
 
@@ -575,9 +558,10 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
       unsub();
       unsubNext();
     };
-  }, [tournament.id, activeMatch.id, showToast, (tournament as any)?.organizationId]);
+  }, [tournament.id, activeMatch?.id, showToast, (tournament as any)?.organizationId]);
 
   const handleNextMatchClick = () => {
+    if (!activeMatch) return;
     haptics.medium();
     CanonicalLiveStore.getInstance().sendCommand('NEXT_MATCH', {
       currentMatchId: activeMatch.id,
@@ -1127,6 +1111,34 @@ export const BroadcastRemoteControl: React.FC<BroadcastRemoteControlProps> = ({ 
           <p className="text-xs text-zinc-400 leading-relaxed">
             The requested tournament ID <code className="text-red-300 font-mono">{targetTournamentId}</code> could not be found on the server.
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  // 0.1 NO MATCH AVAILABLE SCREEN
+  if (!activeMatch) {
+    return (
+      <div className="min-h-screen bg-[#0e0c14] text-white flex items-center justify-center p-4 font-sans select-none">
+        <div className="w-full max-w-md p-8 rounded-3xl bg-[#171424] border border-amber-500/40 shadow-2xl text-center space-y-4">
+          <div className="h-16 w-16 mx-auto rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <Smartphone className="h-8 w-8 animate-pulse" />
+          </div>
+          <h2 className="text-xl font-bold font-display uppercase tracking-wide text-amber-400">
+            No Match Available
+          </h2>
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            No matches have been created for <strong>{tournament.title}</strong> yet. Create your first match from Tournament Management.
+          </p>
+          <div className="pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.history.back()}
+            >
+              Go Back
+            </Button>
+          </div>
         </div>
       </div>
     );

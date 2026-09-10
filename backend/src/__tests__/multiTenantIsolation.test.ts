@@ -129,8 +129,23 @@ describe('Multi-Tenant Tournament Isolation Test Suite', () => {
       teams: [{ id: 'team-b', name: 'Team B' }],
     });
 
-    // Score update on Tour A
-    await updateMatchScoreServer(tourA.customId, tourA.matches[0].id, {
+    // Create Match 1 in each tournament (createTournament does not auto-create matches)
+    const matchResA = await request(app)
+      .post(`/api/tournaments/${tourA.customId}/matches`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ mapName: 'Map Alpha', idempotencyKey: 'sync-tour-a-m1' });
+    expect(matchResA.status).toBe(201);
+    const matchIdA: string = matchResA.body.data.id ?? matchResA.body.data._id;
+
+    const matchResB = await request(app)
+      .post(`/api/tournaments/${tourB.customId}/matches`)
+      .set('Authorization', `Bearer ${tokenB}`)
+      .send({ mapName: 'Map Beta', idempotencyKey: 'sync-tour-b-m1' });
+    expect(matchResB.status).toBe(201);
+    const matchIdB: string = matchResB.body.data.id ?? matchResB.body.data._id;
+
+    // Score update on Tour A — must NOT bleed into Tour B
+    await updateMatchScoreServer(tourA.customId, matchIdA, {
       teamId: 'team-a',
       kills: 5,
     });
@@ -146,5 +161,8 @@ describe('Multi-Tenant Tournament Isolation Test Suite', () => {
     const matchB = stateB.tournament?.matches[0];
     expect(matchB?.results.find((r: any) => r.teamId === 'team-b')?.kills).toBe(0);
     expect(stateB.tournament?.matches.some((m: any) => m.results.some((r: any) => r.teamId === 'team-a'))).toBe(false);
+
+    // Sanity: Tour B's match is not Tour A's match
+    expect(matchIdB).not.toBe(matchIdA);
   });
 });

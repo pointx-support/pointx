@@ -77,7 +77,14 @@ describe('Authoritative Elimination Path & Atomic Scoring Test Suite', () => {
     });
 
     const tourId = tour.customId;
-    const matchId = tour.matches[0].id;
+
+    // createTournament() does NOT auto-create matches — create Match 1 first
+    const matchRes = await request(app)
+      .post(`/api/tournaments/${tourId}/matches`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ mapName: 'Bermuda', idempotencyKey: 'test-atomic-m1' });
+    expect(matchRes.status).toBe(201);
+    const matchId: string = matchRes.body.data.id ?? matchRes.body.data._id;
 
     // Simulate Remote operator adding 4 kills and placement #1 (Booyah) to Alpha Squad
     const scoreResult = await updateMatchScoreServer(tourId, matchId, {
@@ -130,8 +137,16 @@ describe('Authoritative Elimination Path & Atomic Scoring Test Suite', () => {
       teams: [{ id: 'team-valid-1', name: 'Valid Team' }],
     });
 
+    // createTournament() does NOT auto-create matches — create Match 1 first
+    const matchRes = await request(app)
+      .post(`/api/tournaments/${tour.customId}/matches`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ mapName: 'Kalahari', idempotencyKey: 'test-invalid-team-m1' });
+    expect(matchRes.status).toBe(201);
+    const matchId: string = matchRes.body.data.id ?? matchRes.body.data._id;
+
     await expect(
-      updateMatchScoreServer(tour.customId, tour.matches[0].id, {
+      updateMatchScoreServer(tour.customId, matchId, {
         teamId: 'team-fake-unregistered-id',
         kills: 2,
       })
@@ -148,7 +163,14 @@ describe('Authoritative Elimination Path & Atomic Scoring Test Suite', () => {
     });
 
     const tourId = tour.customId;
-    const matchId = tour.matches[0].id;
+
+    // createTournament() does NOT auto-create matches — create Match 1 first
+    const matchCreateRes = await request(app)
+      .post(`/api/tournaments/${tourId}/matches`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ mapName: 'Purgatory', idempotencyKey: 'test-rest-score-m1' });
+    expect(matchCreateRes.status).toBe(201);
+    const matchId: string = matchCreateRes.body.data.id ?? matchCreateRes.body.data._id;
 
     const res = await request(app)
       .post(`/api/tournaments/${tourId}/matches/${matchId}/score`)

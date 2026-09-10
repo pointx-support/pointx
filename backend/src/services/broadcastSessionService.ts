@@ -111,24 +111,37 @@ export async function getOrCreateBroadcastSession(
     : tournament.matches[0];
 
   if (!targetMatch) {
-    const matchId = `match-${effectiveTournamentId}-1`;
-    targetMatch = {
-      id: matchId,
-      customId: matchId,
+    // Tournament has 0 matches: do NOT automatically create a match in the tournament!
+    const matchIdStr = 'none';
+    let session = await BroadcastSession.findOne({
       tournamentId: effectiveTournamentId,
-      matchNumber: 1,
-      customLabel: 'Match 01 — Bermuda',
-      mapName: 'Bermuda',
-      status: 'Live',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      scoringConfigId: tournament.scoringPreset?.id || 'preset-ff-official-v1',
-      scoringVersion: tournament.scoringPreset?.version || 1,
-      results: [],
-    };
-    tournament.matches = [targetMatch];
-    tournament.markModified('matches');
-    await tournament.save();
+      matchId: matchIdStr,
+      active: true,
+    });
+
+    if (!session) {
+      const sessionId = `bcs_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      session = await BroadcastSession.create({
+        sessionId,
+        organizationId: orgId,
+        tournamentId: effectiveTournamentId,
+        matchId: matchIdStr,
+        templateId: 'default',
+        activeMode: 'NORMAL',
+        tableVisible: false,
+        pointRushEnabled: false,
+        fireTeamIds: [],
+        pointRushTeamIds: [],
+        squads: {},
+        teamStats: {},
+        eliminatedTeamOrder: [],
+        isMatchFinished: false,
+        isSubmittedToWebsite: false,
+        revision: 1,
+        active: true,
+      });
+    }
+    return session;
   }
 
   const matchIdStr = targetMatch.id || targetMatch.customId;
@@ -228,15 +241,14 @@ export function buildAuthoritativeSnapshot(session: any, tournament: any): any {
   ) || tournament.matches[0];
 
   if (!match) {
-    const matchId = `match-${tournament.customId || session.tournamentId}-1`;
     match = {
-      id: matchId,
-      customId: matchId,
+      id: '',
+      customId: '',
       tournamentId: tournament.customId || session.tournamentId,
-      matchNumber: 1,
-      customLabel: 'Match 01 — Bermuda',
-      mapName: 'Bermuda',
-      status: 'Live',
+      matchNumber: 0,
+      customLabel: 'No Match Available',
+      mapName: 'None',
+      status: 'Draft',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       scoringConfigId: tournament.scoringPreset?.id || 'preset-ff-official-v1',
@@ -1055,21 +1067,9 @@ export async function submitMatchReportToWebsite(
   );
 
   if (!targetMatch) {
-    targetMatch = {
-      id: session.matchId,
-      customId: session.matchId,
-      tournamentId: tournament.customId || session.tournamentId,
-      matchNumber: 1,
-      customLabel: 'Match 01',
-      mapName: 'Bermuda',
-      status: 'Completed',
-      scoringConfigId: tournament.scoringPreset?.id || 'preset-ff-official-v1',
-      scoringVersion: tournament.scoringPreset?.version || 1,
-      results: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    tournament.matches.push(targetMatch);
+    const err: any = new Error('CANNOT_SUBMIT_REPORT_NO_MATCH: Target match does not exist in tournament.');
+    err.statusCode = 400;
+    throw err;
   }
 
   const results = finalState.teams.map((t: any) => {

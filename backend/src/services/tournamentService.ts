@@ -131,30 +131,7 @@ export async function createTournament(
   }
 
   const effectiveTeams = Array.isArray(data.teams) ? data.teams : [];
-  const initialMatches = data.matches !== undefined
-    ? data.matches
-    : [{
-        id: `match-${customId}-1`,
-        customId: `match-${customId}-1`,
-        tournamentId: customId,
-        matchNumber: 1,
-        customLabel: 'Match 01 — Bermuda',
-        mapName: 'Bermuda',
-        status: 'Live',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        scoringConfigId: data.scoringPreset?.id || 'preset-ff-official-v1',
-        scoringVersion: data.scoringPreset?.version || 1,
-        results: effectiveTeams.map((t: any, idx: number) => ({
-          teamId: t.id || t.customId || (t._id ? String(t._id) : `team-${idx + 1}`),
-          placement: Math.max(1, (effectiveTeams.length || 12) - idx),
-          kills: 0,
-          placementPoints: 0,
-          killPoints: 0,
-          totalPoints: 0,
-          isBooyah: false,
-        })),
-      }];
+  const initialMatches = Array.isArray(data.matches) ? data.matches : [];
 
   const tournament = await Tournament.create({
     ...data,
@@ -471,51 +448,76 @@ export async function getNextMatchForTournament(
     };
   }
 
-  // 2. Check structure matchCount limit
-  const totalPlanned = tour.structure?.matchCount || 6;
-  if (targetNextNum > totalPlanned) {
-    return {
-      hasNext: false,
-      message: `Match ${currentNum} is the final match of the tournament (Total: ${totalPlanned}).`,
-    };
+  // If no next match exists in database, return hasNext: false (never auto-create matches)
+  return {
+    hasNext: false,
+    message: `No next match found. Match ${currentNum} is the latest match.`,
+  };
+}
+
+export async function createMatchInTournament(
+  tournamentId: string,
+  matchData: {
+    mapName?: string;
+    customLabel?: string;
+    idempotencyKey?: string;
+  },
+  userId: string,
+  role?: string,
+  authorizedOrgIds?: string[]
+): Promise<{ match: any; tournament: ITournament; alreadyExisted?: boolean } | null> {
+  const tournament = await getTournamentById(tournamentId, authorizedOrgIds || userId, role, userId);
+  if (!tournament) return null;
+
+  if (!Array.isArray(tournament.matches)) {
+    tournament.matches = [];
   }
 
-  // 3. Create legitimate persisted next match in MongoDB
-  const effectiveTeams = Array.isArray(tour.teams) && tour.teams.length > 0 ? tour.teams : [];
-  const newMatchId = `m_${tour.customId || tournamentId}_${targetNextNum}`;
-  const now = new Date().toISOString();
+  // Idempotency check: if match was already created with this idempotencyKey, return it safely
+  if (matchData.idempotencyKey) {
+    const existing = tournament.matches.find((m: any) => m.idempotencyKey === matchData.idempotencyKey);
+    if (existing) {
+      return { match: existing, tournament, alreadyExisted: true };
+    }
+  }
 
-  nextMatch = {
-    id: newMatchId,
-    customId: newMatchId,
-    tournamentId: tour.customId || tournamentId,
-    matchNumber: targetNextNum,
-    mapName: 'Purgatory',
-    status: 'Upcoming',
-    createdAt: now,
-    updatedAt: now,
-    results: effectiveTeams.map((t: any, idx: number) => ({
-      teamId: t.id,
-      placement: Math.max(1, (effectiveTeams.length || 12) - idx),
-      kills: 0,
-      placementPoints: 0,
-      killPoints: 0,
-      totalPoints: 0,
-      isBooyah: false,
-    })),
+  const existingNumbers = tournament.matches.map((m: any) => m.matchNumber || 0);
+  const nextMatchNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+  const matchId = `match-${tournament.customId || tournamentId}-${nextMatchNumber}-${Date.now().toString(36)}`;
+  const effectiveTeams = Array.isArray(tournament.teams) ? tournament.teams : [];
+  const mapName = matchData.mapName || 'Bermuda';
+  const customLabel = matchData.customLabel?.trim() || `Match ${nextMatchNumber.toString().padStart(2, '0')} (${mapName})`;
+
+  const initialResults = effectiveTeams.map((t: any, idx: number) => ({
+    teamId: t.id || t.customId || `team-${idx + 1}`,
+    placement: 0,
+    kills: 0,
+    placementPoints: 0,
+    killPoints: 0,
+    totalPoints: 0,
+    isBooyah: false,
+  }));
+
+  const newMatch = {
+    id: matchId,
+    customId: matchId,
+    tournamentId: tournament.customId || tournamentId,
+    matchNumber: nextMatchNumber,
+    customLabel,
+    mapName,
+    status: 'Draft',
+    idempotencyKey: matchData.idempotencyKey || undefined,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    scoringConfigId: tournament.scoringPreset?.id || 'preset-ff-official-v1',
+    scoringVersion: tournament.scoringPreset?.version || 1,
+    results: initialResults,
   };
 
-  tour.matches.push(nextMatch);
-  await Tournament.updateOne(
-    { $or: idQueries },
-    { $set: { matches: tour.matches } }
-  );
+  tournament.matches.push(newMatch);
+  tournament.markModified('matches');
+  await tournament.save();
 
-  return {
-    hasNext: true,
-    nextMatchId: newMatchId,
-    nextMatchNumber: targetNextNum,
-    nextMatch,
-  };
+  return { match: newMatch, tournament, alreadyExisted: false };
 }
 

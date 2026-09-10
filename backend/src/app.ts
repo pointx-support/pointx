@@ -24,6 +24,7 @@ import healthRoutes, { handleLivenessHealth, handleReadiness } from './routes/he
 import syncRoutes from './routes/syncRoutes';
 import platformRoutes from './routes/platformRoutes';
 import broadcastSessionRoutes from './routes/broadcastSessionRoutes';
+import remotePairingRoutes from './routes/remotePairingRoutes';
 import { enforceMaintenanceMode } from './middleware/maintenance';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -140,6 +141,7 @@ export function createApp(): Application {
   app.use('/api/contact', contactRoutes);
   app.use('/api/sync', syncRoutes);
   app.use('/api/broadcast/sessions', broadcastSessionRoutes);
+  app.use('/api/broadcast/remote-pairing', remotePairingRoutes);
   app.use('/api', healthRoutes);
   app.get('/health', handleLivenessHealth); // Root alias for health checks
   app.get('/ready', handleReadiness); // Root alias for readiness checks

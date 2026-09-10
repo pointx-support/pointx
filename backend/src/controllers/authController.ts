@@ -16,6 +16,7 @@ import {
   forgotPasswordInitiate,
   resetPasswordWithOtp,
   changeUserPassword,
+  loginOrRegisterWithGoogle,
 } from '../services/authService';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { UserSession } from '../models/UserSession';
@@ -258,3 +259,47 @@ export async function terminateOtherSessions(req: AuthenticatedRequest, res: Res
     next(error);
   }
 }
+
+export async function googleAuth(req: Request, res: Response, next: NextFunction) {
+  try {
+    const idToken = req.body?.idToken || req.body?.credential || req.body?.token;
+    if (!idToken) {
+      return res.status(400).json({ success: false, error: 'Google credential ID token is required.' });
+    }
+
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+    const userAgent = req.headers['user-agent'] || '';
+
+    const result = await loginOrRegisterWithGoogle({
+      idToken,
+      ipAddress,
+      userAgent,
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    if (result.token) {
+      res.cookie('token', result.token, {
+        httpOnly: true,
+        secure: env.isProduction,
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        user: result.user,
+        token: result.token,
+      },
+      user: result.user,
+      token: result.token,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+

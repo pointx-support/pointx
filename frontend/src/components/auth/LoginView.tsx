@@ -17,6 +17,7 @@ import { Silk } from '../ui/Silk';
 import { AnimatedThemeToggle } from '../animation';
 import { cn } from '../../lib/utils';
 import { haptics } from '../../lib/haptics';
+import { GoogleAuthButton } from './GoogleAuthButton';
 import './LoginView.css';
 
 export interface LoginViewProps {
@@ -401,6 +402,25 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </button>
             </div>
 
+            <div className="relative my-2.5 flex items-center justify-center slide-element">
+              <div className="w-full border-t border-[var(--border-subtle)]" />
+              <span className="bg-[var(--bg-surface)] px-2 text-[10px] uppercase font-mono text-[var(--text-secondary)] shrink-0">
+                or
+              </span>
+              <div className="w-full border-t border-[var(--border-subtle)]" />
+            </div>
+
+            <div className="slide-element">
+              <GoogleAuthButton
+                text="signin_with"
+                onSuccess={() => {
+                  haptics.success();
+                  onAuthSuccess?.();
+                }}
+                onError={(err) => setErrorMessage(err)}
+              />
+            </div>
+
             <div className="switch-link slide-element">
               <p>
                 Don't have an account?{' '}
@@ -563,6 +583,25 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
                   <span>Register</span>
                 </button>
+              </div>
+
+              <div className="relative my-2.5 flex items-center justify-center slide-element">
+                <div className="w-full border-t border-[var(--border-subtle)]" />
+                <span className="bg-[var(--bg-surface)] px-2 text-[10px] uppercase font-mono text-[var(--text-secondary)] shrink-0">
+                  or
+                </span>
+                <div className="w-full border-t border-[var(--border-subtle)]" />
+              </div>
+
+              <div className="slide-element">
+                <GoogleAuthButton
+                  text="signup_with"
+                  onSuccess={() => {
+                    haptics.success();
+                    onAuthSuccess?.();
+                  }}
+                  onError={(err) => setErrorMessage(err)}
+                />
               </div>
 
               <div className="switch-link slide-element">

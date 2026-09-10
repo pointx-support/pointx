@@ -719,3 +719,138 @@ export async function changeUserPassword(
 
   return { success: true };
 }
+
+export async function loginOrRegisterWithGoogle(data: {
+  idToken: string;
+  ipAddress?: string;
+  userAgent?: string;
+}): Promise<{ success: boolean; user?: any; token?: string; error?: string }> {
+  const { idToken } = data;
+  if (!idToken) {
+    return { success: false, error: 'Google ID token is required.' };
+  }
+
+  // 1. Verify token via Google tokeninfo endpoint
+  let googlePayload: any;
+  try {
+    const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.warn('[GoogleAuth] Tokeninfo validation failed:', res.status, errBody);
+      return { success: false, error: 'Failed to verify Google ID token. Please try again.' };
+    }
+    googlePayload = await res.json();
+  } catch (err: any) {
+    console.error('[GoogleAuth] Network error calling tokeninfo:', err);
+    return { success: false, error: 'Network error communicating with Google authentication servers.' };
+  }
+
+  const { sub, email, email_verified, name, picture, aud } = googlePayload;
+
+  if (!email) {
+    return { success: false, error: 'Google account did not provide an email address.' };
+  }
+
+  const isVerified = email_verified === 'true' || email_verified === true;
+  if (!isVerified) {
+    return { success: false, error: 'Your Google email address has not been verified by Google.' };
+  }
+
+  if (env.GOOGLE_CLIENT_ID && aud && aud !== env.GOOGLE_CLIENT_ID) {
+    console.warn('[GoogleAuth] Audience warning:', aud, 'configured:', env.GOOGLE_CLIENT_ID);
+  }
+
+  const cleanEmail = email.toLowerCase().trim();
+
+  // 2. Find existing user by email or googleId
+  let user = await User.findOne({
+    $or: [{ email: cleanEmail }, { googleId: sub }],
+  });
+
+  // Maintenance mode guard
+  const { maintenanceMode } = getMaintenanceStatus();
+  if (maintenanceMode && user && user.role !== 'admin') {
+    return {
+      success: false,
+      error: 'PointX is currently undergoing scheduled maintenance. Only Super Administrators can log in at this time.',
+    };
+  }
+
+  if (user) {
+    if (user.status === 'suspended') {
+      return {
+        success: false,
+        error: `Account suspended. Reason: ${user.suspensionReason || 'Violation of platform guidelines.'}`,
+      };
+    }
+
+    user.googleId = sub;
+    if (user.authProvider !== 'local') {
+      user.authProvider = 'google';
+    }
+    user.isEmailVerified = true;
+    user.status = 'active';
+    if (!user.avatarUrl && picture) {
+      user.avatarUrl = picture;
+    }
+    user.lastLoginAt = new Date();
+    user.loginCount = (user.loginCount || 0) + 1;
+    await user.save();
+  } else {
+    // Register new user via Google
+    user = await User.create({
+      name: name || cleanEmail.split('@')[0],
+      email: cleanEmail,
+      googleId: sub,
+      authProvider: 'google',
+      role: 'organizer',
+      status: 'active',
+      isEmailVerified: true,
+      avatarUrl: picture || '',
+      organizationName: '',
+      isOnboarded: false,
+      lastLoginAt: new Date(),
+      loginCount: 1,
+    });
+  }
+
+  try {
+    await ensureUserOrganization(user);
+  } catch (orgErr) {
+    console.error('[TenantProvisioning] Failed to ensure organization for Google user:', orgErr);
+  }
+
+  const { deviceName, browser } = parseUserAgent(data.userAgent);
+  const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  const session = await UserSession.create({
+    userId: user._id,
+    tokenHash: hashToken(`sess_${Date.now()}_${Math.random()}`),
+    deviceName,
+    browser,
+    ipAddress: data.ipAddress || '127.0.0.1',
+    location: 'Google OAuth',
+    lastActive: new Date(),
+    expiresAt: sessionExpiresAt,
+  });
+
+  const token = generateJwtToken(user, session._id.toString());
+
+  await AuditActivity.create({
+    customId: `act-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 4)}`,
+    userId: user._id.toString(),
+    userName: user.name,
+    userEmail: user.email,
+    action: 'Google Authentication',
+    category: 'security',
+    details: `User signed in via Google OAuth from ${deviceName} (${browser}).`,
+    ipAddress: data.ipAddress,
+  });
+
+  return {
+    success: true,
+    user: user.toJSON(),
+    token,
+  };
+}
+

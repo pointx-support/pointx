@@ -8,6 +8,7 @@ import { TournamentWorkspace } from './components/workspace/TournamentWorkspace'
 import { BroadcastContainer } from './components/broadcast/BroadcastContainer';
 import { NewBroadcastRemote } from './components/broadcast/NewBroadcastRemote';
 import { LoginView } from './components/auth/LoginView';
+import { RemoteConnectPage } from './pages/RemoteConnectPage';
 import { OnboardingModal } from './components/onboarding/OnboardingModal';
 import { HomePage } from './components/home/HomePage';
 import { ToastProvider } from './components/ui/Toast';
@@ -160,6 +161,14 @@ export function App() {
     const path = window.location.pathname.toLowerCase();
 
     if (isAuthenticated) {
+      if (typeof window !== 'undefined') {
+        const searchParams = new URLSearchParams(window.location.search);
+        const returnTo = searchParams.get('returnTo');
+        if (returnTo && returnTo.startsWith('/')) {
+          window.location.href = returnTo;
+          return;
+        }
+      }
       // If user is authenticated and currently sitting on /login or /signup, redirect immediately to /dashboard
       if (path === '/login' || path === '/signup' || path === '/signin' || path === '/register') {
         navigateTo('command-center', '/dashboard');
@@ -245,13 +254,19 @@ export function App() {
     );
   }, []);
 
+  // Check if running in Remote Pairing Connect mode (/remote/connect/<token>)
+  const isRemoteConnectMode = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.location.pathname.startsWith('/remote/connect');
+  }, []);
+
   // Check if running in Remote Operator Controller mode (via query param ?mode=remote or /remote path)
   const isRemoteMode = useMemo(() => {
     if (typeof window === 'undefined') return false;
     const searchParams = new URLSearchParams(window.location.search);
     return (
-      searchParams.get('mode') === 'remote' ||
-      window.location.pathname.startsWith('/remote')
+      (searchParams.get('mode') === 'remote' || window.location.pathname.startsWith('/remote')) &&
+      !window.location.pathname.startsWith('/remote/connect')
     );
   }, []);
 
@@ -324,7 +339,16 @@ export function App() {
     return <BroadcastContainer />;
   }
 
-  // 2. Live Match Remote Control Room: Mobile / 2nd-Screen Operator Deck
+  // 2. Dedicated Ephemeral QR Remote Pairing Scan / Claim Landing
+  if (isRemoteConnectMode) {
+    return (
+      <ToastProvider>
+        <RemoteConnectPage />
+      </ToastProvider>
+    );
+  }
+
+  // 3. Live Match Remote Control Room: Mobile / 2nd-Screen Operator Deck
   if (isRemoteMode) {
     return (
       <ToastProvider>
@@ -333,8 +357,20 @@ export function App() {
     );
   }
 
-  // 3. Unauthenticated Public Visitor Routing (Home vs Sign In vs Register with Animated Page Transitions)
+  // 4. Unauthenticated Public Visitor Routing (Home vs Sign In vs Register with Animated Page Transitions)
   if (!isAuthenticated) {
+    const handleAuthSuccess = () => {
+      if (typeof window !== 'undefined') {
+        const searchParams = new URLSearchParams(window.location.search);
+        const returnTo = searchParams.get('returnTo');
+        if (returnTo && returnTo.startsWith('/')) {
+          window.location.href = returnTo;
+          return;
+        }
+      }
+      navigateTo('command-center', '/dashboard');
+    };
+
     return (
       <ToastProvider>
         <AnimatePresence mode="wait">
@@ -351,7 +387,7 @@ export function App() {
                 initialMode="signin"
                 onBackToHome={() => navigateTo('home')}
                 onModeChange={(mode) => navigateTo(mode === 'signup' ? 'signup' : 'login')}
-                onAuthSuccess={() => navigateTo('command-center', '/dashboard')}
+                onAuthSuccess={handleAuthSuccess}
               />
             </motion.div>
           )}
@@ -369,7 +405,7 @@ export function App() {
                 initialMode="signup"
                 onBackToHome={() => navigateTo('home')}
                 onModeChange={(mode) => navigateTo(mode === 'signup' ? 'signup' : 'login')}
-                onAuthSuccess={() => navigateTo('command-center', '/dashboard')}
+                onAuthSuccess={handleAuthSuccess}
               />
             </motion.div>
           )}

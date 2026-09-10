@@ -7,6 +7,7 @@ import {
   updateExistingTournament,
   deleteExistingTournament,
   deleteExistingMatch,
+  createNewMatch,
   updateMatchScore,
   cloneExistingTournament,
   importTournamentsBatch,
@@ -26,6 +27,7 @@ router.post('/clone', authenticate, requireOnboarded, requireOrganizationContext
 router.post('/import', authenticate, requireOnboarded, requireOrganizationContext, importTournamentsBatch);
 router.get('/:id', authenticate, requireOnboarded, requireOrganizationContext, requireTournamentAccess('read'), getTournament);
 router.put('/:id', authenticate, requireOnboarded, requireOrganizationContext, requireTournamentAccess('write'), updateExistingTournament);
+router.post('/:id/matches', authenticate, requireOnboarded, requireOrganizationContext, requireTournamentAccess('write'), createNewMatch);
 router.post('/:id/matches/:matchId/score', authenticate, requireOnboarded, requireOrganizationContext, requireTournamentAccess('write'), updateMatchScore);
 router.delete('/:id/matches/:matchId', authenticate, requireOnboarded, requireOrganizationContext, requireTournamentAccess('write'), deleteExistingMatch);
 router.delete('/:id', authenticate, requireOnboarded, requireOrganizationContext, requireTournamentAccess('admin'), deleteExistingTournament);

@@ -18,6 +18,7 @@ export interface AuthStoreState {
 
   checkAuth: () => Promise<void>;
   login: (email: string, password?: string) => Promise<{ success: boolean; requiresVerification?: boolean; notRegistered?: boolean; error?: string }>;
+  loginWithGoogle: (idToken: string) => Promise<{ success: boolean; error?: string }>;
   signup: (name: string, email: string, password?: string, orgName?: string) => Promise<{ success: boolean; requiresOtp?: boolean; message?: string; error?: string }>;
   verifyOtp: (email: string, otp: string, purpose?: 'signup' | 'forgot_password') => Promise<{ success: boolean; error?: string }>;
   resendOtp: (email: string, purpose?: 'signup' | 'forgot_password') => Promise<{ success: boolean; message?: string; error?: string }>;
@@ -283,6 +284,58 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     } catch {
       set({ isLoading: false });
       return { success: false, error: 'Network communication error. Please try again.' };
+    }
+  },
+
+  loginWithGoogle: async (idToken: string) => {
+    set({ isLoading: true });
+    try {
+      const res = await authApi.googleAuth(idToken);
+      set({ isLoading: false });
+
+      if (res.success && res.user && res.token) {
+        const user = res.user;
+        const token = res.token;
+        setStoredToken(token);
+
+        const currentTheme = getEffectiveTheme();
+        const preferredTheme = (user.preferences?.theme as 'light' | 'dark') || currentTheme;
+        const normalizedTheme = (preferredTheme === 'light' || preferredTheme === 'dark') ? preferredTheme : 'dark';
+
+        const enrichedUser: User = {
+          ...user,
+          preferences: {
+            ...user.preferences,
+            theme: normalizedTheme,
+          },
+        };
+
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(enrichedUser));
+        }
+
+        set({
+          user: enrichedUser,
+          isAuthenticated: true,
+          sessionToken: token,
+          theme: normalizedTheme,
+        });
+
+        applyThemeToDOM(normalizedTheme);
+        useTournamentStore.getState().sanitizeTournamentsForRole(enrichedUser.role);
+        useTournamentStore.getState().fetchTournaments().catch(() => {});
+        get().recordActivity('Google Login', 'security', `Signed in with Google as ${user.email}`);
+
+        return { success: true };
+      }
+
+      return {
+        success: false,
+        error: res.error || 'Google authentication failed. Please try again.',
+      };
+    } catch {
+      set({ isLoading: false });
+      return { success: false, error: 'Network communication error during Google Sign In.' };
     }
   },
 

@@ -85,11 +85,8 @@ describe('Demo Data Eradication & Strict Production Hygiene Test Suite', () => {
       expect(teamNames).not.toContain(demoName);
     }
 
-    // Match 1 should only have real teams
-    const match1 = tour.matches[0];
-    expect(match1).toBeDefined();
-    expect(match1.results.length).toBe(2);
-    expect(match1.results.map((r: any) => r.teamId)).toEqual(['team-phoenix-1', 'team-dragons-2']);
+    // Verify real team IDs are present and no demo team IDs snuck in
+    expect(tour.teams.map((t: any) => t.id)).toEqual(['team-phoenix-1', 'team-dragons-2']);
   });
 
   it('3. should return 404 TOURNAMENT_NOT_FOUND for non-existent tournament and never fabricate demo teams', async () => {

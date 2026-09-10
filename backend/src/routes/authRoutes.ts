@@ -10,6 +10,7 @@ import {
   resetPassword,
   changePassword,
   terminateOtherSessions,
+  googleAuth,
 } from '../controllers/authController';
 import { authenticate } from '../middleware/auth';
 import { authLimiter, otpLimiter } from '../middleware/rateLimiter';
@@ -21,6 +22,7 @@ router.post('/signup', authLimiter, signup);
 router.post('/verify-otp', otpLimiter, verifyOtp);
 router.post('/resend-otp', otpLimiter, resendOtp);
 router.post('/login', authLimiter, login);
+router.post('/google', authLimiter, googleAuth);
 router.post('/forgot-password', otpLimiter, forgotPassword);
 router.post('/reset-password', otpLimiter, resetPassword);
 

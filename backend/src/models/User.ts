@@ -14,7 +14,9 @@ export interface IUserPreferences {
 export interface IUser extends Document {
   name: string;
   email: string;
-  passwordHash: string;
+  passwordHash?: string;
+  authProvider?: 'local' | 'google';
+  googleId?: string;
   role: UserRole;
   status: UserStatus;
   isEmailVerified: boolean;
@@ -61,7 +63,9 @@ const UserSchema = new Schema<IUser>(
       index: true,
       maxlength: 255,
     },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String, required: false },
+    authProvider: { type: String, enum: ['local', 'google'], default: 'local' },
+    googleId: { type: String, sparse: true, index: true },
     role: { type: String, enum: ['admin', 'organizer'], default: 'organizer', index: true },
     status: {
       type: String,

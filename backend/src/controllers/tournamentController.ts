@@ -13,6 +13,7 @@ import {
   updateTournament,
   deleteTournament,
   deleteMatchFromTournament,
+  createMatchInTournament,
   updateMatchScoreAtomic,
   cloneTournament,
   importTournaments,
@@ -144,6 +145,43 @@ export async function deleteExistingMatch(req: AuthorizedTenantRequest, res: Res
       'MATCH_DELETED'
     ).catch((err) => console.warn('[RealtimeSync] Match delete broadcast error:', err));
     return res.status(200).json({ success: true, data: tourData, message: `Match ${matchId} deleted successfully.` });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function createNewMatch(req: AuthorizedTenantRequest, res: Response, next: NextFunction) {
+  try {
+    if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
+    const id = req.params.id as string;
+    const { mapName, customLabel, idempotencyKey } = req.body || {};
+
+    const result = await createMatchInTournament(
+      id,
+      { mapName, customLabel, idempotencyKey },
+      req.user._id.toString(),
+      req.user.role,
+      req.authorizedOrganizationIds
+    );
+
+    if (!result) {
+      return res.status(404).json({ success: false, error: 'Tournament not found or unauthorized.' });
+    }
+
+    const tourData = result.tournament.toJSON();
+    updateAuthoritativeState(
+      result.tournament.customId || id,
+      { tournament: tourData },
+      undefined,
+      'MATCH_CREATED'
+    ).catch((err) => console.warn('[RealtimeSync] Match create broadcast error:', err));
+
+    return res.status(result.alreadyExisted ? 200 : 201).json({
+      success: true,
+      data: result.match,
+      tournament: tourData,
+      message: result.alreadyExisted ? 'Match already exists (idempotent request).' : 'Match created successfully.',
+    });
   } catch (error) {
     next(error);
   }

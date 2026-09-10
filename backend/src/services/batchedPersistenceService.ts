@@ -37,18 +37,8 @@ async function executeMongoPersistence(state: CanonicalLiveMatchState, _scoringP
     let match = tour.matches.find((m: any) => (m.id || m.customId) === state.matchId);
 
     if (!match) {
-      match = {
-        id: state.matchId,
-        customId: state.matchId,
-        tournamentId: state.tournamentId,
-        matchNumber: state.matchNumber || 1,
-        mapName: 'Bermuda',
-        status: state.isMatchFinished ? 'Completed' : 'Live',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        results: [],
-      };
-      tour.matches.push(match);
+      // The match does not exist or was deleted by the user. Do not resurrect it!
+      return;
     }
 
     if (!Array.isArray(match.results)) match.results = [];

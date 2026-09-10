@@ -152,6 +152,12 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     }),
 
+  googleAuth: (idToken: string) =>
+    request<{ user: User; token: string }>('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ idToken }),
+    }),
+
   logout: () =>
     request('/auth/logout', {
       method: 'POST',

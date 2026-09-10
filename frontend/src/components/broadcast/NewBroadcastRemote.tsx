@@ -539,6 +539,30 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
     );
   }
 
+  if (!state.match || state.match.matchNumber === 0 || !state.match.id || state.match.id === 'none') {
+    return (
+      <div className="min-h-screen bg-[#0d0914] text-white flex flex-col items-center justify-center p-6 select-none font-sans">
+        <div className="flex flex-col items-center gap-4 bg-[#1b0d33] border border-[#3b1d6e] text-slate-200 p-8 rounded-2xl shadow-2xl max-w-md text-center">
+          <div className="h-14 w-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+            <Radio className="h-7 w-7" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-white">No Match Available</h2>
+            <p className="text-xs text-slate-400 mt-1">
+              {state.tournament?.title || 'This tournament'} does not have any matches created yet. Create your first match from Tournament Management.
+            </p>
+          </div>
+          <a
+            href="/"
+            className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition-colors"
+          >
+            Go to Tournament Management
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   const {
     tournament,
     match,

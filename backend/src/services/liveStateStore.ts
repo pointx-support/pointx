@@ -195,8 +195,8 @@ export class LiveStateStore {
     }
 
     const effectiveOrgId = organizationId || (tour?.organizationId ? String(tour.organizationId) : 'org-default');
-    const effectiveMatchId = matchId || (tour?.matches?.[0]?.id || `m_${tournamentId}_1`);
-    const matchNumber = tour?.matches?.find((m: any) => m.id === effectiveMatchId)?.matchNumber || 1;
+    const effectiveMatchId = matchId || (tour?.matches?.[0]?.id || (tour?.matches && tour.matches.length > 0 ? `m_${tournamentId}_1` : 'none'));
+    const matchNumber = tour?.matches?.find((m: any) => m.id === effectiveMatchId)?.matchNumber || (tour?.matches && tour.matches.length > 0 ? 1 : 0);
     const threshold = tour?.scoringPreset?.pointRushThreshold ?? 50;
 
     const teamsMap: Record<string, TeamLiveStatus> = {};
