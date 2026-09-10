@@ -39,54 +39,76 @@ function setGsiState(next: GsiState) {
   notifyListeners();
 }
 
+function pollForGoogleAccounts(attempts = 30, interval = 100): void {
+  if (typeof window === 'undefined') return;
+  if (window.google?.accounts?.id) {
+    if (gsiTimeoutHandle) {
+      clearTimeout(gsiTimeoutHandle);
+      gsiTimeoutHandle = null;
+    }
+    setGsiState('ready');
+    return;
+  }
+  if (attempts > 0) {
+    setTimeout(() => pollForGoogleAccounts(attempts - 1, interval), interval);
+  }
+}
+
 function loadGsiSdk(): void {
-  if (gsiInitialised) return;
+  if (gsiInitialised) {
+    // If already marked initialized, verify if google.accounts.id became available in the meantime
+    if (window.google?.accounts?.id) {
+      setGsiState('ready');
+    }
+    return;
+  }
   gsiInitialised = true;
 
-  // Already available (e.g. loaded by another means)
+  // 1. Already available (e.g. loaded via index.html or cache)
   if (window.google?.accounts?.id) {
     setGsiState('ready');
     return;
   }
 
-  const scriptId = 'google-gsi-client';
-  const existing = document.getElementById(scriptId);
+  // 2. Start polling in case script is loading in background via index.html
+  pollForGoogleAccounts(40, 100);
 
-  if (existing) {
-    // Script tag already exists — may still be loading or already done
-    if (window.google?.accounts?.id) {
-      setGsiState('ready');
-    }
-    // Otherwise wait for onload which already fired or will fire
-    return;
-  }
-
-  // Hard timeout — if the SDK hasn't loaded in 10s, declare timeout
+  // 3. Set a hard timeout — if SDK hasn't loaded in 10s, declare timeout
   gsiTimeoutHandle = setTimeout(() => {
     if (gsiState === 'loading') {
-      setGsiState('timeout');
+      if (window.google?.accounts?.id) {
+        setGsiState('ready');
+      } else {
+        setGsiState('timeout');
+      }
     }
   }, GIS_INIT_TIMEOUT_MS);
 
+  // 4. Check if script tag exists anywhere in DOM
+  const existing = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
+  if (existing) {
+    existing.addEventListener('load', () => pollForGoogleAccounts(20, 50));
+    existing.addEventListener('error', () => {
+      if (gsiTimeoutHandle) clearTimeout(gsiTimeoutHandle);
+      setGsiState('failed');
+    });
+    return;
+  }
+
+  // 5. Fallback: dynamically inject script if not found in index.html
   const script = document.createElement('script');
-  script.id = scriptId;
+  script.id = 'google-gsi-client';
   script.src = 'https://accounts.google.com/gsi/client';
   script.async = true;
   script.defer = true;
 
   script.onload = () => {
-    if (gsiTimeoutHandle) clearTimeout(gsiTimeoutHandle);
-    if (window.google?.accounts?.id) {
-      setGsiState('ready');
-    } else {
-      // Script loaded but API not available — treat as failure
-      setGsiState('failed');
-    }
+    pollForGoogleAccounts(20, 50);
   };
 
   script.onerror = () => {
     if (gsiTimeoutHandle) clearTimeout(gsiTimeoutHandle);
-    console.warn('[GoogleAuth] Failed to load Google Identity Services SDK. Possible causes: network error, ad-blocker, CSP, or missing authorized origin in Google Cloud Console.');
+    console.warn('[GoogleAuth] Failed to load Google Identity Services SDK. Possible causes: network error, ad-blocker, Brave Shields, or CSP.');
     setGsiState('failed');
   };
 
@@ -268,18 +290,21 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
   if (gsiState === 'failed' || gsiState === 'timeout') {
     return (
       <div className={`w-full flex flex-col items-center gap-1.5 ${className}`}>
-        <div className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)] text-xs font-medium">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0 text-red-400" aria-hidden="true" />
+        <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs font-medium text-center">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden="true" />
           <span>
             {gsiState === 'timeout'
-              ? "Google Sign-In couldn't be initialized."
-              : 'Google Sign-In is currently unavailable.'}
+              ? "Google Sign-In initialization timed out."
+              : 'Google Sign-In blocked or unavailable.'}
           </span>
         </div>
+        <p className="text-[11px] text-[var(--text-muted)] text-center px-1">
+          If using Brave Shields or an ad blocker, disable it for this site, or sign in with email/password above.
+        </p>
         <button
           type="button"
           onClick={handleRetry}
-          className="flex items-center gap-1.5 text-xs font-semibold text-[var(--accent-primary)] hover:underline cursor-pointer"
+          className="flex items-center gap-1.5 text-xs font-semibold text-[var(--accent-primary)] hover:underline cursor-pointer pt-0.5"
         >
           <RefreshCw className="h-3 w-3" aria-hidden="true" />
           Try Again
