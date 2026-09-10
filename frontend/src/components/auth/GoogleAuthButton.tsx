@@ -27,7 +27,7 @@ let gsiListeners: Array<() => void> = [];
 let gsiInitialised = false;
 let gsiTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
-const GIS_INIT_TIMEOUT_MS = 10_000; // Hard 10-second limit — never infinite
+const GIS_INIT_TIMEOUT_MS = 8_000; // 8-second limit
 
 function notifyListeners() {
   gsiListeners.forEach((fn) => fn());
@@ -39,76 +39,78 @@ function setGsiState(next: GsiState) {
   notifyListeners();
 }
 
-function pollForGoogleAccounts(attempts = 30, interval = 100): void {
-  if (typeof window === 'undefined') return;
-  if (window.google?.accounts?.id) {
-    if (gsiTimeoutHandle) {
-      clearTimeout(gsiTimeoutHandle);
-      gsiTimeoutHandle = null;
-    }
-    setGsiState('ready');
-    return;
+let pollIntervalHandle: ReturnType<typeof setInterval> | null = null;
+
+function stopPolling() {
+  if (pollIntervalHandle) {
+    clearInterval(pollIntervalHandle);
+    pollIntervalHandle = null;
   }
-  if (attempts > 0) {
-    setTimeout(() => pollForGoogleAccounts(attempts - 1, interval), interval);
+  if (gsiTimeoutHandle) {
+    clearTimeout(gsiTimeoutHandle);
+    gsiTimeoutHandle = null;
   }
 }
 
-function loadGsiSdk(): void {
-  if (gsiInitialised) {
-    // If already marked initialized, verify if google.accounts.id became available in the meantime
+function startPolling(timeoutMs = 8_000): void {
+  if (typeof window === 'undefined') return;
+  stopPolling();
+
+  const startTime = Date.now();
+  pollIntervalHandle = setInterval(() => {
     if (window.google?.accounts?.id) {
+      stopPolling();
       setGsiState('ready');
+      return;
     }
+
+    if (Date.now() - startTime >= timeoutMs) {
+      stopPolling();
+      if (gsiState === 'loading') {
+        setGsiState('timeout');
+      }
+    }
+  }, 150);
+}
+
+function loadGsiSdk(): void {
+  if (typeof window === 'undefined') return;
+
+  // 1. If already available in window, ready immediately
+  if (window.google?.accounts?.id) {
+    stopPolling();
+    setGsiState('ready');
+    return;
+  }
+
+  if (gsiInitialised) {
     return;
   }
   gsiInitialised = true;
 
-  // 1. Already available (e.g. loaded via index.html or cache)
-  if (window.google?.accounts?.id) {
-    setGsiState('ready');
-    return;
-  }
+  // 2. Start continuous 150ms polling loop
+  startPolling(GIS_INIT_TIMEOUT_MS);
 
-  // 2. Start polling in case script is loading in background via index.html
-  pollForGoogleAccounts(40, 100);
+  // 3. Remove any previous/stale script tag to guarantee clean event binding
+  const stale = document.querySelectorAll('script[src*="accounts.google.com/gsi/client"]');
+  stale.forEach((s) => s.remove());
 
-  // 3. Set a hard timeout — if SDK hasn't loaded in 10s, declare timeout
-  gsiTimeoutHandle = setTimeout(() => {
-    if (gsiState === 'loading') {
-      if (window.google?.accounts?.id) {
-        setGsiState('ready');
-      } else {
-        setGsiState('timeout');
-      }
-    }
-  }, GIS_INIT_TIMEOUT_MS);
-
-  // 4. Check if script tag exists anywhere in DOM
-  const existing = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
-  if (existing) {
-    existing.addEventListener('load', () => pollForGoogleAccounts(20, 50));
-    existing.addEventListener('error', () => {
-      if (gsiTimeoutHandle) clearTimeout(gsiTimeoutHandle);
-      setGsiState('failed');
-    });
-    return;
-  }
-
-  // 5. Fallback: dynamically inject script if not found in index.html
+  // 4. Inject fresh script tag with deterministic onload & onerror
   const script = document.createElement('script');
   script.id = 'google-gsi-client';
   script.src = 'https://accounts.google.com/gsi/client';
   script.async = true;
-  script.defer = true;
 
   script.onload = () => {
-    pollForGoogleAccounts(20, 50);
+    if (window.google?.accounts?.id) {
+      stopPolling();
+      setGsiState('ready');
+    }
   };
 
   script.onerror = () => {
-    if (gsiTimeoutHandle) clearTimeout(gsiTimeoutHandle);
-    console.warn('[GoogleAuth] Failed to load Google Identity Services SDK. Possible causes: network error, ad-blocker, Brave Shields, or CSP.');
+    stopPolling();
+    console.warn('[GoogleAuth] Google Identity Services script blocked by browser, Brave Shields, or ad-blocker.');
     setGsiState('failed');
   };
 
@@ -258,13 +260,11 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
   }, [isLoading, isProcessing, googleClientId, gsiState, onError]);
 
   const handleRetry = useCallback(() => {
-    // Reset module-level singleton state and reload the SDK
+    stopPolling();
     setGsiState('loading');
     gsiInitialised = false;
     gsiInitRef.current = false;
-    if (gsiTimeoutHandle) clearTimeout(gsiTimeoutHandle);
-    const oldScript = document.getElementById('google-gsi-client');
-    if (oldScript) oldScript.remove();
+    document.querySelectorAll('script[src*="accounts.google.com/gsi/client"]').forEach((s) => s.remove());
     loadGsiSdk();
   }, []);
 
