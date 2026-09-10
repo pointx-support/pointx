@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useCallback } from 'react';
-import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
-// ─── Google Identity Services type declaration ────────────────────────────────
+// ─── Google Identity Services Types ───────────────────────────────────────────
 declare global {
   interface Window {
     google?: {
@@ -17,17 +17,14 @@ declare global {
   }
 }
 
-// ─── Deterministic init state machine ────────────────────────────────────────
 type GsiState = 'loading' | 'ready' | 'failed' | 'timeout';
 
-// Module-level singleton so multiple <GoogleAuthButton> instances share state
-// and the GIS SDK is only loaded once per page.
+// Module-level singleton state to coordinate between multiple button instances
 let gsiState: GsiState = 'loading';
 let gsiListeners: Array<() => void> = [];
-let gsiInitialised = false;
+let gsiInitialized = false;
+let gsiPollHandle: ReturnType<typeof setInterval> | null = null;
 let gsiTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
-
-const GIS_INIT_TIMEOUT_MS = 8_000; // 8-second limit
 
 function notifyListeners() {
   gsiListeners.forEach((fn) => fn());
@@ -39,12 +36,10 @@ function setGsiState(next: GsiState) {
   notifyListeners();
 }
 
-let pollIntervalHandle: ReturnType<typeof setInterval> | null = null;
-
-function stopPolling() {
-  if (pollIntervalHandle) {
-    clearInterval(pollIntervalHandle);
-    pollIntervalHandle = null;
+function stopTimers() {
+  if (gsiPollHandle) {
+    clearInterval(gsiPollHandle);
+    gsiPollHandle = null;
   }
   if (gsiTimeoutHandle) {
     clearTimeout(gsiTimeoutHandle);
@@ -52,65 +47,59 @@ function stopPolling() {
   }
 }
 
-function startPolling(timeoutMs = 8_000): void {
-  if (typeof window === 'undefined') return;
-  stopPolling();
-
-  const startTime = Date.now();
-  pollIntervalHandle = setInterval(() => {
-    if (window.google?.accounts?.id) {
-      stopPolling();
-      setGsiState('ready');
-      return;
-    }
-
-    if (Date.now() - startTime >= timeoutMs) {
-      stopPolling();
-      if (gsiState === 'loading') {
-        setGsiState('timeout');
-      }
-    }
-  }, 150);
-}
-
-function loadGsiSdk(): void {
+function initGsiSdk(): void {
   if (typeof window === 'undefined') return;
 
-  // 1. If already available in window, ready immediately
+  // 1. If already available on window, mark ready immediately
   if (window.google?.accounts?.id) {
-    stopPolling();
+    stopTimers();
     setGsiState('ready');
     return;
   }
 
-  if (gsiInitialised) {
+  if (gsiInitialized) return;
+  gsiInitialized = true;
+
+  // 2. Poll every 100ms for up to 10 seconds
+  const startTime = Date.now();
+  gsiPollHandle = setInterval(() => {
+    if (window.google?.accounts?.id) {
+      stopTimers();
+      setGsiState('ready');
+      return;
+    }
+    if (Date.now() - startTime >= 10_000) {
+      stopTimers();
+      if (gsiState === 'loading') {
+        setGsiState('timeout');
+      }
+    }
+  }, 100);
+
+  // 3. Check if script tag is already in DOM (e.g. from index.html)
+  const existing = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
+  if (existing) {
+    // Script is already in the document — let the browser load it naturally
     return;
   }
-  gsiInitialised = true;
 
-  // 2. Start continuous 150ms polling loop
-  startPolling(GIS_INIT_TIMEOUT_MS);
-
-  // 3. Remove any previous/stale script tag to guarantee clean event binding
-  const stale = document.querySelectorAll('script[src*="accounts.google.com/gsi/client"]');
-  stale.forEach((s) => s.remove());
-
-  // 4. Inject fresh script tag with deterministic onload & onerror
+  // 4. If script is somehow not in DOM, inject it safely
   const script = document.createElement('script');
   script.id = 'google-gsi-client';
   script.src = 'https://accounts.google.com/gsi/client';
   script.async = true;
+  script.defer = true;
 
   script.onload = () => {
     if (window.google?.accounts?.id) {
-      stopPolling();
+      stopTimers();
       setGsiState('ready');
     }
   };
 
   script.onerror = () => {
-    stopPolling();
-    console.warn('[GoogleAuth] Google Identity Services script blocked by browser, Brave Shields, or ad-blocker.');
+    stopTimers();
+    console.warn('[GoogleAuth] Could not load Google Identity Services SDK.');
     setGsiState('failed');
   };
 
@@ -118,15 +107,12 @@ function loadGsiSdk(): void {
 }
 
 function useGsiState(): GsiState {
-  const [state, setState] = React.useState<GsiState>(gsiState);
+  const [state, setState] = useState<GsiState>(gsiState);
 
   useEffect(() => {
-    // Sync in case state changed between render and effect
     if (state !== gsiState) setState(gsiState);
-
     const listener = () => setState(gsiState);
     gsiListeners.push(listener);
-
     return () => {
       gsiListeners = gsiListeners.filter((l) => l !== listener);
     };
@@ -150,15 +136,15 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
   text = 'continue_with',
   className = '',
 }) => {
-  const { loginWithGoogle, isLoading } = useAuthStore();
-  const [isProcessing, setIsProcessing] = React.useState(false);
-  const hiddenBtnRef = useRef<HTMLDivElement>(null);
-  const gsiInitRef = useRef(false); // prevent double-init inside this instance
+  const { loginWithGoogle } = useAuthStore();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const gsiRenderedRef = useRef(false);
   const gsiState = useGsiState();
 
   const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '').trim();
 
-  // Stable callback stored in a ref so it never triggers re-initialization
+  // Stable callback ref to prevent GIS re-initialization loops
   const callbackRef = useRef<((response: { credential?: string }) => Promise<void>) | undefined>(undefined);
   callbackRef.current = async (response) => {
     if (!response?.credential) return;
@@ -179,17 +165,16 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
 
   // Kick off SDK loading once on mount
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    loadGsiSdk();
+    initGsiSdk();
   }, []);
 
-  // Initialize GIS once SDK is ready — runs only when gsiState transitions to 'ready'
+  // When GSI state is ready and container is mounted, render Google's official button
   useEffect(() => {
     if (gsiState !== 'ready') return;
     if (!googleClientId) return;
     if (!window.google?.accounts?.id) return;
-    if (gsiInitRef.current) return; // idempotent — only init once per component instance
-    gsiInitRef.current = true;
+    if (!containerRef.current) return;
+    if (gsiRenderedRef.current) return;
 
     try {
       window.google.accounts.id.initialize({
@@ -201,106 +186,49 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
         cancel_on_tap_outside: true,
       });
 
-      if (hiddenBtnRef.current) {
-        window.google.accounts.id.renderButton(hiddenBtnRef.current, {
-          type: 'standard',
-          theme: 'filled_black',
-          size: 'large',
-          text,
-          shape: 'pill',
-        });
-      }
+      containerRef.current.innerHTML = '';
+      window.google.accounts.id.renderButton(containerRef.current, {
+        type: 'standard',
+        theme: 'filled_black',
+        size: 'large',
+        text,
+        shape: 'pill',
+        logo_alignment: 'left',
+        width: Math.min(Math.max(containerRef.current.offsetWidth || 300, 240), 380),
+      });
+
+      gsiRenderedRef.current = true;
     } catch (err) {
-      console.warn('[GoogleAuth] GIS initialize() error:', err);
+      console.warn('[GoogleAuth] GIS render error:', err);
     }
   }, [gsiState, googleClientId, text]);
 
-  const handleCustomClick = useCallback(() => {
-    if (isLoading || isProcessing) return;
-
-    if (!googleClientId) {
-      onError?.(
-        'Google Sign-In is not configured. Please contact support or use email/password login.'
-      );
-      return;
-    }
-
-    if (gsiState === 'loading') {
-      // Still loading — tell the user to wait, but this will resolve within 10s
-      onError?.('Google Sign-In is loading. Please try again in a moment.');
-      return;
-    }
-
-    if (gsiState === 'timeout' || gsiState === 'failed') {
-      onError?.(
-        'Google Sign-In could not be initialized. Please try again or use email/password login.'
-      );
-      return;
-    }
-
-    // gsiState === 'ready'
-    if (!window.google?.accounts?.id) {
-      onError?.('Google Sign-In is currently unavailable. Please use email/password login.');
-      return;
-    }
-
-    // Try to click the native GIS button (most reliable popup trigger)
-    if (hiddenBtnRef.current) {
-      const nativeBtn = hiddenBtnRef.current.querySelector(
-        'div[role="button"]'
-      ) as HTMLElement | null;
-      if (nativeBtn) {
-        nativeBtn.click();
-        return;
-      }
-    }
-
-    // Fall back to prompt()
-    window.google.accounts.id.prompt();
-  }, [isLoading, isProcessing, googleClientId, gsiState, onError]);
-
   const handleRetry = useCallback(() => {
-    stopPolling();
+    stopTimers();
+    gsiInitialized = false;
+    gsiRenderedRef.current = false;
     setGsiState('loading');
-    gsiInitialised = false;
-    gsiInitRef.current = false;
-    document.querySelectorAll('script[src*="accounts.google.com/gsi/client"]').forEach((s) => s.remove());
-    loadGsiSdk();
+    initGsiSdk();
   }, []);
 
-  // ─── Derived display labels ─────────────────────────────────────────────────
-  const buttonLabel =
-    isProcessing
-      ? 'Verifying with Google…'
-      : gsiState === 'loading'
-      ? 'Loading Google Sign-In…'
-      : gsiState === 'timeout'
-      ? "Google Sign-In couldn't be initialized. Try again."
-      : gsiState === 'failed'
-      ? 'Google Sign-In is currently unavailable.'
-      : text === 'signin_with'
-      ? 'Sign in with Google'
-      : text === 'signup_with'
-      ? 'Sign up with Google'
-      : 'Continue with Google';
+  // ─── 1. Processing state ────────────────────────────────────────────────────
+  if (isProcessing) {
+    return (
+      <div className={`w-full h-11 px-4 rounded-xl flex items-center justify-center gap-3 border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)] text-xs font-semibold ${className}`}>
+        <Loader2 className="h-4 w-4 animate-spin text-[var(--accent-primary)]" />
+        <span>Verifying Google account…</span>
+      </div>
+    );
+  }
 
-  const isDisabled = isLoading || isProcessing || gsiState === 'loading';
-
-  // ─── Failed / Timeout state — show retry UI ─────────────────────────────────
+  // ─── 2. Failed / Timeout state ──────────────────────────────────────────────
   if (gsiState === 'failed' || gsiState === 'timeout') {
     return (
       <div className={`w-full flex flex-col items-center gap-1.5 ${className}`}>
         <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs font-medium text-center">
           <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden="true" />
-          <span>
-            {gsiState === 'timeout'
-              ? "Google Sign-In initialization timed out."
-              : 'Google Sign-In blocked or unavailable.'}
-          </span>
+          <span>Google Sign-In is currently unavailable.</span>
         </div>
-        <p className="text-[11px] text-[var(--text-muted)] text-center px-1">
-          If using Brave Shields or an ad blocker, disable it for this site, or sign in with email/password above.
-        </p>
         <button
           type="button"
           onClick={handleRetry}
@@ -313,36 +241,31 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
     );
   }
 
-  // ─── Normal / Loading / Ready state ─────────────────────────────────────────
+  // ─── 3. Missing Client ID state ─────────────────────────────────────────────
+  if (!googleClientId && gsiState === 'ready') {
+    return (
+      <div className={`w-full h-11 px-4 rounded-xl flex items-center justify-center gap-2 border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-muted)] text-xs font-medium ${className}`}>
+        <span>Google Sign-In not configured. Use email/password above.</span>
+      </div>
+    );
+  }
+
+  // ─── 4. Ready / Loading state ───────────────────────────────────────────────
   return (
-    <div className="relative w-full">
-      {/* Hidden real Google button for accurate GIS event binding */}
+    <div className={`w-full flex justify-center items-center min-h-[44px] ${className}`}>
+      {/* Container where Google Identity Services injects the official button */}
       <div
-        ref={hiddenBtnRef}
-        className="absolute opacity-0 pointer-events-none w-0 h-0 overflow-hidden"
-        aria-hidden="true"
+        ref={containerRef}
+        className={`w-full flex justify-center items-center ${gsiState === 'loading' ? 'hidden' : ''}`}
       />
 
-      <button
-        type="button"
-        onClick={handleCustomClick}
-        disabled={isDisabled}
-        aria-label={buttonLabel}
-        className={`w-full h-11 px-4 rounded-xl font-medium text-xs sm:text-sm flex items-center justify-center gap-3 transition-all duration-200 border cursor-pointer select-none bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover,rgba(255,255,255,0.06))] text-[var(--text-primary)] border-[var(--border-subtle)] hover:border-[var(--border-strong,rgba(255,255,255,0.2))] shadow-sm active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
-      >
-        {isProcessing || gsiState === 'loading' ? (
-          <Loader2 className="h-4 w-4 animate-spin text-[var(--accent-primary)]" aria-hidden="true" />
-        ) : (
-          /* Google logo SVG */
-          <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-          </svg>
-        )}
-        <span className="font-semibold">{buttonLabel}</span>
-      </button>
+      {/* Loading placeholder while SDK evaluates */}
+      {gsiState === 'loading' && (
+        <div className="w-full h-11 px-4 rounded-xl flex items-center justify-center gap-3 border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)] text-xs font-medium animate-pulse">
+          <Loader2 className="h-4 w-4 animate-spin text-[var(--accent-primary)]" />
+          <span>Loading Google Sign-In…</span>
+        </div>
+      )}
     </div>
   );
 };
