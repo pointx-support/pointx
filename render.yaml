@@ -34,3 +34,9 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      # VITE_* vars are embedded into the frontend bundle at BUILD TIME by Vite.
+      # This must be set in the Render dashboard → Environment for this service.
+      - key: VITE_GOOGLE_CLIENT_ID
+        sync: false
