@@ -153,29 +153,44 @@ export function classifyLayer(layer: Layer): DetectedElement | null {
     return { ...base, type: 'logo', slotNumber: 1 };
   }
 
-  // 5. Stats: Kills / Frags
-  if (combined.includes('kill') || combined.includes('frag') || combined === 'k') {
-    return { ...base, type: 'kills' };
+  // Helper to extract slot number from layer name: e.g. "Fin 1", "Pos 2", "TP 1", "Total #3", etc.
+  const extractSlotFromText = (str: string): number | undefined => {
+    const m = str.match(/(?:#|\b|_)([1-9]|1[0-6])\b/);
+    if (m) {
+      const val = parseInt(m[1], 10);
+      if (val >= 1 && val <= 16) return val;
+    }
+    return undefined;
+  };
+
+  // 5. Stats: Kills / Frags / Finishes
+  if (combined.includes('kill') || combined.includes('frag') || combined.includes('fin') || combined === 'k') {
+    const slot = extractSlotFromText(combined);
+    return { ...base, type: 'kills', slotNumber: slot };
   }
 
-  // 6. Stats: Total Points / Pts / Score
-  if (combined.includes('pts') || combined.includes('total') || combined.includes('points') || combined === 'score') {
-    return { ...base, type: 'total' };
+  // 6. Stats: Total Points / Pts / Score / TP
+  if (combined.includes('pts') || combined.includes('total') || combined.includes('points') || combined.includes('score') || /\btp\b/i.test(combined) || combined.includes('tot')) {
+    const slot = extractSlotFromText(combined);
+    return { ...base, type: 'total', slotNumber: slot };
   }
 
-  // 7. Stats: Place Points (use word boundary so "placeholder" doesn't trigger place!)
-  if (/\b(place|placement|rank pts)\b/i.test(combined) || combined === 'p' || combined === 'pl.') {
-    return { ...base, type: 'place' };
+  // 7. Stats: Place Points / Position / POS (use word boundary so "placeholder" doesn't trigger place!)
+  if (/\b(place|placement|rank pts|pos|position)\b/i.test(combined) || combined === 'p' || combined === 'pl.' || combined.startsWith('pos')) {
+    const slot = extractSlotFromText(combined);
+    return { ...base, type: 'place', slotNumber: slot };
   }
 
   // 8. Stats: Matches Played
   if (combined.includes('matches') || combined === 'm' || combined === 'mp' || /\bmatch\b/i.test(combined)) {
-    return { ...base, type: 'match' };
+    const slot = extractSlotFromText(combined);
+    return { ...base, type: 'match', slotNumber: slot };
   }
 
-  // 9. Stats: Booyah / WWCD
-  if (combined.includes('booyah') || combined.includes('wwcd') || combined.includes('win')) {
-    return { ...base, type: 'booyah' };
+  // 9. Stats: Booyah / WWCD / Wins
+  if (combined.includes('booyah') || combined.includes('wwcd') || combined.includes('win') || combined === 'b!' || combined === 'b') {
+    const slot = extractSlotFromText(combined);
+    return { ...base, type: 'booyah', slotNumber: slot };
   }
 
   return null;
@@ -265,6 +280,11 @@ export function analyzePsdTemplateBuffer(buffer: ArrayBuffer | Uint8Array): PsdA
   const teamSlots: Record<number, DetectedElement> = {};
   const rankSlots: Record<number, DetectedElement> = {};
   const logoSlots: Record<number, DetectedElement> = {};
+  const killsSlots: Record<number, DetectedElement> = {};
+  const placeSlots: Record<number, DetectedElement> = {};
+  const totalSlots: Record<number, DetectedElement> = {};
+  const booyahSlots: Record<number, DetectedElement> = {};
+  const matchSlots: Record<number, DetectedElement> = {};
 
   let killsEl: DetectedElement | undefined;
   let totalEl: DetectedElement | undefined;
@@ -280,11 +300,26 @@ export function analyzePsdTemplateBuffer(buffer: ArrayBuffer | Uint8Array): PsdA
     if (el.type === 'teamName' && el.slotNumber) teamSlots[el.slotNumber] = el;
     else if (el.type === 'rank' && el.slotNumber) rankSlots[el.slotNumber] = el;
     else if (el.type === 'logo' && el.slotNumber) logoSlots[el.slotNumber] = el;
-    else if (el.type === 'kills' && !killsEl) killsEl = el;
-    else if (el.type === 'total' && !totalEl) totalEl = el;
-    else if (el.type === 'match' && !matchEl) matchEl = el;
-    else if (el.type === 'place' && !placeEl) placeEl = el;
-    else if (el.type === 'booyah' && !booyahEl) booyahEl = el;
+    else if (el.type === 'kills') {
+      if (el.slotNumber) killsSlots[el.slotNumber] = el;
+      if (!killsEl) killsEl = el;
+    }
+    else if (el.type === 'total') {
+      if (el.slotNumber) totalSlots[el.slotNumber] = el;
+      if (!totalEl) totalEl = el;
+    }
+    else if (el.type === 'match') {
+      if (el.slotNumber) matchSlots[el.slotNumber] = el;
+      if (!matchEl) matchEl = el;
+    }
+    else if (el.type === 'place') {
+      if (el.slotNumber) placeSlots[el.slotNumber] = el;
+      if (!placeEl) placeEl = el;
+    }
+    else if (el.type === 'booyah') {
+      if (el.slotNumber) booyahSlots[el.slotNumber] = el;
+      if (!booyahEl) booyahEl = el;
+    }
     else if (el.type === 'orgLogo' && !orgLogoEl) orgLogoEl = el;
     else if (el.type === 'tourneyLogo' && !tourneyLogoEl) tourneyLogoEl = el;
     else if (el.type === 'tourneyTitle' && !tourneyTitleEl) tourneyTitleEl = el;
@@ -297,7 +332,9 @@ export function analyzePsdTemplateBuffer(buffer: ArrayBuffer | Uint8Array): PsdA
 
   // Single Column vs Dual Column detection
   let layoutMode: 'dual-column' | 'single-column' = 'single-column';
-  if (teamSlots[1] && teamSlots[7] && (teamSlots[7].x - teamSlots[1].x) > 300) {
+  // If team 4 is already positioned far to the right, this is a podium + single table layout!
+  const isPodiumAndTable = !!(teamSlots[1] && teamSlots[4] && (teamSlots[4].x - teamSlots[1].x > 250));
+  if (!isPodiumAndTable && teamSlots[1] && teamSlots[7] && (teamSlots[7].x - teamSlots[1].x) > 300) {
     layoutMode = 'dual-column';
   }
 
@@ -340,8 +377,13 @@ export function analyzePsdTemplateBuffer(buffer: ArrayBuffer | Uint8Array): PsdA
     const tSlot = teamSlots[i];
     const rSlot = rankSlots[i];
     const lSlot = logoSlots[i] || (i === 1 && logoSlots[1] ? logoSlots[1] : undefined);
+    const kSlot = killsSlots[i];
+    const pSlot = placeSlots[i];
+    const totSlot = totalSlots[i];
+    const bSlot = booyahSlots[i];
+    const mSlot = matchSlots[i];
 
-    if (tSlot || rSlot || lSlot) {
+    if (tSlot || rSlot || lSlot || kSlot || pSlot || totSlot || bSlot || mSlot) {
       slotOverrides[i] = {
         teamName: tSlot ? {
           x: Math.round(tSlot.x),
@@ -362,6 +404,47 @@ export function analyzePsdTemplateBuffer(buffer: ArrayBuffer | Uint8Array): PsdA
         logo: lSlot ? {
           x: Math.round(lSlot.x),
           y: Math.round(lSlot.y),
+          fontSize: lSlot.fontSize || 32,
+          visible: true,
+        } : undefined,
+        kills: kSlot ? {
+          x: Math.round(kSlot.x),
+          y: Math.round(kSlot.y),
+          fontSize: kSlot.fontSize,
+          fill: kSlot.color || '#ffffff',
+          fontFamily: kSlot.fontFamily,
+          visible: true,
+        } : undefined,
+        place: pSlot ? {
+          x: Math.round(pSlot.x),
+          y: Math.round(pSlot.y),
+          fontSize: pSlot.fontSize,
+          fill: pSlot.color || '#ffffff',
+          fontFamily: pSlot.fontFamily,
+          visible: true,
+        } : undefined,
+        total: totSlot ? {
+          x: Math.round(totSlot.x),
+          y: Math.round(totSlot.y),
+          fontSize: totSlot.fontSize,
+          fill: totSlot.color || '#f59e0b',
+          fontFamily: totSlot.fontFamily,
+          visible: true,
+        } : undefined,
+        booyah: bSlot ? {
+          x: Math.round(bSlot.x),
+          y: Math.round(bSlot.y),
+          fontSize: bSlot.fontSize,
+          fill: bSlot.color || '#ffffff',
+          fontFamily: bSlot.fontFamily,
+          visible: true,
+        } : undefined,
+        match: mSlot ? {
+          x: Math.round(mSlot.x),
+          y: Math.round(mSlot.y),
+          fontSize: mSlot.fontSize,
+          fill: mSlot.color || '#ffffff',
+          fontFamily: mSlot.fontFamily,
           visible: true,
         } : undefined,
       };

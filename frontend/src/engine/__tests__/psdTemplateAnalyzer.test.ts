@@ -157,5 +157,74 @@ describe('PSD Template Analyzer Engine', () => {
       expect(result.alignment.baseY).toBe(250);
       expect(result.alignment.rowGap).toBe(60);
     });
+
+    it('correctly parses esports podium layout (Top 3 on left + 9 rows table on right) with POS, FIN, TP, B!', () => {
+      const psdPodium: any = {
+        width: 1920,
+        height: 1080,
+        children: [
+          { name: 'BG', top: 0, left: 0, bottom: 1080, right: 1920 },
+          { name: 'Tournament Title', top: 120, left: 500, bottom: 180, right: 1200 },
+          { name: 'Organizer Name', top: 60, left: 600, bottom: 100, right: 900 },
+          // Top 1 Featured Card (Left)
+          { name: 'Team 1', top: 600, left: 100, bottom: 650, right: 450 },
+          { name: 'POS 1', top: 480, left: 350, bottom: 510, right: 420 },
+          { name: 'FIN 1', top: 520, left: 350, bottom: 550, right: 420 },
+          { name: 'TP 1', top: 560, left: 350, bottom: 590, right: 420 },
+          { name: 'Booyah 1', top: 520, left: 80, bottom: 550, right: 120 },
+
+          // Top 2 Card (Left Bottom-Left)
+          { name: 'Team 2', top: 820, left: 50, bottom: 850, right: 220 },
+          { name: 'POS 2', top: 750, left: 180, bottom: 770, right: 210 },
+          { name: 'FIN 2', top: 775, left: 180, bottom: 795, right: 210 },
+          { name: 'TP 2', top: 800, left: 180, bottom: 820, right: 210 },
+
+          // Top 3 Card (Left Bottom-Right)
+          { name: 'Team 3', top: 820, left: 260, bottom: 850, right: 430 },
+          { name: 'POS 3', top: 750, left: 390, bottom: 770, right: 420 },
+          { name: 'FIN 3', top: 775, left: 390, bottom: 795, right: 420 },
+          { name: 'TP 3', top: 800, left: 390, bottom: 820, right: 420 },
+
+          // Right Table: Teams 4 through 12
+          { name: 'Team 4', top: 400, left: 650, bottom: 430, right: 850 },
+          { name: 'Team 5', top: 460, left: 650, bottom: 490, right: 850 },
+          { name: 'Team 6', top: 520, left: 650, bottom: 550, right: 850 },
+          { name: 'Team 7', top: 580, left: 650, bottom: 610, right: 850 },
+          { name: 'Team 8', top: 640, left: 650, bottom: 670, right: 850 },
+          { name: 'Team 9', top: 700, left: 650, bottom: 730, right: 850 },
+          { name: 'Team 10', top: 760, left: 650, bottom: 790, right: 850 },
+          { name: 'Team 11', top: 820, left: 650, bottom: 850, right: 850 },
+          { name: 'Team 12', top: 880, left: 650, bottom: 910, right: 850 },
+
+          // Right Table Column Headers
+          { name: 'POS', top: 350, left: 880, bottom: 375, right: 920 },
+          { name: 'FIN', top: 350, left: 930, bottom: 375, right: 970 },
+          { name: 'TOTAL', top: 350, left: 980, bottom: 375, right: 1030 },
+        ],
+      };
+
+      const buffer = writePsdBuffer(psdPodium);
+      const result = analyzePsdTemplateBuffer(buffer);
+
+      expect(result.success).toBe(true);
+      // Because Team 4 is on the right, it should be single-column with slot overrides so 4-6 aren't stuck on left
+      expect(result.layoutMode).toBe('single-column');
+      expect(result.detectedSummary.teamsCount).toBe(12);
+
+      // Verify slot 1 specific coordinates
+      expect(result.alignment.slots?.[1]?.teamName?.x).toBe(100);
+      expect(result.alignment.slots?.[1]?.teamName?.y).toBe(600);
+      expect(result.alignment.slots?.[1]?.place?.x).toBe(350);
+      expect(result.alignment.slots?.[1]?.kills?.x).toBe(350);
+      expect(result.alignment.slots?.[1]?.total?.x).toBe(350);
+
+      // Verify slot 2 and 3 coordinates
+      expect(result.alignment.slots?.[2]?.teamName?.x).toBe(50);
+      expect(result.alignment.slots?.[3]?.teamName?.x).toBe(260);
+
+      // Verify slot 4 (table on right)
+      expect(result.alignment.slots?.[4]?.teamName?.x).toBe(650);
+      expect(result.alignment.slots?.[12]?.teamName?.x).toBe(650);
+    });
   });
 });

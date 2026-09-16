@@ -36,6 +36,7 @@ export interface MasterGraphicRendererProps {
   selectedElementKey?: string | string[] | null;
   selectedElementKeys?: string[] | null;
   onSelectElement?: (elementKey: string, e?: React.MouseEvent) => void;
+  onSelectMultipleElements?: (elementKeys: string[]) => void;
   onDragElement?: (key: string, deltaX: number, deltaY: number) => void;
   isInteractive?: boolean;
 }
@@ -49,6 +50,7 @@ export const MasterGraphicRenderer: React.FC<MasterGraphicRendererProps> = ({
   selectedElementKey,
   selectedElementKeys,
   onSelectElement,
+  onSelectMultipleElements,
   onDragElement,
   isInteractive = false
 }) => {
@@ -185,6 +187,7 @@ export const MasterGraphicRenderer: React.FC<MasterGraphicRendererProps> = ({
           selectedElementKey={selectedElementKey}
           selectedElementKeys={selectedElementKeys}
           onSelectElement={onSelectElement}
+          onSelectMultipleElements={onSelectMultipleElements}
           onDragElement={onDragElement}
           isInteractive={isInteractive}
           hueRotate={hueRotate}

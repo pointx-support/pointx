@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import type { CustomGraphicsTemplate } from '../../../types/customTemplate';
 import type { GraphicsRenderData } from '../../../types/graphics';
 import { DynamicCustomTemplate } from '../templates/DynamicCustomTemplate';
@@ -10,6 +10,7 @@ export interface PointsTableRendererProps {
   selectedElementKey?: string | string[] | null;
   selectedElementKeys?: string[] | null;
   onSelectElement?: (elementKey: string, e?: React.MouseEvent) => void;
+  onSelectMultipleElements?: (elementKeys: string[]) => void;
   onDragElement?: (key: string, deltaX: number, deltaY: number) => void;
   isInteractive?: boolean;
   hueRotate?: number;

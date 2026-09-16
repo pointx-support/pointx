@@ -70,6 +70,35 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   const [lastSentCommand, setLastSentCommand] = useState<string>('None');
   const [lastCommandId, setLastCommandId] = useState<string>('None');
 
+  const totalMatchCount = Math.max(
+    tournamentInfo?.matchCount || 6,
+    availableMatches.length,
+    6
+  );
+
+  const matchOptions = useMemo(() => {
+    const list: Array<{ id: string; label: string; number: number }> = [];
+    for (let i = 1; i <= totalMatchCount; i++) {
+      const existing = availableMatches.find(
+        (m: any) => m.matchNumber === i || (m.id || m.customId) === `live-match-${i}`
+      );
+      if (existing) {
+        list.push({
+          id: existing.id || existing.customId,
+          label: existing.customLabel || `Match ${i}`,
+          number: i,
+        });
+      } else {
+        list.push({
+          id: `live-match-${i}`,
+          label: `Match ${i}`,
+          number: i,
+        });
+      }
+    }
+    return list;
+  }, [availableMatches, totalMatchCount]);
+
   // Initialize and resolve actual matches (strictly zero-match valid)
   useEffect(() => {
     let isCancelled = false;
@@ -448,35 +477,6 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
 
   const currentMatchDoc = availableMatches.find((m: any) => (m.id || m.customId) === activeMatchId);
   const obsUrl = `${window.location.origin}/obs?tournamentId=${encodeURIComponent(effectiveTournamentId)}&matchId=${encodeURIComponent(activeMatchId)}`;
-
-  const totalMatchCount = Math.max(
-    tournamentInfo?.matchCount || 6,
-    availableMatches.length,
-    6
-  );
-
-  const matchOptions = useMemo(() => {
-    const list: Array<{ id: string; label: string; number: number }> = [];
-    for (let i = 1; i <= totalMatchCount; i++) {
-      const existing = availableMatches.find(
-        (m: any) => m.matchNumber === i || (m.id || m.customId) === `live-match-${i}`
-      );
-      if (existing) {
-        list.push({
-          id: existing.id || existing.customId,
-          label: existing.customLabel || `Match ${i}`,
-          number: i,
-        });
-      } else {
-        list.push({
-          id: `live-match-${i}`,
-          label: `Match ${i}`,
-          number: i,
-        });
-      }
-    }
-    return list;
-  }, [availableMatches, totalMatchCount]);
 
   return (
     <div className="min-h-screen bg-[#0d0914] text-slate-100 flex flex-col font-sans select-none pb-12">
