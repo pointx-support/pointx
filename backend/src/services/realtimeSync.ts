@@ -227,16 +227,48 @@ export function sanitizeStateForBroadcast(state: TournamentSyncState): any {
 }
 
 /**
+ * Bidirectional lookup for tournament room aliases (customId <-> _id <-> id)
+ */
+const tournamentAliases = new Map<string, Set<string>>();
+
+export function registerTournamentAliases(tournamentDoc: any) {
+  if (!tournamentDoc) return;
+  const idSet = new Set<string>();
+  if (tournamentDoc.customId) idSet.add(tournamentDoc.customId);
+  if (tournamentDoc._id) idSet.add(String(tournamentDoc._id));
+  if (tournamentDoc.id) idSet.add(String(tournamentDoc.id));
+
+  for (const id of idSet) {
+    let existing = tournamentAliases.get(id);
+    if (!existing) {
+      existing = new Set<string>();
+      tournamentAliases.set(id, existing);
+    }
+    for (const other of idSet) {
+      existing.add(other);
+    }
+  }
+}
+
+/**
  * Helper to compute all room aliases for a tournament (customId, _id, id, and 'default')
  */
 export function getRoomAliases(tournamentId: string, tournamentDoc?: any): string[] {
   const rooms = new Set<string>();
   if (tournamentId) rooms.add(tournamentId);
+
   if (tournamentDoc) {
+    registerTournamentAliases(tournamentDoc);
     if (tournamentDoc.customId) rooms.add(tournamentDoc.customId);
     if (tournamentDoc._id) rooms.add(String(tournamentDoc._id));
     if (tournamentDoc.id) rooms.add(String(tournamentDoc.id));
   }
+
+  const registered = tournamentAliases.get(tournamentId);
+  if (registered) {
+    for (const r of registered) rooms.add(r);
+  }
+
   return Array.from(rooms);
 }
 
@@ -705,6 +737,11 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
           const matchId = parsed.matchId || 'none';
           const orgId = parsed.organizationId || 'org-default';
 
+          const tourState = await getOrCreateAuthoritativeState(newTourId);
+          if (tourState?.tournament) {
+            registerTournamentAliases(tourState.tournament);
+          }
+
           if (meta) {
             if (meta.tournamentId !== newTourId) {
               const oldAliases = getRoomAliases(meta.tournamentId);
@@ -716,7 +753,7 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
           }
 
           // Register in new room and all tournament aliases
-          const aliasRooms = getRoomAliases(newTourId);
+          const aliasRooms = getRoomAliases(newTourId, tourState?.tournament);
           for (const alias of aliasRooms) {
             if (!roomClients.has(alias)) {
               roomClients.set(alias, new Set());
@@ -745,8 +782,13 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
           const matchId = parsed.matchId || 'none';
           const orgId = parsed.organizationId || 'org-default';
 
+          const tourState = await getOrCreateAuthoritativeState(tourId);
+          if (tourState?.tournament) {
+            registerTournamentAliases(tourState.tournament);
+          }
+
           // Guarantee socket is registered in tournament alias rooms
-          const aliasRooms = getRoomAliases(tourId);
+          const aliasRooms = getRoomAliases(tourId, tourState?.tournament);
           for (const alias of aliasRooms) {
             if (!roomClients.has(alias)) {
               roomClients.set(alias, new Set());
@@ -848,7 +890,7 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
                 timestamp: Date.now(),
               };
 
-              const aliasRooms = getRoomAliases(cmd.tournamentId);
+              const aliasRooms = getRoomAliases(cmd.tournamentId, tourState.tournament);
               broadcastToRooms(aliasRooms, nextMsg);
               ws.send(JSON.stringify(nextMsg));
             } else {
@@ -891,7 +933,7 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
               timestamp: updatedLiveState.updatedAt,
             };
 
-            const aliasRooms = getRoomAliases(cmd.tournamentId);
+            const aliasRooms = getRoomAliases(cmd.tournamentId, tourState.tournament);
             broadcastToRooms(aliasRooms, deltaMsg);
             broadcastToRooms(aliasRooms, finalizedMsg);
             broadcastToSseRooms(aliasRooms, deltaMsg);
@@ -932,7 +974,7 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
             timestamp: updatedLiveState.updatedAt,
           };
 
-          const aliasRooms = getRoomAliases(cmd.tournamentId);
+          const aliasRooms = getRoomAliases(cmd.tournamentId, tourState.tournament);
           broadcastToRooms(aliasRooms, deltaMsg);
           broadcastToSseRooms(aliasRooms, deltaMsg);
 
