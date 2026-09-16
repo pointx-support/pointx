@@ -62,7 +62,10 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
   const [finalizedReport, setFinalizedReport] = useState<MatchReportData | null>(null);
   const [isLoadingReport, setIsLoadingReport] = useState<boolean>(false);
-
+  // Diagnostic panel toggle
+  const [showDiagnostics, setShowDiagnostics] = useState<boolean>(isDebugUrl);
+  const [lastSentCommand, setLastSentCommand] = useState<string>('None');
+  const [lastCommandId, setLastCommandId] = useState<string>('None');
 
   // Initialize and resolve actual matches (strictly zero-match valid)
   useEffect(() => {

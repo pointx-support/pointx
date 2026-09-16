@@ -61,7 +61,6 @@ beforeEach(async () => {
     userId: testUser._id,
     organizationId: testOrg._id.toString(),
     role: 'owner',
-    isActive: true,
   });
 
   userToken = generateJwtToken(testUser);

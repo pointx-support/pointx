@@ -75,8 +75,8 @@ const MatchReportSchema = new Schema<IMatchReport>(
     finalizedAt: { type: Date, default: Date.now },
     finalizedBy: { type: String, default: 'Operator' },
     version: { type: Number, default: 1 },
-    standings: { type: [Schema.Types.Mixed], default: [] },
-    playerStats: { type: [Schema.Types.Mixed], default: [] },
+    standings: [{ type: Schema.Types.Mixed }],
+    playerStats: [{ type: Schema.Types.Mixed }],
     summary: { type: Schema.Types.Mixed, required: true },
   },
   {

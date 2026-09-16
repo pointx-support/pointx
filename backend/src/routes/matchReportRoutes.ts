@@ -10,7 +10,8 @@ const router = Router();
 // 1. Fetch finalized match report
 router.get('/:tournamentId/:matchId', async (req: Request, res: Response) => {
   try {
-    const { tournamentId, matchId } = req.params;
+    const tournamentId = req.params.tournamentId as string;
+    const matchId = req.params.matchId as string;
     const version = req.query.version ? Number(req.query.version) : undefined;
 
     const report = await getMatchReport(tournamentId, matchId, version);
@@ -37,7 +38,8 @@ router.get('/:tournamentId/:matchId', async (req: Request, res: Response) => {
 // 2. Export match report as CSV or JSON download
 router.get('/:tournamentId/:matchId/export', async (req: Request, res: Response) => {
   try {
-    const { tournamentId, matchId } = req.params;
+    const tournamentId = req.params.tournamentId as string;
+    const matchId = req.params.matchId as string;
     const format = ((req.query.format as string) || 'json').toLowerCase();
     const version = req.query.version ? Number(req.query.version) : undefined;
 
@@ -76,7 +78,7 @@ router.get('/:tournamentId/:matchId/export', async (req: Request, res: Response)
 // 3. Fetch all match reports for a tournament
 router.get('/:tournamentId', async (req: Request, res: Response) => {
   try {
-    const { tournamentId } = req.params;
+    const tournamentId = req.params.tournamentId as string;
     const reports = await getAllMatchReportsForTournament(tournamentId);
 
     return res.status(200).json({

@@ -67,7 +67,6 @@ beforeEach(async () => {
     userId: userA._id,
     organizationId: orgA._id.toString(),
     role: 'owner',
-    isActive: true,
   });
 
   tokenA = generateJwtToken(userA);
@@ -97,7 +96,6 @@ beforeEach(async () => {
     userId: userB._id,
     organizationId: orgB._id.toString(),
     role: 'owner',
-    isActive: true,
   });
 
   tokenB = generateJwtToken(userB);
@@ -109,7 +107,6 @@ beforeEach(async () => {
     userId: userA._id,
     organizationId: orgA._id.toString(),
     game: 'freefire',
-    format: 'squad',
     matches: [],
   });
 });
