@@ -61,8 +61,8 @@ export const env = {
   SUPER_ADMIN_USERNAME: process.env.SUPER_ADMIN_USERNAME || 'admin',
   SUPER_ADMIN_PASSWORD: superAdminPassword || 'Universe00@@',
   
-  FRONTEND_URL: process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173',
-  CLIENT_URL: process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173',
+  FRONTEND_URL: process.env.FRONTEND_URL || process.env.CLIENT_URL || (isProduction ? 'https://pointx.in' : 'http://localhost:5173'),
+  CLIENT_URL: process.env.CLIENT_URL || process.env.FRONTEND_URL || (isProduction ? 'https://pointx.in' : 'http://localhost:5173'),
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
   
   isProduction,

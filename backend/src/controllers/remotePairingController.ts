@@ -67,7 +67,16 @@ export async function createPairingSession(req: AuthorizedTenantRequest, res: Re
       isConsumed: false,
     });
 
-    const clientOrigin = env.FRONTEND_URL || env.CLIENT_URL || 'https://pointx.in';
+    const reqOrigin = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : '');
+    const isReqLocal = reqOrigin.includes('localhost') || reqOrigin.includes('127.0.0.1');
+
+    let clientOrigin = env.FRONTEND_URL || env.CLIENT_URL || 'https://pointx.in';
+    if (reqOrigin && !isReqLocal) {
+      clientOrigin = reqOrigin;
+    } else if (env.isProduction || clientOrigin.includes('localhost')) {
+      clientOrigin = (reqOrigin && !isReqLocal) ? reqOrigin : 'https://pointx.in';
+    }
+
     const pairingUrl = `${clientOrigin}/remote/connect/${pairingToken}`;
 
     return res.status(201).json({

@@ -302,9 +302,21 @@ export const BroadcastControlView: React.FC = () => {
   };
 
   // Active ephemeral QR pairing URL (10-min TTL, single-use, 0 sensitive raw credentials)
-  const activeQrTargetUrl = pairingUrl || `${origin}/remote/connect/${pairingToken}`;
+  // Ensure the target URL matches the user's active browser origin (never localhost when browsing on public domain)
+  const isLocalhostOrigin = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+  const resolvedTargetOrigin = !isLocalhostOrigin && origin
+    ? origin
+    : (pairingUrl && !pairingUrl.includes('localhost') && !pairingUrl.includes('127.0.0.1')
+        ? new URL(pairingUrl).origin
+        : (origin && !origin.includes('localhost') ? origin : 'https://pointx.in'));
+
+  const activeQrTargetUrl = pairingToken
+    ? `${resolvedTargetOrigin}/remote/connect/${pairingToken}`
+    : (pairingUrl && !pairingUrl.includes('localhost') ? pairingUrl : `${resolvedTargetOrigin}/remote/connect`);
+
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(activeQrTargetUrl)}&bgcolor=13100f&color=ffd000&margin=8`;
-  const largeQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(activeQrTargetUrl)}&bgcolor=13100f&color=ffd000&margin=12`;
+  const largeQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=480x480&data=${encodeURIComponent(activeQrTargetUrl)}&bgcolor=13100f&color=ffd000&margin=12`;
 
   const ttlMinutes = Math.floor(remainingTtlSeconds / 60);
   const ttlSecs = remainingTtlSeconds % 60;
@@ -668,10 +680,10 @@ export const BroadcastControlView: React.FC = () => {
         )}
       </div>
 
-      {/* Large QR Modal - High-Contrast, Screen-Dominant, 1-2 Meter Scannability */}
+      {/* Large QR Modal - Centered, Scroll-Safe, High-Contrast 1-2 Meter Scannability */}
       {showQrModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-xl animate-in fade-in duration-200">
-          <div className="w-full max-w-md rounded-3xl bg-[#13101d] border border-white/20 p-6 sm:p-8 shadow-[0_0_60px_rgba(0,0,0,0.8)] text-center space-y-5 relative">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/90 backdrop-blur-2xl p-4 sm:p-6 flex min-h-screen items-center justify-center animate-in fade-in duration-200">
+          <div className="relative w-full max-w-sm sm:max-w-md my-auto rounded-3xl bg-[#13101d] border border-white/20 p-5 sm:p-6 shadow-[0_0_60px_rgba(0,0,0,0.9)] text-center space-y-4">
             {/* Close X Button */}
             <button
               type="button"
@@ -716,11 +728,11 @@ export const BroadcastControlView: React.FC = () => {
             </div>
 
             {/* Large High-Contrast QR Code Frame */}
-            <div className="relative p-4 sm:p-5 bg-black rounded-3xl border-2 border-[#ffd000]/50 flex items-center justify-center shadow-[0_0_30px_rgba(255,208,0,0.2)] mx-auto max-w-[340px]">
+            <div className="relative p-3 sm:p-4 bg-black rounded-3xl border-2 border-[#ffd000]/50 flex items-center justify-center shadow-[0_0_30px_rgba(255,208,0,0.2)] mx-auto max-w-[280px] sm:max-w-[320px]">
               <img
                 src={largeQrCodeUrl}
                 alt="Large Remote QR Code"
-                className={`w-64 h-64 sm:w-72 sm:h-72 object-contain rounded-2xl ${isQrExpired ? 'opacity-20 grayscale' : ''}`}
+                className={`w-52 h-52 sm:w-64 sm:h-64 object-contain rounded-2xl ${isQrExpired ? 'opacity-20 grayscale' : ''}`}
               />
 
               {isGeneratingQr && (
@@ -775,7 +787,7 @@ export const BroadcastControlView: React.FC = () => {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex items-center gap-3 pt-1">
               <Button
                 variant="outline"
                 size="md"
