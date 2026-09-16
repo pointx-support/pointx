@@ -118,18 +118,18 @@ export function broadcastToSession(sessionId: string, event: any): void {
 const sseListeners = new Map<string, Set<any>>();
 
 export const DEFAULT_SEED_TEAMS = [
-  { id: 't1', name: 'Total Gaming Esports', tag: 'TG', slotNumber: 1, players: [{ id: 'p1', name: 'Mafia' }, { id: 'p2', name: 'FozyAjay' }] },
-  { id: 't2', name: 'Team Elite', tag: 'TE', slotNumber: 2, players: [{ id: 'p3', name: 'Killer' }, { id: 'p4', name: 'Pahari' }] },
-  { id: 't3', name: 'Orangutan Elite', tag: 'OG', slotNumber: 3, players: [{ id: 'p5', name: 'Jash' }, { id: 'p6', name: 'MrJayYT' }] },
-  { id: 't4', name: 'GodLike Esports', tag: 'GODL', slotNumber: 4, players: [{ id: 'p7', name: 'Niku' }, { id: 'p8', name: 'Ginotra' }] },
-  { id: 't5', name: 'Blind Esports', tag: 'BLIND', slotNumber: 5, players: [{ id: 'p9', name: 'Abhay' }] },
-  { id: 't6', name: 'Revenant Esports', tag: 'RNT', slotNumber: 6, players: [{ id: 'p10', name: 'Aayush' }] },
-  { id: 't7', name: 'Chemin Esports', tag: 'CHM', slotNumber: 7, players: [{ id: 'p11', name: 'Swastik' }] },
-  { id: 't8', name: 'TSM FTX India', tag: 'TSM', slotNumber: 8, players: [{ id: 'p12', name: 'OldMonk' }] },
-  { id: 't9', name: 'Nigma Galaxy', tag: 'NGX', slotNumber: 9, players: [{ id: 'p13', name: 'VasiyoCRJ7' }] },
-  { id: 't10', name: 'Desi Gamers Esports', tag: 'DG', slotNumber: 10, players: [{ id: 'p14', name: 'AmitBhai' }] },
-  { id: 't11', name: 'Head Hunters', tag: 'HH', slotNumber: 11, players: [{ id: 'p15', name: 'Aasif' }] },
-  { id: 't12', name: 'Enigma Gaming', tag: 'EG', slotNumber: 12, players: [{ id: 'p16', name: 'RadheThakur' }] },
+  { id: 't1', name: 'Total Gaming Esports', tag: 'TG', slotNumber: 1, players: [{ id: 'p1', name: 'Mafia' }, { id: 'p2', name: 'FozyAjay' }, { id: 'p3', name: 'Vasiyo' }, { id: 'p4', name: 'Golden' }] },
+  { id: 't2', name: 'Team Elite', tag: 'TE', slotNumber: 2, players: [{ id: 'p5', name: 'Killer' }, { id: 'p6', name: 'Pahari' }, { id: 'p7', name: 'Iconic' }, { id: 'p8', name: 'Javaboy' }] },
+  { id: 't3', name: 'Orangutan Elite', tag: 'OG', slotNumber: 3, players: [{ id: 'p9', name: 'Jash' }, { id: 'p10', name: 'MrJayYT' }, { id: 'p11', name: 'Rohan' }, { id: 'p12', name: 'Spidey' }] },
+  { id: 't4', name: 'GodLike Esports', tag: 'GODL', slotNumber: 4, players: [{ id: 'p13', name: 'Niku' }, { id: 'p14', name: 'Ginotra' }, { id: 'p15', name: 'Punky' }, { id: 'p16', name: 'Akash' }] },
+  { id: 't5', name: 'Blind Esports', tag: 'BLIND', slotNumber: 5, players: [{ id: 'p17', name: 'Abhay' }, { id: 'p18', name: 'Triple7' }, { id: 'p19', name: 'Anand' }, { id: 'p20', name: 'Shadow' }] },
+  { id: 't6', name: 'Revenant Esports', tag: 'RNT', slotNumber: 6, players: [{ id: 'p21', name: 'Aayush' }, { id: 'p22', name: 'Bshow' }, { id: 'p23', name: 'Shann' }, { id: 'p24', name: 'Harsh' }] },
+  { id: 't7', name: 'Chemin Esports', tag: 'CHM', slotNumber: 7, players: [{ id: 'p25', name: 'Swastik' }, { id: 'p26', name: 'Radhe' }, { id: 'p27', name: 'Anand' }, { id: 'p28', name: 'Falcon' }] },
+  { id: 't8', name: 'TSM FTX India', tag: 'TSM', slotNumber: 8, players: [{ id: 'p29', name: 'OldMonk' }, { id: 'p30', name: 'MrFish' }, { id: 'p31', name: 'Tenz' }, { id: 'p32', name: 'Sagar' }] },
+  { id: 't9', name: 'Nigma Galaxy', tag: 'NGX', slotNumber: 9, players: [{ id: 'p33', name: 'VasiyoCRJ7' }, { id: 'p34', name: 'Tahir' }, { id: 'p35', name: 'Soham' }, { id: 'p36', name: 'Aman' }] },
+  { id: 't10', name: 'Desi Gamers Esports', tag: 'DG', slotNumber: 10, players: [{ id: 'p37', name: 'AmitBhai' }, { id: 'p38', name: 'Saransh' }, { id: 'p39', name: 'Ignis' }, { id: 'p40', name: 'Dev' }] },
+  { id: 't11', name: 'Head Hunters', tag: 'HH', slotNumber: 11, players: [{ id: 'p41', name: 'Aasif' }, { id: 'p42', name: 'Satyam' }, { id: 'p43', name: 'Rohit' }, { id: 'p44', name: 'Vinit' }] },
+  { id: 't12', name: 'Enigma Gaming', tag: 'EG', slotNumber: 12, players: [{ id: 'p45', name: 'RadheThakur' }, { id: 'p46', name: 'Skyler' }, { id: 'p47', name: 'Prince' }, { id: 'p48', name: 'Rocky' }] },
 ];
 
 /**
@@ -582,11 +582,14 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
     const deviceName = url.searchParams.get('deviceName') || (role === 'obs' ? 'OBS Studio' : 'Remote Control');
     const token = url.searchParams.get('token') || '';
 
-    // Register client in room
-    if (!roomClients.has(tournamentId)) {
-      roomClients.set(tournamentId, new Set());
+    // Register client in room and all tournament aliases
+    const aliasRooms = getRoomAliases(tournamentId);
+    for (const alias of aliasRooms) {
+      if (!roomClients.has(alias)) {
+        roomClients.set(alias, new Set());
+      }
+      roomClients.get(alias)!.add(ws);
     }
-    roomClients.get(tournamentId)!.add(ws);
 
     clientMetadata.set(ws, {
       tournamentId,
@@ -674,11 +677,14 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
             roomClients.get(meta.tournamentId)?.delete(ws);
             meta.tournamentId = newTourId;
           }
-          // Join new room
-          if (!roomClients.has(newTourId)) {
-            roomClients.set(newTourId, new Set());
+          // Join new room and all alias rooms
+          const aliasRooms = getRoomAliases(newTourId);
+          for (const alias of aliasRooms) {
+            if (!roomClients.has(alias)) {
+              roomClients.set(alias, new Set());
+            }
+            roomClients.get(alias)!.add(ws);
           }
-          roomClients.get(newTourId)!.add(ws);
 
           const state = await getOrCreateAuthoritativeState(newTourId);
           const isDash = meta?.role === 'dashboard';
@@ -691,6 +697,76 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
               timestamp: state.timestamp,
             })
           );
+          return;
+        }
+
+        if (parsed.type === 'JOIN_MATCH') {
+          const newTourId = parsed.tournamentId || meta?.tournamentId || 'default';
+          const matchId = parsed.matchId || 'none';
+          const orgId = parsed.organizationId || 'org-default';
+
+          if (meta) {
+            if (meta.tournamentId !== newTourId) {
+              const oldAliases = getRoomAliases(meta.tournamentId);
+              for (const oldAlias of oldAliases) {
+                roomClients.get(oldAlias)?.delete(ws);
+              }
+              meta.tournamentId = newTourId;
+            }
+          }
+
+          // Register in new room and all tournament aliases
+          const aliasRooms = getRoomAliases(newTourId);
+          for (const alias of aliasRooms) {
+            if (!roomClients.has(alias)) {
+              roomClients.set(alias, new Set());
+            }
+            roomClients.get(alias)!.add(ws);
+          }
+
+          if (matchId && matchId !== 'none') {
+            const liveState = await LiveStateStore.getInstance().getOrCreateLiveState(orgId, newTourId, matchId);
+            ws.send(
+              JSON.stringify({
+                type: 'FULL_MATCH_STATE',
+                tournamentId: newTourId,
+                matchId,
+                revision: liveState.revision,
+                state: liveState,
+                timestamp: liveState.updatedAt,
+              })
+            );
+          }
+          return;
+        }
+
+        if (parsed.type === 'REQUEST_FULL_STATE') {
+          const tourId = parsed.tournamentId || meta?.tournamentId || 'default';
+          const matchId = parsed.matchId || 'none';
+          const orgId = parsed.organizationId || 'org-default';
+
+          // Guarantee socket is registered in tournament alias rooms
+          const aliasRooms = getRoomAliases(tourId);
+          for (const alias of aliasRooms) {
+            if (!roomClients.has(alias)) {
+              roomClients.set(alias, new Set());
+            }
+            roomClients.get(alias)!.add(ws);
+          }
+
+          if (matchId && matchId !== 'none') {
+            const liveState = await LiveStateStore.getInstance().getOrCreateLiveState(orgId, tourId, matchId);
+            ws.send(
+              JSON.stringify({
+                type: 'FULL_MATCH_STATE',
+                tournamentId: tourId,
+                matchId,
+                revision: liveState.revision,
+                state: liveState,
+                timestamp: liveState.updatedAt,
+              })
+            );
+          }
           return;
         }
 

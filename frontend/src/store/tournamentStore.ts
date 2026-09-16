@@ -80,18 +80,18 @@ export interface AppState {
 }
 
 export const SEED_TEAMS: Team[] = [
-  { id: 't1', name: 'Total Gaming Esports', tag: 'TG', slotNumber: 1, players: [{ id: 'p1', name: 'Mafia', inGameId: 'TG_Mafia' }, { id: 'p2', name: 'FozyAjay', inGameId: 'TG_Fozy' }] },
-  { id: 't2', name: 'Team Elite', tag: 'TE', slotNumber: 2, players: [{ id: 'p3', name: 'Killer', inGameId: 'TE_Killer' }, { id: 'p4', name: 'Pahari', inGameId: 'TE_Pahari' }] },
-  { id: 't3', name: 'Orangutan Elite', tag: 'OG', slotNumber: 3, players: [{ id: 'p5', name: 'Jash', inGameId: 'OG_Jash' }, { id: 'p6', name: 'MrJayYT', inGameId: 'OG_Jay' }] },
-  { id: 't4', name: 'GodLike Esports', tag: 'GODL', slotNumber: 4, players: [{ id: 'p7', name: 'Niku', inGameId: 'GL_Niku' }, { id: 'p8', name: 'Ginotra', inGameId: 'GL_Ginotra' }] },
-  { id: 't5', name: 'Blind Esports', tag: 'BLIND', slotNumber: 5, players: [{ id: 'p9', name: 'Abhay', inGameId: 'BL_Abhay' }] },
-  { id: 't6', name: 'Revenant Esports', tag: 'RNT', slotNumber: 6, players: [{ id: 'p10', name: 'Aayush', inGameId: 'RNT_Aayush' }] },
-  { id: 't7', name: 'Chemin Esports', tag: 'CHM', slotNumber: 7, players: [{ id: 'p11', name: 'Swastik', inGameId: 'CHM_Swastik' }] },
-  { id: 't8', name: 'TSM FTX India', tag: 'TSM', slotNumber: 8, players: [{ id: 'p12', name: 'OldMonk', inGameId: 'TSM_Monk' }] },
-  { id: 't9', name: 'Nigma Galaxy', tag: 'NGX', slotNumber: 9, players: [{ id: 'p13', name: 'VasiyoCRJ7', inGameId: 'NGX_Vasiyo' }] },
-  { id: 't10', name: 'Desi Gamers Esports', tag: 'DG', slotNumber: 10, players: [{ id: 'p14', name: 'AmitBhai', inGameId: 'DG_Amit' }] },
-  { id: 't11', name: 'Head Hunters', tag: 'HH', slotNumber: 11, players: [{ id: 'p15', name: 'Aasif', inGameId: 'HH_Aasif' }] },
-  { id: 't12', name: 'Enigma Gaming', tag: 'EG', slotNumber: 12, players: [{ id: 'p16', name: 'RadheThakur', inGameId: 'EG_Radhe' }] },
+  { id: 't1', name: 'Total Gaming Esports', tag: 'TG', slotNumber: 1, players: [{ id: 'p1', name: 'Mafia', inGameId: 'TG_Mafia' }, { id: 'p2', name: 'FozyAjay', inGameId: 'TG_Fozy' }, { id: 'p3', name: 'Vasiyo', inGameId: 'TG_Vasiyo' }, { id: 'p4', name: 'Golden', inGameId: 'TG_Golden' }] },
+  { id: 't2', name: 'Team Elite', tag: 'TE', slotNumber: 2, players: [{ id: 'p5', name: 'Killer', inGameId: 'TE_Killer' }, { id: 'p6', name: 'Pahari', inGameId: 'TE_Pahari' }, { id: 'p7', name: 'Iconic', inGameId: 'TE_Iconic' }, { id: 'p8', name: 'Javaboy', inGameId: 'TE_Javaboy' }] },
+  { id: 't3', name: 'Orangutan Elite', tag: 'OG', slotNumber: 3, players: [{ id: 'p9', name: 'Jash', inGameId: 'OG_Jash' }, { id: 'p10', name: 'MrJayYT', inGameId: 'OG_Jay' }, { id: 'p11', name: 'Rohan', inGameId: 'OG_Rohan' }, { id: 'p12', name: 'Spidey', inGameId: 'OG_Spidey' }] },
+  { id: 't4', name: 'GodLike Esports', tag: 'GODL', slotNumber: 4, players: [{ id: 'p13', name: 'Niku', inGameId: 'GL_Niku' }, { id: 'p14', name: 'Ginotra', inGameId: 'GL_Ginotra' }, { id: 'p15', name: 'Punky', inGameId: 'GL_Punky' }, { id: 'p16', name: 'Akash', inGameId: 'GL_Akash' }] },
+  { id: 't5', name: 'Blind Esports', tag: 'BLIND', slotNumber: 5, players: [{ id: 'p17', name: 'Abhay', inGameId: 'BL_Abhay' }, { id: 'p18', name: 'Triple7', inGameId: 'BL_Triple7' }, { id: 'p19', name: 'Anand', inGameId: 'BL_Anand' }, { id: 'p20', name: 'Shadow', inGameId: 'BL_Shadow' }] },
+  { id: 't6', name: 'Revenant Esports', tag: 'RNT', slotNumber: 6, players: [{ id: 'p21', name: 'Aayush', inGameId: 'RNT_Aayush' }, { id: 'p22', name: 'Bshow', inGameId: 'RNT_Bshow' }, { id: 'p23', name: 'Shann', inGameId: 'RNT_Shann' }, { id: 'p24', name: 'Harsh', inGameId: 'RNT_Harsh' }] },
+  { id: 't7', name: 'Chemin Esports', tag: 'CHM', slotNumber: 7, players: [{ id: 'p25', name: 'Swastik', inGameId: 'CHM_Swastik' }, { id: 'p26', name: 'Radhe', inGameId: 'CHM_Radhe' }, { id: 'p27', name: 'Anand', inGameId: 'CHM_Anand' }, { id: 'p28', name: 'Falcon', inGameId: 'CHM_Falcon' }] },
+  { id: 't8', name: 'TSM FTX India', tag: 'TSM', slotNumber: 8, players: [{ id: 'p29', name: 'OldMonk', inGameId: 'TSM_Monk' }, { id: 'p30', name: 'MrFish', inGameId: 'TSM_MrFish' }, { id: 'p31', name: 'Tenz', inGameId: 'TSM_Tenz' }, { id: 'p32', name: 'Sagar', inGameId: 'TSM_Sagar' }] },
+  { id: 't9', name: 'Nigma Galaxy', tag: 'NGX', slotNumber: 9, players: [{ id: 'p33', name: 'VasiyoCRJ7', inGameId: 'NGX_Vasiyo' }, { id: 'p34', name: 'Tahir', inGameId: 'NGX_Tahir' }, { id: 'p35', name: 'Soham', inGameId: 'NGX_Soham' }, { id: 'p36', name: 'Aman', inGameId: 'NGX_Aman' }] },
+  { id: 't10', name: 'Desi Gamers Esports', tag: 'DG', slotNumber: 10, players: [{ id: 'p37', name: 'AmitBhai', inGameId: 'DG_Amit' }, { id: 'p38', name: 'Saransh', inGameId: 'DG_Saransh' }, { id: 'p39', name: 'Ignis', inGameId: 'DG_Ignis' }, { id: 'p40', name: 'Dev', inGameId: 'DG_Dev' }] },
+  { id: 't11', name: 'Head Hunters', tag: 'HH', slotNumber: 11, players: [{ id: 'p41', name: 'Aasif', inGameId: 'HH_Aasif' }, { id: 'p42', name: 'Satyam', inGameId: 'HH_Satyam' }, { id: 'p43', name: 'Rohit', inGameId: 'HH_Rohit' }, { id: 'p44', name: 'Vinit', inGameId: 'HH_Vinit' }] },
+  { id: 't12', name: 'Enigma Gaming', tag: 'EG', slotNumber: 12, players: [{ id: 'p45', name: 'RadheThakur', inGameId: 'EG_Radhe' }, { id: 'p46', name: 'Skyler', inGameId: 'EG_Skyler' }, { id: 'p47', name: 'Prince', inGameId: 'EG_Prince' }, { id: 'p48', name: 'Rocky', inGameId: 'EG_Rocky' }] },
 ];
 
 const SEED_MATCHES: Match[] = [

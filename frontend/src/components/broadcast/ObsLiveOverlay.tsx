@@ -32,6 +32,8 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<number>(Date.now());
   const [hasNoMatches, setHasNoMatches] = useState<boolean>(false);
+  const [availableTournaments, setAvailableTournaments] = useState<any[]>([]);
+  const [isLoadingTournaments, setIsLoadingTournaments] = useState<boolean>(false);
 
   useEffect(() => {
     let isCancelled = false;
@@ -41,7 +43,16 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
     async function setupContextAndConnect() {
       if (!effectiveTournamentId) {
         setLoading(false);
-        setError('No tournament ID provided for OBS overlay.');
+        try {
+          setIsLoadingTournaments(true);
+          const res = await fetch('/api/tournaments');
+          const data = await res.json();
+          if (!isCancelled && data?.success && Array.isArray(data.data)) {
+            setAvailableTournaments(data.data);
+          }
+        } catch {} finally {
+          if (!isCancelled) setIsLoadingTournaments(false);
+        }
         return;
       }
 
@@ -125,6 +136,78 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
     };
   }, [effectiveTournamentId, effectiveMatchId]);
 
+  if (!effectiveTournamentId) {
+    return (
+      <div
+        className={`w-full min-h-screen flex items-center justify-center p-6 select-none font-sans ${
+          isTransparent ? 'bg-transparent' : 'bg-[#0f0c1b]'
+        }`}
+      >
+        <div className="w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl border border-purple-800/50 bg-[#160d29]/95 p-6 backdrop-blur-md">
+          <div className="flex items-center gap-3 border-b border-purple-900/40 pb-4 mb-4">
+            <div className="h-10 w-10 rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30 flex items-center justify-center font-bold shrink-0">
+              <Activity className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-black text-white font-display uppercase tracking-wider">
+                Select Tournament for Overlay
+              </h2>
+              <p className="text-xs text-slate-400">
+                Please pick a tournament to display on this OBS Browser Source.
+              </p>
+            </div>
+          </div>
+
+          {isLoadingTournaments ? (
+            <div className="py-8 flex flex-col items-center justify-center gap-2 text-slate-400 text-xs">
+              <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
+              <span>Loading available tournaments...</span>
+            </div>
+          ) : availableTournaments.length === 0 ? (
+            <div className="py-6 text-center text-slate-400 text-xs space-y-2">
+              <p>No tournaments found in your account.</p>
+              <p className="text-[11px] text-slate-500">
+                Create a tournament in the PointX dashboard first.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+              {availableTournaments.map((tour: any) => {
+                const tourId = tour.customId || tour.id || tour._id;
+                return (
+                  <button
+                    key={tourId}
+                    type="button"
+                    onClick={() => {
+                      const url = new URL(window.location.href);
+                      url.searchParams.set('tournamentId', tourId);
+                      window.location.href = url.toString();
+                    }}
+                    className="w-full p-3 rounded-xl bg-purple-950/30 hover:bg-purple-900/40 border border-purple-900/40 hover:border-purple-500/60 transition-all flex items-center justify-between group cursor-pointer text-left"
+                  >
+                    <div className="min-w-0 pr-2">
+                      <div className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors truncate">
+                        {tour.title || 'Untitled Tournament'}
+                      </div>
+                      <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+                        <span className="font-mono text-purple-300">{tourId}</span>
+                        <span>•</span>
+                        <span>{tour.status || 'Active'}</span>
+                      </div>
+                    </div>
+                    <span className="shrink-0 px-2.5 py-1 rounded bg-purple-600 group-hover:bg-purple-500 text-white text-[10px] font-bold">
+                      Select →
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (loading && !canonicalState && !hasNoMatches) {
     return (
       <div
@@ -186,8 +269,8 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
             : ['alive', 'alive', 'alive', 'alive'];
           while (squadPlayers.length < 4) squadPlayers.push('alive');
           const isWiped = squadPlayers.every((p) => p === 'eliminated');
-          const isFire = t.teamId === canonicalState.fireTeamId;
-          const isPointRush = t.pointRushEnabled;
+          const isFire = t.isOnFire === true || (t.isOnFire !== false && t.teamId === canonicalState.fireTeamId);
+          const isPointRush = Boolean(t.pointRushEnabled);
           const isFocused = t.teamId === canonicalState.selectedTeamId;
 
           return {

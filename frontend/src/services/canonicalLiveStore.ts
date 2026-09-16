@@ -23,6 +23,8 @@ export interface TeamLiveStatus {
   penaltyPoints?: number;
   players: Record<string, PlayerLiveStatus>;
   pointRushEnabled: boolean;
+  isOnFire?: boolean;
+  isPointRushManual?: boolean;
   lastKillTimestamp?: number;
 }
 
@@ -112,9 +114,15 @@ export class CanonicalLiveStore {
       this.lastAppliedRevision = 0;
       this.currentState = null;
 
+      const client = RealtimeSyncClient.getInstance();
+      client.setTournament(this.activeTourId);
+      client.sendRawMessage({
+        type: 'JOIN_ROOM',
+        tournamentId: this.activeTourId,
+      });
+
       if (cleanMatchId !== 'none') {
-        // Join new room on WebSocket
-        const client = RealtimeSyncClient.getInstance();
+        // Join new match room on WebSocket
         client.sendRawMessage({
           type: 'JOIN_MATCH',
           organizationId: this.activeOrgId,
@@ -295,6 +303,8 @@ export class CanonicalLiveStore {
       | 'SELECT_TEAM'
       | 'SELECT_PLAYER'
       | 'SET_POINT_RUSH_THRESHOLD'
+      | 'TOGGLE_TEAM_FIRE'
+      | 'TOGGLE_TEAM_RUSH'
       | 'FINALIZE_MATCH'
       | 'REOPEN_MATCH'
       | 'NEXT_MATCH'
@@ -314,7 +324,9 @@ export class CanonicalLiveStore {
           t.kills = Math.max(0, t.kills + delta);
           t.killPoints = t.kills * 1;
           t.points = t.placementPoints + t.killPoints + (t.bonusPoints || 0) - (t.penaltyPoints || 0);
-          t.pointRushEnabled = t.points >= this.currentState.pointRushThreshold;
+          if (t.isPointRushManual === undefined) {
+            t.pointRushEnabled = t.points >= this.currentState.pointRushThreshold;
+          }
           this.notify();
         }
       } else if (command === 'SET_PLAYER_STATUS') {
@@ -361,9 +373,30 @@ export class CanonicalLiveStore {
         const threshold = Number(payload.threshold || 50);
         this.currentState.pointRushThreshold = threshold;
         for (const t of Object.values(this.currentState.teams)) {
-          t.pointRushEnabled = t.points >= threshold;
+          if (t.isPointRushManual === undefined) {
+            t.pointRushEnabled = t.points >= threshold;
+          }
         }
         this.notify();
+      } else if (command === 'TOGGLE_TEAM_FIRE') {
+        const teamId = payload.teamId;
+        const t = this.currentState.teams[teamId];
+        if (t) {
+          const currentlyOnFire = t.isOnFire === true || (t.isOnFire !== false && this.currentState.fireTeamId === teamId);
+          t.isOnFire = payload.enabled !== undefined ? Boolean(payload.enabled) : !currentlyOnFire;
+          if (!t.isOnFire && this.currentState.fireTeamId === teamId) {
+            this.currentState.fireTeamId = null;
+          }
+          this.notify();
+        }
+      } else if (command === 'TOGGLE_TEAM_RUSH') {
+        const teamId = payload.teamId;
+        const t = this.currentState.teams[teamId];
+        if (t) {
+          t.pointRushEnabled = payload.enabled !== undefined ? Boolean(payload.enabled) : !t.pointRushEnabled;
+          t.isPointRushManual = t.pointRushEnabled;
+          this.notify();
+        }
       } else if (command === 'FINALIZE_MATCH') {
         this.currentState.isMatchFinished = true;
         this.notify();

@@ -37,7 +37,7 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
   }, []);
 
   const requestedTourId = urlParams?.get('tournamentId') || urlParams?.get('tournament') || '';
-  const effectiveTourId = requestedTourId || store.currentTournament.id || 'default';
+  const effectiveTourId = requestedTourId || '';
   const [tournamentNotFound, setTournamentNotFound] = useState<boolean>(false);
 
   const initialTournament: Tournament = useMemo(() => {
@@ -53,7 +53,19 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
         updatedAt: new Date().toISOString(),
       };
     }
-    return store.currentTournament;
+    return {
+      ...store.currentTournament,
+      id: '',
+      title: 'No Tournament Selected',
+      organizer: '',
+      game: 'Free Fire',
+      status: 'Draft',
+      teams: [],
+      matches: [],
+      scoringPreset: store.currentTournament.scoringPreset,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
   }, [requestedTourId, store.currentTournament, store.tournaments]);
 
   const [tournament, setTournament] = useState<Tournament>(initialTournament);

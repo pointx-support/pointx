@@ -227,6 +227,14 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
     executeCommand('REVIVE_SQUAD', { teamId });
   };
 
+  const handleToggleTeamFire = (teamId: string) => {
+    executeCommand('TOGGLE_TEAM_FIRE', { teamId });
+  };
+
+  const handleToggleTeamRush = (teamId: string) => {
+    executeCommand('TOGGLE_TEAM_RUSH', { teamId });
+  };
+
   const handleResetAlive = () => {
     executeCommand('RESET_ALIVE', {});
     showToast({
@@ -567,9 +575,14 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       <main className="max-w-6xl mx-auto px-4 py-6 w-full flex-1">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {sortedTeams.map((team) => {
-            const isFire = team.teamId === fireTeamId;
-            const isRush = team.pointRushEnabled;
-            const players = team.players ? Object.entries(team.players) : [];
+            const isFire = team.isOnFire === true || (team.isOnFire !== false && team.teamId === fireTeamId);
+            const isRush = Boolean(team.pointRushEnabled);
+            const rawPlayers = team.players ? Object.entries(team.players) : [];
+            const players: [string, { status: PlayerState; updatedAt?: number }][] = [...rawPlayers];
+            while (players.length < 4) {
+              const pSlot = players.length + 1;
+              players.push([`${team.teamId}-p${pSlot}`, { status: 'alive', updatedAt: Date.now() }]);
+            }
             const isWiped = players.length > 0 && players.every(([, p]) => p.status === 'eliminated');
 
             return (
@@ -603,19 +616,35 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
                       </div>
                     </div>
 
-                    {/* Special Mode Badges */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      {isFire && !isWiped && (
-                        <span className="flex items-center gap-0.5 px-2 py-0.5 rounded bg-orange-500 text-black text-[10px] font-black tracking-wider shadow">
-                          <Flame className="h-3 w-3 fill-black" />
-                          FIRE
-                        </span>
-                      )}
-                      {isRush && !isWiped && (
-                        <span className="px-2 py-0.5 rounded bg-yellow-400 text-black text-[10px] font-black tracking-wider shadow">
-                          RUSH
-                        </span>
-                      )}
+                    {/* Manual / Automatic Fire and Rush Toggle Controls */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleTeamFire(team.teamId)}
+                        title={isFire ? "Turn OFF Fire for this team" : "Turn ON Fire for this team"}
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black tracking-wider transition-all cursor-pointer active:scale-95 border ${
+                          isFire
+                            ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white border-orange-400 shadow-md shadow-orange-950/50 animate-pulse'
+                            : 'bg-neutral-900/80 hover:bg-orange-950/40 text-neutral-400 hover:text-orange-300 border-neutral-800'
+                        }`}
+                      >
+                        <Flame className={`h-3 w-3 ${isFire ? 'fill-white text-white' : 'text-neutral-400'}`} />
+                        <span>FIRE</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleToggleTeamRush(team.teamId)}
+                        title={isRush ? "Turn OFF Rush for this team" : "Turn ON Rush for this team"}
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black tracking-wider transition-all cursor-pointer active:scale-95 border ${
+                          isRush
+                            ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-black border-yellow-300 shadow-md shadow-yellow-950/50 font-black'
+                            : 'bg-neutral-900/80 hover:bg-yellow-950/40 text-neutral-400 hover:text-yellow-300 border-neutral-800'
+                        }`}
+                      >
+                        <span className="text-[11px]">⚡</span>
+                        <span>RUSH</span>
+                      </button>
                     </div>
                   </div>
 

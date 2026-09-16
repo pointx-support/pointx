@@ -25,6 +25,8 @@ export interface TeamLiveStatus {
   penaltyPoints?: number;
   players: Record<string, PlayerLiveStatus>;
   pointRushEnabled: boolean;
+  isOnFire?: boolean;
+  isPointRushManual?: boolean;
   lastKillTimestamp?: number;
 }
 
@@ -72,6 +74,8 @@ export interface RemoteCommand {
     | 'SELECT_TEAM'
     | 'SELECT_PLAYER'
     | 'SET_POINT_RUSH_THRESHOLD'
+    | 'TOGGLE_TEAM_FIRE'
+    | 'TOGGLE_TEAM_RUSH'
     | 'FINALIZE_MATCH'
     | 'REOPEN_MATCH'
     | 'NEXT_MATCH'
@@ -218,7 +222,11 @@ export class LiveStateStore {
       effectiveTeams.forEach((t: any, teamIdx: number) => {
         const res = resultsMap.get(t.id);
         const playersObj: Record<string, PlayerLiveStatus> = {};
-        const teamPlayers = Array.isArray(t.players) && t.players.length > 0 ? t.players : [{ id: `${t.id}-p1` }, { id: `${t.id}-p2` }, { id: `${t.id}-p3` }, { id: `${t.id}-p4` }];
+        const rawPlayers = Array.isArray(t.players) ? [...t.players] : [];
+        while (rawPlayers.length < 4) {
+          rawPlayers.push({ id: `${t.id}-p${rawPlayers.length + 1}`, name: `Player ${rawPlayers.length + 1}` });
+        }
+        const teamPlayers = rawPlayers;
 
         teamPlayers.forEach((p: any, idx: number) => {
           const pid = p.id || `${t.id}-p${idx + 1}`;
@@ -313,7 +321,9 @@ export class LiveStateStore {
   public recalculatePointRush(state: CanonicalLiveMatchState): void {
     const threshold = state.pointRushThreshold;
     for (const team of Object.values(state.teams)) {
-      team.pointRushEnabled = team.points >= threshold;
+      if (team.isPointRushManual === undefined) {
+        team.pointRushEnabled = team.points >= threshold;
+      }
     }
   }
 
@@ -359,7 +369,9 @@ export class LiveStateStore {
           team.killPoints = team.kills * killRate;
           team.points = team.placementPoints + team.killPoints + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
 
-          team.pointRushEnabled = team.points >= state.pointRushThreshold;
+          if (team.isPointRushManual === undefined) {
+            team.pointRushEnabled = team.points >= state.pointRushThreshold;
+          }
 
           state.fireTeamId = this.calculateFireTeamId(state.teams);
 
@@ -485,6 +497,48 @@ export class LiveStateStore {
           updatedTeams[tid] = { pointRushEnabled: t.pointRushEnabled };
         }
         diff.teams = updatedTeams;
+        break;
+      }
+
+      case 'TOGGLE_TEAM_FIRE': {
+        const teamId = payload.teamId;
+        const team = state.teams[teamId];
+        if (team) {
+          const currentlyOnFire = team.isOnFire === true || (team.isOnFire !== false && state.fireTeamId === teamId);
+          team.isOnFire = payload.enabled !== undefined ? Boolean(payload.enabled) : !currentlyOnFire;
+
+          // If turning off and this was the auto leader, clear fireTeamId so it stops burning
+          if (!team.isOnFire && state.fireTeamId === teamId) {
+            state.fireTeamId = null;
+          }
+
+          diff.teams = {
+            [teamId]: {
+              isOnFire: team.isOnFire,
+            },
+          };
+          if (state.fireTeamId !== oldFire) {
+            diff.fireTeamId = state.fireTeamId;
+          }
+        }
+        break;
+      }
+
+      case 'TOGGLE_TEAM_RUSH': {
+        const teamId = payload.teamId;
+        const team = state.teams[teamId];
+        if (team) {
+          const nextRush = payload.enabled !== undefined ? Boolean(payload.enabled) : !team.pointRushEnabled;
+          team.pointRushEnabled = nextRush;
+          team.isPointRushManual = nextRush;
+
+          diff.teams = {
+            [teamId]: {
+              pointRushEnabled: team.pointRushEnabled,
+              isPointRushManual: team.isPointRushManual,
+            },
+          };
+        }
         break;
       }
 
