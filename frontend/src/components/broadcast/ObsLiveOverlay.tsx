@@ -277,7 +277,7 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
     );
   }
 
-  const teams = canonicalState?.teams
+  const rawTeams = canonicalState?.teams
     ? Object.values(canonicalState.teams)
         .map((t) => {
           const squadPlayers: PlayerState[] = t.players
@@ -300,7 +300,7 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
             placementPoints: t.placementPoints,
             killPoints: t.killPoints,
             totalPoints: t.points,
-            isBooyah: t.isBooyah || false,
+            isBooyah: !isWiped && Boolean(t.isBooyah),
             squadPlayers,
             alivePlayersCount: squadPlayers.filter((p) => p === 'alive' || p === 'knock').length,
             isWiped,
@@ -309,14 +309,25 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
             isFocused,
           };
         })
-        .sort((a, b) => {
-          if (a.isBooyah !== b.isBooyah) return a.isBooyah ? -1 : 1;
-          if (a.isWiped !== b.isWiped) return a.isWiped ? 1 : -1;
-          if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-          if (b.kills !== a.kills) return b.kills - a.kills;
-          return (a.slotNumber || 1) - (b.slotNumber || 1);
-        })
     : [];
+
+  // Enforce single Booyah guarantee across the entire overlay (at most ONE team can ever hold Booyah)
+  let booyahAwarded = false;
+  const processedTeams = rawTeams.map((t) => {
+    if (t.isBooyah && !t.isWiped && !booyahAwarded) {
+      booyahAwarded = true;
+      return t;
+    }
+    return { ...t, isBooyah: false };
+  });
+
+  const teams = processedTeams.sort((a, b) => {
+    if (a.isBooyah !== b.isBooyah) return a.isBooyah ? -1 : 1;
+    if (a.isWiped !== b.isWiped) return a.isWiped ? 1 : -1;
+    if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+    if (b.kills !== a.kills) return b.kills - a.kills;
+    return (a.slotNumber || 1) - (b.slotNumber || 1);
+  });
 
   const tableVisible = canonicalState?.tableVisible ?? true;
   const revision = canonicalState?.revision ?? 1;

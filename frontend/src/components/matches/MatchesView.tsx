@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Match } from '../../types/tournament';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { MatchEditor } from './MatchEditor';
@@ -25,8 +25,14 @@ import {
 import { getMatchpointLabel } from '../../utils/format';
 
 export const MatchesView: React.FC = () => {
-  const { currentTournament, deleteMatch, setCreateMatchModalOpen, isCreateMatchModalOpen, goBackTab } = useTournamentStore();
+  const { currentTournament, deleteMatch, setCreateMatchModalOpen, isCreateMatchModalOpen, goBackTab, refreshCurrentTournament } = useTournamentStore();
   const { showToast } = useToast();
+
+  useEffect(() => {
+    if (refreshCurrentTournament && currentTournament?.id) {
+      refreshCurrentTournament();
+    }
+  }, [currentTournament?.id]);
 
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);

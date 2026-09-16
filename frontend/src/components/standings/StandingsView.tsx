@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { ResponsiveStandingsTable } from './ResponsiveStandingsTable';
 import { TopFraggersView } from './TopFraggersView';
@@ -8,17 +8,23 @@ import { useToast } from '../ui/Toast';
 import {
   Trophy,
   Tv,
-  Sparkles,
   Download,
   Flame,
   RotateCw,
+  Sparkles,
   ArrowLeft
 } from 'lucide-react';
 import { exportStandingsToCSV, downloadBlobFile } from '../../engine/exportEngine';
 
 export const StandingsView: React.FC = () => {
-  const { currentTournament, getStandings, setActiveTab, goBackTab } = useTournamentStore();
+  const { currentTournament, getStandings, setActiveTab, goBackTab, refreshCurrentTournament } = useTournamentStore();
   const { showToast } = useToast();
+
+  useEffect(() => {
+    if (refreshCurrentTournament && currentTournament?.id) {
+      refreshCurrentTournament();
+    }
+  }, [currentTournament?.id]);
 
   const [activeSubTab, setActiveSubTab] = useState<'overall' | 'mvp'>('overall');
   const [selectedGroup, setSelectedGroup] = useState<'All' | 'Group A' | 'Group B'>('All');

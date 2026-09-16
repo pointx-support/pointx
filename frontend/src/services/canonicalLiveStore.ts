@@ -339,6 +339,9 @@ export class CanonicalLiveStore {
           }
 
           const allDead = Object.values(t.players).every((p) => p.status === 'eliminated');
+          if (allDead) {
+            t.isBooyah = false;
+          }
           if (allDead && !this.currentState.eliminationOrder.includes(teamId)) {
             this.currentState.eliminationOrder.push(teamId);
           } else if (!allDead && this.currentState.eliminationOrder.includes(teamId)) {
@@ -352,8 +355,10 @@ export class CanonicalLiveStore {
           });
 
           if (aliveSquads.length === 1 && allSquads.length > 1) {
-            aliveSquads[0].isBooyah = true;
             this.currentState.isMatchFinished = true;
+            for (const team of allSquads) {
+              team.isBooyah = team.teamId === aliveSquads[0].teamId;
+            }
           } else if (aliveSquads.length > 1 && this.currentState.isMatchFinished) {
             this.currentState.isMatchFinished = false;
             for (const team of allSquads) {
@@ -367,6 +372,7 @@ export class CanonicalLiveStore {
         const teamId = payload.teamId;
         const t = this.currentState.teams[teamId];
         if (t) {
+          t.isBooyah = false;
           for (const pid of Object.keys(t.players)) {
             t.players[pid].status = 'eliminated';
           }
@@ -381,8 +387,15 @@ export class CanonicalLiveStore {
           });
 
           if (aliveSquads.length === 1 && allSquads.length > 1) {
-            aliveSquads[0].isBooyah = true;
             this.currentState.isMatchFinished = true;
+            for (const team of allSquads) {
+              team.isBooyah = team.teamId === aliveSquads[0].teamId;
+            }
+          } else if (aliveSquads.length > 1 && this.currentState.isMatchFinished) {
+            this.currentState.isMatchFinished = false;
+            for (const team of allSquads) {
+              team.isBooyah = false;
+            }
           }
 
           this.notify();

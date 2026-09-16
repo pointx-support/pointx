@@ -211,14 +211,23 @@ export class LiveStateStore {
     const requestedMatch = hasMatches ? tour.matches.find((m: any) => (m.id || m.customId) === matchId) : null;
     const effectiveMatchId = requestedMatch
       ? (requestedMatch.id || requestedMatch.customId)
-      : (matchId === 'none'
-          ? 'none'
+      : (matchId && matchId !== 'none'
+          ? matchId
           : (hasMatches
               ? (tour.matches[0].id || tour.matches[0].customId)
-              : (matchId || 'none')));
-    const matchNumber = effectiveMatchId === 'none'
-      ? 0
-      : (requestedMatch?.matchNumber || (hasMatches ? (tour.matches[0].matchNumber || 1) : 1));
+              : 'none'));
+
+    // Resolve match number intelligently (e.g. from match document, or live-match-2 -> 2)
+    let matchNumber = 1;
+    if (requestedMatch?.matchNumber) {
+      matchNumber = requestedMatch.matchNumber;
+    } else if (matchId && matchId.match(/match.*?(\d+)/i)) {
+      matchNumber = parseInt(matchId.match(/match.*?(\d+)/i)![1], 10);
+    } else if (effectiveMatchId === 'none') {
+      matchNumber = 0;
+    } else if (hasMatches) {
+      matchNumber = tour.matches.length + 1;
+    }
     const threshold = tour?.scoringPreset?.pointRushThreshold ?? 50;
 
     // Sum up totalPoints for each team from prior COMPLETED matches
@@ -382,9 +391,23 @@ export class LiveStateStore {
         ...(diff.teams[booyahWinner.teamId] || {}),
         isBooyah: true,
       };
-    } else if (aliveSquads.length > 1 && state.isMatchFinished) {
-      state.isMatchFinished = false;
-      diff.isMatchFinished = false;
+
+      // Clear isBooyah on ALL other squads so multiple teams can NEVER hold Booyah simultaneously
+      for (const t of allSquads) {
+        if (t.teamId !== booyahWinner.teamId && t.isBooyah) {
+          t.isBooyah = false;
+          diff.teams[t.teamId] = {
+            ...(diff.teams[t.teamId] || {}),
+            isBooyah: false,
+          };
+        }
+      }
+    } else {
+      // More than 1 team alive OR 0 teams alive: no single Booyah exists
+      if (state.isMatchFinished) {
+        state.isMatchFinished = false;
+        diff.isMatchFinished = false;
+      }
       if (!diff.teams) diff.teams = {};
       for (const t of allSquads) {
         if (t.isBooyah) {
@@ -483,11 +506,16 @@ export class LiveStateStore {
             diff.eliminationOrder = state.eliminationOrder;
           }
 
+          if (allDead && team.isBooyah) {
+            team.isBooyah = false;
+          }
+
           diff.teams = {
             [teamId]: {
               players: {
                 [playerId]: team.players[playerId],
               },
+              ...(allDead && !team.isBooyah ? { isBooyah: false } : {}),
             },
           };
 
@@ -505,6 +533,10 @@ export class LiveStateStore {
             team.players[pid].updatedAt = now;
           }
 
+          if (team.isBooyah) {
+            team.isBooyah = false;
+          }
+
           if (!state.eliminationOrder.includes(teamId)) {
             state.eliminationOrder.push(teamId);
             diff.eliminationOrder = state.eliminationOrder;
@@ -513,6 +545,7 @@ export class LiveStateStore {
           diff.teams = {
             [teamId]: {
               players: team.players,
+              isBooyah: false,
             },
           };
 

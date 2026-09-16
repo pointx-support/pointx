@@ -380,6 +380,10 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       if (data.success) {
         setIsReportPublished(true);
         const matchNum = data.data?.match?.matchNumber || data.data?.matchNumber || 1;
+
+        // Immediately update frontend tournament store with the newly published match
+        useTournamentStore.getState().refreshCurrentTournament(effectiveTournamentId);
+
         showToast({
           type: 'success',
           title: 'Report Published',
