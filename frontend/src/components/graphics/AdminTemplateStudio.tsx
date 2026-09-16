@@ -11,6 +11,7 @@ import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { useToast } from '../ui/Toast';
 import { CustomTemplateWizard } from '../admin/CustomTemplateWizard';
+import { analyzePsdTemplateBuffer } from '../../engine/psdTemplateAnalyzer';
 import {
   CheckCircle2,
   Trash2,
@@ -77,6 +78,8 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
 
   const replaceArtworkInputRef = useRef<HTMLInputElement | null>(null);
   const customFontInputRef = useRef<HTMLInputElement | null>(null);
+  const psdImportInputRef = useRef<HTMLInputElement | null>(null);
+  const [isImportingPsd, setIsImportingPsd] = useState(false);
 
   // Multi-element selection state
   const [selectedKeys, setSelectedKeys] = useState<string[]>(['slot_1_teamName']);
@@ -571,6 +574,40 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
     reader.readAsDataURL(file);
   };
 
+  // Import PSD Layout & Alignment Handler
+  const handleImportPsdStudio = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsImportingPsd(true);
+      const buffer = await file.arrayBuffer();
+      const result = analyzePsdTemplateBuffer(buffer);
+
+      if (result.success) {
+        updateTemplateAlignment(activeTemplate.id, result.alignment);
+        if (result.cleanImageUrl && !result.cleanImageUrl.startsWith('data:image/svg+xml')) {
+          replaceTemplateImage(activeTemplate.id, result.cleanImageUrl);
+        }
+
+        showToast({
+          type: 'success',
+          title: 'PSD Layout Imported ⚡',
+          message: `Auto-aligned ${result.detectedSummary.teamsCount} team slots, ${result.detectedSummary.ranksCount} serial ranks from "${file.name}".`,
+        });
+      }
+    } catch (err: any) {
+      showToast({
+        type: 'error',
+        title: 'PSD Import Failed',
+        message: err?.message || 'Could not parse PSD file.',
+      });
+    } finally {
+      setIsImportingPsd(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
   // Custom Font Upload Handler
   const handleCustomFontSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -746,6 +783,26 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
             type="file"
             accept="image/png,image/jpeg,image/webp,image/svg+xml"
             onChange={handleReplaceArtwork}
+            className="hidden"
+          />
+
+          {/* ⚡ AUTO-IMPORT PSD */}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isImportingPsd}
+            onClick={() => psdImportInputRef.current?.click()}
+            leftIcon={<Upload className="h-4 w-4 text-amber-500" />}
+            className="border-amber-500/40 hover:bg-amber-500/10 text-[var(--text-primary)] font-bold text-xs"
+            title="Import exact 12-team alignment & artwork from Photopea / Photoshop (.PSD)"
+          >
+            {isImportingPsd ? 'Importing PSD...' : 'Import .PSD Layout'}
+          </Button>
+          <input
+            ref={psdImportInputRef}
+            type="file"
+            accept=".psd"
+            onChange={handleImportPsdStudio}
             className="hidden"
           />
 
