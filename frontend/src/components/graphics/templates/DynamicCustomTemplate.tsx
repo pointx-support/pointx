@@ -11,6 +11,7 @@ export interface DynamicCustomTemplateProps {
   selectedElementKey?: string | string[] | null;
   selectedElementKeys?: string[] | null;
   onSelectElement?: (elementKey: string, e?: React.MouseEvent) => void;
+  onSelectMultipleElements?: (elementKeys: string[]) => void;
   onDragElement?: (key: string, deltaX: number, deltaY: number) => void;
   isInteractive?: boolean;
   hueRotate?: number;
@@ -32,6 +33,7 @@ export const DynamicCustomTemplate: React.FC<DynamicCustomTemplateProps> = ({
   selectedElementKey,
   selectedElementKeys,
   onSelectElement,
+  onSelectMultipleElements,
   onDragElement,
   isInteractive = false,
   hueRotate = 0
@@ -45,6 +47,17 @@ export const DynamicCustomTemplate: React.FC<DynamicCustomTemplateProps> = ({
   // Dragging State
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const lastSvgPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Marquee / Box Selection State
+  const [marquee, setMarquee] = useState<{
+    isSelecting: boolean;
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+    isShift: boolean;
+    initialKeys: string[];
+  } | null>(null);
 
   useEffect(() => {
     registerAllFontsInDocument();
@@ -100,21 +113,69 @@ export const DynamicCustomTemplate: React.FC<DynamicCustomTemplateProps> = ({
       lastSvgPosRef.current = coords;
       setDraggingKey(key);
       try {
-        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+        (e.currentTarget as unknown as Element).setPointerCapture?.(e.pointerId);
       } catch {}
     }
   };
 
-  // SVG Container Pointer Move (Active Dragging)
-  const handleSvgPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!isInteractive || !draggingKey || !onDragElement) return;
-    const current = getSvgCoordinates(e);
-    const deltaX = current.x - lastSvgPosRef.current.x;
-    const deltaY = current.y - lastSvgPosRef.current.y;
+  // SVG Canvas Pointer Down (Trigger Marquee Selection if clicking on empty canvas)
+  const handleSvgPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!isInteractive || e.button !== 0) return;
+    const coords = getSvgCoordinates(e);
+    const isShift = e.shiftKey || e.ctrlKey || e.metaKey;
+    const initialKeys = isShift ? (selectedElementKeys || (selectedElementKey ? (Array.isArray(selectedElementKey) ? selectedElementKey : [selectedElementKey]) : [])) : [];
 
-    if (deltaX !== 0 || deltaY !== 0) {
-      onDragElement(draggingKey, deltaX, deltaY);
-      lastSvgPosRef.current = current;
+    setMarquee({
+      isSelecting: true,
+      startX: coords.x,
+      startY: coords.y,
+      currentX: coords.x,
+      currentY: coords.y,
+      isShift,
+      initialKeys
+    });
+
+    try {
+      (e.currentTarget as unknown as Element).setPointerCapture?.(e.pointerId);
+    } catch {}
+  };
+
+  // SVG Container Pointer Move (Handles element dragging & marquee box selection)
+  const handleSvgPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!isInteractive) return;
+
+    // 1. Element Dragging Mode (Single element or Multi-selected group)
+    if (draggingKey && onDragElement) {
+      const current = getSvgCoordinates(e);
+      const deltaX = current.x - lastSvgPosRef.current.x;
+      const deltaY = current.y - lastSvgPosRef.current.y;
+
+      if (deltaX !== 0 || deltaY !== 0) {
+        onDragElement(draggingKey, deltaX, deltaY);
+        lastSvgPosRef.current = current;
+      }
+      return;
+    }
+
+    // 2. Marquee Box Selection Mode
+    if (marquee?.isSelecting) {
+      const current = getSvgCoordinates(e);
+      const mMinX = Math.min(marquee.startX, current.x);
+      const mMaxX = Math.max(marquee.startX, current.x);
+      const mMinY = Math.min(marquee.startY, current.y);
+      const mMaxY = Math.max(marquee.startY, current.y);
+
+      const allBounds = getAllElementBounds();
+      const intersecting = allBounds
+        .filter((b) => !(b.maxX < mMinX || b.minX > mMaxX || b.maxY < mMinY || b.minY > mMaxY))
+        .map((b) => b.key);
+
+      const finalKeys = marquee.isShift
+        ? Array.from(new Set([...marquee.initialKeys, ...intersecting]))
+        : intersecting;
+
+      onSelectMultipleElements?.(finalKeys);
+      setMarquee((prev) => (prev ? { ...prev, currentX: current.x, currentY: current.y } : null));
     }
   };
 
@@ -122,7 +183,19 @@ export const DynamicCustomTemplate: React.FC<DynamicCustomTemplateProps> = ({
     if (draggingKey) {
       setDraggingKey(null);
       try {
-        (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+        (e.target as unknown as Element).releasePointerCapture?.(e.pointerId);
+      } catch {}
+    }
+
+    if (marquee?.isSelecting) {
+      const dist = Math.hypot(marquee.currentX - marquee.startX, marquee.currentY - marquee.startY);
+      if (dist < 6 && !marquee.isShift) {
+        // Simple click on empty canvas deselects
+        onSelectMultipleElements?.([]);
+      }
+      setMarquee(null);
+      try {
+        (e.currentTarget as unknown as Element).releasePointerCapture?.(e.pointerId);
       } catch {}
     }
   };
@@ -388,6 +461,103 @@ export const DynamicCustomTemplate: React.FC<DynamicCustomTemplateProps> = ({
       customText: itemOverride.customText ?? baseStyle.customText
     };
   };
+
+  // Helper to compute bounding boxes for all interactive elements for marquee box selection
+  const getAllElementBounds = useCallback((): { key: string; minX: number; minY: number; maxX: number; maxY: number }[] => {
+    const list: { key: string; minX: number; minY: number; maxX: number; maxY: number }[] = [];
+
+    const addTextBounds = (key: string, style: TextElementStyle, approxCharWidth = 0.6) => {
+      if (style.visible === false) return;
+      const fSize = style.fontSize || 24;
+      const text = style.customText || '';
+      const textLen = Math.max(text.length, 3);
+      const estWidth = Math.max(40, textLen * fSize * approxCharWidth);
+
+      let minX = style.x;
+      let maxX = style.x + estWidth;
+      if (style.textAnchor === 'middle') {
+        minX = style.x - estWidth / 2;
+        maxX = style.x + estWidth / 2;
+      } else if (style.textAnchor === 'end') {
+        minX = style.x - estWidth;
+        maxX = style.x;
+      }
+      const minY = style.y - fSize;
+      const maxY = style.y + 10;
+      list.push({ key, minX, minY, maxX, maxY });
+    };
+
+    const addBoxBounds = (key: string, x: number, y: number, w: number, h: number, visible = true) => {
+      if (!visible) return;
+      list.push({ key, minX: x, minY: y, maxX: x + w, maxY: y + h });
+    };
+
+    // 1. Organizer
+    addTextBounds('organizer', orgStyle, 0.7);
+    if (effectiveOrgLogo && orgLogoStyle.visible !== false) {
+      addBoxBounds('organizerLogo', orgLogoStyle.x, orgLogoStyle.y, orgLogoStyle.fontSize, orgLogoStyle.fontSize);
+    }
+
+    // 2. Tournament Title & Logo
+    addTextBounds('tournamentTitle', titleStyle, 0.75);
+    if (effectiveTournamentLogo && tourneyLogoStyle.visible !== false) {
+      addBoxBounds('tournamentLogo', tourneyLogoStyle.x, tourneyLogoStyle.y, 64, 64);
+    }
+
+    // 3. Subtitle
+    if (isCustomSubtitle && subStyle.visible !== false) {
+      addBoxBounds('subtitle', subStyle.x, subStyle.y, alignment.subtitleWidth || 300, alignment.subtitleHeight || 50);
+    }
+
+    // 4. Slots (1 to 12)
+    for (let rank = 1; rank <= 12; rank++) {
+      const isRightCol = !isSingleColumn && rank > 6;
+      const rowIndex = isRightCol ? rank - 7 : rank - 1;
+      const defaultBaseY = alignment.baseY + rowIndex * alignment.rowGap;
+
+      const baseRank = isRightCol ? baseRightRankStyle : baseRankStyle;
+      const baseTeam = isRightCol ? baseRightTeamStyle : baseTeamStyle;
+      const baseLogo = isRightCol ? baseRightLogoStyle : baseLogoStyle;
+      const baseMatch = isRightCol ? baseRightMatchStyle : baseMatchStyle;
+      const baseBooyah = isRightCol ? baseRightBooyahStyle : baseBooyahStyle;
+      const baseKills = isRightCol ? baseRightKillsStyle : baseKillsStyle;
+      const basePlace = isRightCol ? baseRightPlaceStyle : basePlaceStyle;
+      const baseTotal = isRightCol ? baseRightTotalStyle : baseTotalStyle;
+
+      const curRank = resolveSlotItemStyle(rank, 'rank', baseRank, defaultBaseY + 32);
+      const curTeam = resolveSlotItemStyle(rank, 'teamName', baseTeam, defaultBaseY + 31);
+      const curLogo = resolveSlotItemStyle(rank, 'logo', baseLogo, defaultBaseY + 31 - (baseTeam.fontSize || 24));
+      const curMatch = resolveSlotItemStyle(rank, 'match', baseMatch, defaultBaseY + 32);
+      const curBooyah = resolveSlotItemStyle(rank, 'booyah', baseBooyah, defaultBaseY + 32);
+      const curKills = resolveSlotItemStyle(rank, 'kills', baseKills, defaultBaseY + 32);
+      const curPlace = resolveSlotItemStyle(rank, 'place', basePlace, defaultBaseY + 32);
+      const curTotal = resolveSlotItemStyle(rank, 'total', baseTotal, defaultBaseY + 32);
+
+      // Rank
+      addTextBounds(`slot_${rank}_rank`, curRank, 0.6);
+      // Logo
+      addBoxBounds(`slot_${rank}_logo`, curLogo.x, curLogo.y, curLogo.fontSize || 28, curLogo.fontSize || 28, curLogo.visible !== false);
+      // Team Name
+      addTextBounds(`slot_${rank}_teamName`, { ...curTeam, customText: curTeam.customText || `Team ${rank}` }, 0.65);
+      // Stats
+      addTextBounds(`slot_${rank}_match`, curMatch, 0.6);
+      addTextBounds(`slot_${rank}_booyah`, curBooyah, 0.6);
+      addTextBounds(`slot_${rank}_kills`, curKills, 0.6);
+      addTextBounds(`slot_${rank}_place`, curPlace, 0.6);
+      addTextBounds(`slot_${rank}_total`, curTotal, 0.6);
+    }
+
+    return list;
+  }, [
+    orgStyle, effectiveOrgLogo, orgLogoStyle,
+    titleStyle, effectiveTournamentLogo, tourneyLogoStyle,
+    isCustomSubtitle, subStyle, alignment, isSingleColumn,
+    baseRightRankStyle, baseRankStyle, baseRightTeamStyle, baseTeamStyle,
+    baseRightLogoStyle, baseLogoStyle, baseRightMatchStyle, baseMatchStyle,
+    baseRightBooyahStyle, baseBooyahStyle, baseRightKillsStyle, baseKillsStyle,
+    baseRightPlaceStyle, basePlaceStyle, baseRightTotalStyle, baseTotalStyle,
+    resolveSlotItemStyle
+  ]);
 
   const renderRow = (
     row: CalculatedStanding | null,
@@ -709,10 +879,11 @@ export const DynamicCustomTemplate: React.FC<DynamicCustomTemplateProps> = ({
       width="100%"
       height="100%"
       preserveAspectRatio="xMidYMid meet"
+      onPointerDown={handleSvgPointerDown}
       onPointerMove={handleSvgPointerMove}
       onPointerUp={handleSvgPointerUp}
       onPointerLeave={handleSvgPointerUp}
-      className={`w-full h-full select-none ${isInteractive ? 'cursor-crosshair' : ''}`}
+      className={`w-full h-full select-none ${isInteractive ? (draggingKey ? 'cursor-grabbing' : 'cursor-crosshair') : ''}`}
     >
       <defs>
         {/* Self-contained Embedded Fonts (Google + Uploaded Custom Base64) */}
@@ -918,6 +1089,48 @@ export const DynamicCustomTemplate: React.FC<DynamicCustomTemplateProps> = ({
       {/* 5. ROWS DATA OVERLAY */}
       {leftRows.map((row, idx) => renderRow(row, idx, false))}
       {!isSingleColumn && rightRows.map((row, idx) => renderRow(row, idx, true))}
+
+      {/* 6. MARQUEE MULTI-SELECTION BOX & FLOATING BADGE */}
+      {marquee && marquee.isSelecting && Math.hypot(marquee.currentX - marquee.startX, marquee.currentY - marquee.startY) >= 4 && (
+        <g pointerEvents="none" className="select-none">
+          <rect
+            x={Math.min(marquee.startX, marquee.currentX)}
+            y={Math.min(marquee.startY, marquee.currentY)}
+            width={Math.abs(marquee.currentX - marquee.startX)}
+            height={Math.abs(marquee.currentY - marquee.startY)}
+            fill="rgba(59, 130, 246, 0.18)"
+            stroke="#3b82f6"
+            strokeWidth="2"
+            strokeDasharray="6 3"
+            rx="6"
+          />
+          {/* Live selection counter floating badge */}
+          <g transform={`translate(${Math.max(marquee.startX, marquee.currentX) + 10}, ${Math.min(marquee.startY, marquee.currentY) - 8})`}>
+            <rect
+              x={0}
+              y={0}
+              width={120}
+              height={28}
+              rx={14}
+              fill="#0f172a"
+              stroke="#3b82f6"
+              strokeWidth={1.5}
+              filter="drop-shadow(0 4px 6px rgba(0,0,0,0.5))"
+            />
+            <text
+              x={60}
+              y={18}
+              textAnchor="middle"
+              fill="#93c5fd"
+              fontSize="12"
+              fontWeight="bold"
+              fontFamily="sans-serif"
+            >
+              ✦ {selectedElementKeys?.length || 0} Selected
+            </text>
+          </g>
+        </g>
+      )}
     </svg>
   );
 };

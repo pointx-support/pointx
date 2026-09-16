@@ -549,6 +549,18 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
     }
   };
 
+  // Multi-element selection handler (from marquee box or batch actions)
+  const handleSelectMultipleElements = useCallback((keys: string[]) => {
+    setSelectedKeys(keys);
+    if (keys.length === 0) {
+      setSelectedPresetLabel('No Selection');
+    } else if (keys.length === 1) {
+      setSelectedPresetLabel(keys[0].replace(/_/g, ' ').toUpperCase());
+    } else {
+      setSelectedPresetLabel(`${keys.length} Elements Selected`);
+    }
+  }, []);
+
   // Preset Selection Helpers
   const selectPreset = (label: string, keys: string[]) => {
     setSelectedKeys(keys);
@@ -913,6 +925,12 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
             </div>
           </div>
 
+          {/* Quick Interactive Gesture Tip */}
+          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs">
+            <span className="text-blue-400 font-bold font-mono">💡 TIP:</span>
+            <span>Click &amp; drag on empty canvas to <strong>Mass-Select</strong>. Drag any selected element to move all of them together. Hold <strong>Shift</strong> to expand selection.</span>
+          </div>
+
           {/* SVG Canvas Board */}
           <div className="w-full flex justify-center items-center bg-[#070b13] p-4 sm:p-6 rounded-3xl border border-[var(--border-subtle)] shadow-2xl overflow-hidden min-h-[560px]">
             <div
@@ -936,6 +954,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                 }}
                 selectedElementKeys={selectedKeys}
                 onSelectElement={handleSelectElement}
+                onSelectMultipleElements={handleSelectMultipleElements}
                 onDragElement={handleDragElement}
                 isInteractive={true}
               />
@@ -1796,6 +1815,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                 }}
                 selectedElementKeys={selectedKeys}
                 onSelectElement={handleSelectElement}
+                onSelectMultipleElements={handleSelectMultipleElements}
                 onDragElement={handleDragElement}
                 isInteractive={true}
               />
