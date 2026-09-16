@@ -62,6 +62,9 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
   const [finalizedReport, setFinalizedReport] = useState<MatchReportData | null>(null);
   const [isLoadingReport, setIsLoadingReport] = useState<boolean>(false);
+  const [isPublishingReport, setIsPublishingReport] = useState<boolean>(false);
+  const [isReportPublished, setIsReportPublished] = useState<boolean>(false);
+  const [confirmNextModalOpen, setConfirmNextModalOpen] = useState<boolean>(false);
   // Diagnostic panel toggle
   const [showDiagnostics, setShowDiagnostics] = useState<boolean>(isDebugUrl);
   const [lastSentCommand, setLastSentCommand] = useState<string>('None');
@@ -271,8 +274,21 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   };
 
   const handleNextMatch = () => {
+    setConfirmNextModalOpen(true);
+  };
+
+  const handleConfirmNextMatch = () => {
     setIsSwitchingMatch(true);
+    setConfirmNextModalOpen(false);
     executeCommand('NEXT_MATCH', {});
+    setTimeout(() => {
+      setIsSwitchingMatch(false);
+      showToast({
+        type: 'success',
+        title: 'Next Match Started',
+        message: 'All squads revived, match kills reset, and previous standings retained.',
+      });
+    }, 500);
   };
 
   const handleSavePointRushThreshold = () => {
@@ -285,15 +301,11 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   };
 
   const handleOpenReportModal = async () => {
-    if (finalizedReport) {
-      setIsReportModalOpen(true);
-      return;
-    }
-
     if (!activeMatchId || activeMatchId === 'none') return;
 
     try {
       setIsLoadingReport(true);
+      setIsReportPublished(false);
       const res = await fetch(`/api/reports/${encodeURIComponent(effectiveTournamentId)}/${encodeURIComponent(activeMatchId)}`);
       const data = await res.json();
       if (data.success && data.data) {
@@ -303,7 +315,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         showToast({
           type: 'info',
           title: 'Report Unavailable',
-          message: 'Finalize the match first to generate an official match report.',
+          message: 'Could not load report for current match.',
         });
       }
     } catch {
@@ -314,6 +326,40 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       });
     } finally {
       setIsLoadingReport(false);
+    }
+  };
+
+  const handlePublishReport = async () => {
+    if (!activeMatchId || activeMatchId === 'none') return;
+    try {
+      setIsPublishingReport(true);
+      const res = await fetch(`/api/reports/${encodeURIComponent(effectiveTournamentId)}/${encodeURIComponent(activeMatchId)}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsReportPublished(true);
+        showToast({
+          type: 'success',
+          title: 'Report Published',
+          message: `Match ${data.data?.matchNumber || 1} report pushed to tournament on website!`,
+        });
+      } else {
+        showToast({
+          type: 'error',
+          title: 'Publish Failed',
+          message: data.message || 'Failed to publish match report.',
+        });
+      }
+    } catch (err: any) {
+      showToast({
+        type: 'error',
+        title: 'Network Error',
+        message: err.message || 'Could not push report to website.',
+      });
+    } finally {
+      setIsPublishingReport(false);
     }
   };
 
@@ -348,7 +394,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   }
 
   // Zero-Match Empty State (Zero-Match Valid Guarantee)
-  if (availableMatches.length === 0 || activeMatchId === 'none') {
+  if (activeMatchId === 'none' && availableMatches.length === 0) {
     return (
       <div className="min-h-screen bg-[#0d0914] text-white flex flex-col items-center justify-center p-6 select-none font-sans">
         <div className="flex flex-col items-center gap-4 bg-[#1b0d33] border border-[#3b1d6e] text-slate-200 p-8 rounded-2xl shadow-2xl max-w-md text-center">
@@ -753,8 +799,48 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
           <MatchReportView
             report={finalizedReport}
             onClose={() => setIsReportModalOpen(false)}
+            onPublish={handlePublishReport}
+            isPublishing={isPublishingReport}
+            isPublished={isReportPublished}
           />
         )}
+      </Modal>
+
+      {/* Confirm Next Match Modal */}
+      <Modal
+        isOpen={confirmNextModalOpen}
+        onClose={() => setConfirmNextModalOpen(false)}
+        maxWidth="md"
+      >
+        <div className="p-6 bg-[#160d29] text-white rounded-2xl border border-purple-800/40">
+          <div className="flex items-center gap-3 text-amber-400 mb-4">
+            <AlertTriangle className="h-6 w-6 shrink-0" />
+            <h3 className="text-lg font-bold font-display">Start Next Match?</h3>
+          </div>
+          <p className="text-sm text-slate-300 leading-relaxed mb-6 font-sans">
+            This will finalize the current round, revive all 12 squads to <strong className="text-emerald-400">ALIVE</strong>,
+            reset match kills to <strong className="text-amber-300">0</strong>, and carry forward all cumulative points
+            into the overall tournament standings.
+          </p>
+          <div className="flex items-center justify-end gap-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setConfirmNextModalOpen(false)}
+              className="bg-neutral-800 hover:bg-neutral-700 text-slate-300"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleConfirmNextMatch}
+              className="bg-purple-600 hover:bg-purple-500 text-white font-bold"
+            >
+              Confirm & Start Next Match
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

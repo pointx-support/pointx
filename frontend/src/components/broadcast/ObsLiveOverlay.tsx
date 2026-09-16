@@ -75,10 +75,10 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
         const matches = Array.isArray(tour.matches) ? tour.matches : [];
 
         if (matches.length === 0) {
-          // Zero-match tournament state: do NOT create fake match!
-          setHasNoMatches(true);
-          setLoading(false);
-          liveStore.setMatchContext(orgId, effectiveTournamentId, 'none');
+          // Zero-match tournament state: connect to virtual 'live-match-1' session
+          // so overlay works seamlessly in sync with Remote without polluting DB
+          setHasNoMatches(false);
+          liveStore.setMatchContext(orgId, effectiveTournamentId, 'live-match-1');
           return;
         }
 
@@ -294,6 +294,7 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
           };
         })
         .sort((a, b) => {
+          if (a.isBooyah !== b.isBooyah) return a.isBooyah ? -1 : 1;
           if (a.isWiped !== b.isWiped) return a.isWiped ? 1 : -1;
           if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
           if (b.kills !== a.kills) return b.kills - a.kills;
@@ -301,6 +302,7 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
         })
     : [];
 
+  const booyahWinner = teams.find((t) => t.isBooyah);
   const tableVisible = canonicalState?.tableVisible ?? true;
   const revision = canonicalState?.revision ?? 1;
 
@@ -365,6 +367,15 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
           </div>
         </div>
 
+        {/* ================= BOOYAH BANNER ================= */}
+        {canonicalState?.isMatchFinished && booyahWinner && (
+          <div className="bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500 text-black px-3 py-1.5 text-center font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg border-b border-amber-300 animate-pulse">
+            <span className="text-sm">👑</span>
+            <span>WINNER: {booyahWinner.name} (BOOYAH!)</span>
+            <span className="text-sm">🏆</span>
+          </div>
+        )}
+
         {/* ================= 2. ROWS 1 TO 12 ================= */}
         <div className="flex flex-col divide-y divide-[#cfb99f]">
           {teams.length === 0 ? (
@@ -386,6 +397,7 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
                 isFireActive,
                 isPointRushActive,
                 isFocused,
+                isBooyah,
               } = team;
 
               const isFire = isFireActive;
@@ -394,7 +406,9 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
                 <div
                   key={teamId}
                   className={`flex items-center h-11 transition-all relative ${
-                    isFire && !isWiped
+                    isBooyah
+                      ? 'border-y-2 border-amber-400 bg-gradient-to-r from-[#d97706] via-[#f59e0b] to-[#fbbf24] text-black shadow-2xl font-bold'
+                      : isFire && !isWiped
                       ? 'border-y-2 border-orange-500 bg-gradient-to-r from-[#991b1b] via-[#ea580c] to-[#f97316] text-white shadow-xl'
                       : isFire && isWiped
                       ? 'border-y-2 border-[#5c3a28] bg-gradient-to-r from-[#422215] via-[#522d1d] to-[#3a1d12] text-[#d4bca4]'
@@ -408,7 +422,9 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
                   {/* # Rank Pill */}
                   <div
                     className={`w-8 h-full flex items-center justify-center font-bold text-base border-r ${
-                      isFire && !isWiped
+                      isBooyah
+                        ? 'bg-amber-600 text-black border-amber-700 font-black'
+                        : isFire && !isWiped
                         ? 'bg-[#8f2702] text-white border-[#5a1400] font-black'
                         : isFire && isWiped
                         ? 'bg-[#2b140a] text-[#c49b80] border-[#401f11]'
@@ -449,7 +465,9 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
                       <div className="flex items-center gap-1.5 truncate">
                         <span
                           className={`font-black text-[13px] tracking-wide truncate ${
-                            isFire || isFocused
+                            isBooyah
+                              ? 'text-black font-extrabold'
+                              : isFire || isFocused
                               ? 'text-white'
                               : isWiped
                               ? 'text-[#8f847b] line-through decoration-red-500/80 decoration-2'
@@ -459,14 +477,20 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
                           {name}
                         </span>
 
-                        {isFire && !isWiped && (
+                        {isBooyah && (
+                          <span className="flex items-center gap-1 bg-black text-amber-300 px-1.5 py-0.2 rounded text-[9px] font-black tracking-wider border border-amber-400/80 shadow-sm shrink-0">
+                            👑 BOOYAH
+                          </span>
+                        )}
+
+                        {isFire && !isWiped && !isBooyah && (
                           <span className="flex items-center gap-0.5 bg-black/40 text-[#ffeedd] px-1 py-0.2 rounded text-[9px] font-black tracking-wider border border-amber-400/60 shadow-sm shrink-0">
                             <Flame className="h-2.5 w-2.5 text-amber-300 fill-amber-300 animate-pulse" />
                             FIRE
                           </span>
                         )}
 
-                        {isPointRushActive && !isWiped && (
+                        {isPointRushActive && !isWiped && !isBooyah && (
                           <span className="flex items-center gap-0.5 bg-yellow-400 text-black px-1 py-0.2 rounded text-[9px] font-black tracking-wider shrink-0 shadow-sm">
                             RUSH
                           </span>
@@ -498,7 +522,13 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
                   {/* Kills (ELIMS) */}
                   <div
                     className={`w-11 text-center font-bold text-sm tracking-wide ${
-                      isFire || isFocused ? 'text-white' : isWiped ? 'text-[#8f847b]' : 'text-[#8a2211]'
+                      isBooyah
+                        ? 'text-black font-black'
+                        : isFire || isFocused
+                        ? 'text-white'
+                        : isWiped
+                        ? 'text-[#8f847b]'
+                        : 'text-[#8a2211]'
                     }`}
                     style={{ fontFamily: "'Space Grotesk', 'Rajdhani', sans-serif" }}
                   >
@@ -508,7 +538,13 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
                   {/* Total Points (T.PTS) */}
                   <div
                     className={`w-12 text-right pr-2 font-black text-sm tracking-tight ${
-                      isFire || isFocused ? 'text-white' : isWiped ? 'text-[#8f847b]' : 'text-[#19110a]'
+                      isBooyah
+                        ? 'text-black font-black'
+                        : isFire || isFocused
+                        ? 'text-white'
+                        : isWiped
+                        ? 'text-[#8f847b]'
+                        : 'text-[#19110a]'
                     }`}
                     style={{ fontFamily: "'Space Grotesk', 'Rajdhani', sans-serif" }}
                   >

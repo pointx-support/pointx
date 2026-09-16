@@ -799,14 +799,8 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
             timestamp: parsed.timestamp || Date.now(),
           };
 
-          if (cmd.matchId === 'none' && cmd.command !== 'SET_TABLE_VISIBILITY') {
-            ws.send(JSON.stringify({
-              type: 'ERROR',
-              error: 'NO_ACTIVE_MATCH',
-              message: 'Cannot execute commands because there are no active matches in this tournament. Create a match first.',
-              commandId: cmd.commandId,
-            }));
-            return;
+          if (cmd.matchId === 'none') {
+            cmd.matchId = 'live-match-1';
           }
 
           if (cmd.command === 'NEXT_MATCH') {
@@ -819,6 +813,30 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
                 cmd.tournamentId,
                 nextRes.nextMatch.id
               );
+
+              // Revive all squads to alive, reset match kills to 0, retain prior total points
+              for (const team of Object.values(nextLiveState.teams)) {
+                team.kills = 0;
+                team.killPoints = 0;
+                team.placementPoints = 0;
+                team.placement = undefined;
+                team.isBooyah = false;
+                team.isOnFire = false;
+                team.pointRushEnabled = false;
+                team.isPointRushManual = undefined;
+                team.points = team.priorTotalPoints || 0;
+                if (team.players) {
+                  for (const p of Object.values(team.players)) {
+                    p.status = 'alive';
+                    p.updatedAt = Date.now();
+                  }
+                }
+              }
+              nextLiveState.eliminationOrder = [];
+              nextLiveState.isMatchFinished = false;
+              nextLiveState.fireTeamId = null;
+              nextLiveState.revision += 1;
+              nextLiveState.updatedAt = Date.now();
 
               const nextMsg = {
                 type: 'NEXT_MATCH_READY',

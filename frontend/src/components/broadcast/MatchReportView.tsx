@@ -7,6 +7,8 @@ import {
   Flame,
   CheckCircle2,
   Crosshair,
+  UploadCloud,
+  Loader2,
   X,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -59,9 +61,18 @@ export interface MatchReportData {
 export interface MatchReportViewProps {
   report: MatchReportData;
   onClose?: () => void;
+  onPublish?: () => Promise<void> | void;
+  isPublishing?: boolean;
+  isPublished?: boolean;
 }
 
-export const MatchReportView: React.FC<MatchReportViewProps> = ({ report, onClose }) => {
+export const MatchReportView: React.FC<MatchReportViewProps> = ({
+  report,
+  onClose,
+  onPublish,
+  isPublishing = false,
+  isPublished = false,
+}) => {
   const handlePrint = () => {
     if (typeof window !== 'undefined') {
       window.print();
@@ -113,6 +124,37 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({ report, onClos
 
         {/* Action Controls (Hidden in Print) */}
         <div className="flex items-center gap-2 print:hidden">
+          {onPublish && (
+            <Button
+              size="sm"
+              variant={isPublished ? "outline" : "booyah"}
+              onClick={onPublish}
+              disabled={isPublishing || isPublished}
+              className={`flex items-center gap-1.5 text-xs font-bold ${
+                isPublished
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 cursor-default'
+                  : 'bg-gradient-to-r from-amber-500 to-orange-500 text-black shadow-lg hover:brightness-110'
+              }`}
+            >
+              {isPublishing ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Publishing...</span>
+                </>
+              ) : isPublished ? (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Published to Website</span>
+                </>
+              ) : (
+                <>
+                  <UploadCloud className="h-3.5 w-3.5" />
+                  <span>Push to Tournament as Match {report.matchNumber}</span>
+                </>
+              )}
+            </Button>
+          )}
+
           <Button
             size="sm"
             variant="secondary"
@@ -317,6 +359,56 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({ report, onClos
             </table>
           </div>
         </div>
+
+        {/* Verification & Action Bar */}
+        {onPublish && (
+          <div className="p-4 rounded-xl border border-purple-800/40 bg-[#1e143b] flex flex-col sm:flex-row items-center justify-between gap-3 print:hidden">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-white">
+                  Verified Statistics for Match {report.matchNumber}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  {isPublished
+                    ? 'This match report has been officially published and recorded to the tournament website.'
+                    : 'Review kills, placement points, and total score. Click to publish directly as an official match.'}
+                </p>
+              </div>
+            </div>
+
+            <Button
+              size="md"
+              variant={isPublished ? "outline" : "booyah"}
+              onClick={onPublish}
+              disabled={isPublishing || isPublished}
+              className={`w-full sm:w-auto font-bold text-xs ${
+                isPublished
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 cursor-default'
+                  : 'bg-gradient-to-r from-amber-500 to-orange-500 text-black shadow-lg hover:brightness-110'
+              }`}
+            >
+              {isPublishing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Publishing to Website...</span>
+                </>
+              ) : isPublished ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <span>Published to Website</span>
+                </>
+              ) : (
+                <>
+                  <UploadCloud className="h-4 w-4" />
+                  <span>Push to Website as Match {report.matchNumber}</span>
+                </>
+              )}
+            </Button>
+          </div>
+        )}
 
         {/* Footer Audit Signature */}
         <div className="pt-2 border-t border-purple-900/30 flex items-center justify-between text-[11px] font-mono text-slate-500 print:text-neutral-500">

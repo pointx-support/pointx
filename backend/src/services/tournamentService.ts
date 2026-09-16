@@ -448,7 +448,25 @@ export async function getNextMatchForTournament(
     };
   }
 
-  // If no next match exists in database, return hasNext: false (never auto-create matches)
+  // 2. If tournament structure allows more matches (e.g. 6 matches planned), allow advancing seamlessly
+  const maxMatches = tour.structure?.matchCount || 1;
+  if (targetNextNum <= maxMatches) {
+    const nextMatchId = `live-match-${targetNextNum}`;
+    return {
+      hasNext: true,
+      nextMatchId,
+      nextMatchNumber: targetNextNum,
+      nextMatch: {
+        id: nextMatchId,
+        matchNumber: targetNextNum,
+        customLabel: `Match ${String(targetNextNum).padStart(2, '0')}`,
+        mapName: 'Bermuda',
+        status: 'Live',
+      },
+    };
+  }
+
+  // If no next match exists in database and maximum matches reached, return hasNext: false
   return {
     hasNext: false,
     message: `No next match found. Match ${currentNum} is the latest match.`,

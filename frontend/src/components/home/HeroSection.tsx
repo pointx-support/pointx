@@ -10,12 +10,12 @@ import {
   ArrowRight,
   LogIn,
   LayoutDashboard,
-  Cpu,
   Monitor,
   Trophy,
-  Radio,
-  Flame
+  Smartphone,
+  Palette,
 } from 'lucide-react';
+import { LandingFeaturesShowcase } from './LandingFeaturesShowcase';
 
 export interface HeroSectionProps {
   onNavigateLogin: () => void;
@@ -285,183 +285,11 @@ const HeroSectionComponent: React.FC<HeroSectionProps> = ({
             </div>
 
             {/* ─────────────────────────────────────────────────────────────────── */}
-            {/* RIGHT COLUMN (Col 5): REDESIGNED LIVE TOURNAMENT COMMAND HUB        */}
+            {/* RIGHT COLUMN (Col 5): INTERACTIVE FEATURES SHOWCASE (OBS, REMOTE, STUDIO) */}
             {/* ─────────────────────────────────────────────────────────────────── */}
             <div className="lg:col-span-5 w-full">
               <FadeIn delay={0.2}>
-                {/* Master Holographic Arena Command Card */}
-                <div
-                  className="relative w-full rounded-3xl border backdrop-blur-2xl overflow-hidden shadow-2xl bg-white/95 dark:bg-[#0a0d14]/95 border-slate-200 dark:border-white/[0.14] shadow-[0_24px_60px_rgba(15,23,42,0.1)] dark:shadow-[0_30px_70px_rgba(0,0,0,0.8)] hover:border-amber-400/60 dark:hover:border-amber-400/40"
-                >
-                  {/* Top Golden Laser Accent Bar */}
-                  <div className="absolute top-0 left-6 right-6 h-[2px] bg-gradient-to-r from-transparent via-amber-400/90 to-transparent pointer-events-none" />
-
-                  {/* 1. Deck Header: Match Telemetry & Status */}
-                  <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border-subtle)] bg-black/[0.02] dark:bg-black/40">
-                    <div className="flex items-center gap-2.5">
-                      <span className="relative flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-                      </span>
-                      <span
-                        className="text-xs font-black tracking-widest uppercase text-emerald-600 dark:text-emerald-400"
-                        style={{ fontFamily: "'Rajdhani', sans-serif" }}
-                      >
-                        LIVE BROADCAST FEED
-                      </span>
-                    </div>
-
-                    <div
-                      className="flex items-center gap-2 text-[11px] font-bold text-[var(--text-secondary)]"
-                      style={{ fontFamily: "'Rajdhani', sans-serif" }}
-                    >
-                      <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 uppercase tracking-wide">
-                        BERMUDA • MATCH 3/6
-                      </span>
-                      <span className="hidden sm:inline px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25 uppercase tracking-wide">
-                        4K 60FPS
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 2. Grand Champion Showcase Pod */}
-                  <div className="p-5 space-y-4">
-                    <div
-                      className="relative p-4 sm:p-5 rounded-2xl border overflow-hidden bg-gradient-to-br from-amber-50/80 via-white to-amber-50/40 dark:from-[#141a27] dark:via-[#0d111a] dark:to-[#121622] border-amber-400/40 dark:border-amber-400/35 shadow-sm dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]"
-                    >
-                      {/* Ambient Golden Radial Beacon */}
-                      <div className="absolute top-[-20%] right-[-10%] w-44 h-44 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
-
-                      <div className="relative z-10">
-                        {/* Match Title & Auto-Calculated Indicator */}
-                        <div
-                          className="flex items-center justify-between text-xs font-bold uppercase tracking-wider mb-3 text-[var(--text-secondary)]"
-                          style={{ fontFamily: "'Rajdhani', sans-serif" }}
-                        >
-                          <span className="text-amber-500 font-extrabold flex items-center gap-1.5">
-                            <Trophy className="h-4 w-4" />
-                            FREE FIRE WORLD SERIES
-                          </span>
-                          <span className="text-emerald-500 font-black">
-                            AUTO-RANKED #1
-                          </span>
-                        </div>
-
-                        {/* Champion Team & Score Row */}
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3.5 min-w-0">
-                            {/* Gold Crown Trophy Rank Badge */}
-                            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-yellow-500 text-black flex flex-col items-center justify-center font-black shadow-[0_4px_16px_rgba(245,158,11,0.45)] border border-amber-200 shrink-0">
-                              <span className="text-xs leading-none">👑</span>
-                              <span
-                                className="text-lg leading-none font-black mt-0.5"
-                                style={{ fontFamily: "'Rajdhani', sans-serif" }}
-                              >
-                                #1
-                              </span>
-                            </div>
-
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <h3
-                                  className="text-base sm:text-lg font-black tracking-wide uppercase text-[var(--text-primary)] truncate"
-                                  style={{ fontFamily: "'Rajdhani', sans-serif" }}
-                                >
-                                  Total Gaming
-                                </h3>
-                                <span
-                                  className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-600 dark:text-amber-300 text-xs font-bold border border-amber-500/25"
-                                  style={{ fontFamily: "'Rajdhani', sans-serif" }}
-                                >
-                                  TG
-                                </span>
-                              </div>
-
-                              {/* Combat Frag Stat Chips */}
-                              <div
-                                className="flex items-center gap-2 mt-1.5 text-xs font-bold flex-wrap"
-                                style={{ fontFamily: "'Rajdhani', sans-serif" }}
-                              >
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25 tracking-wide">
-                                  <Flame className="h-3 w-3" />
-                                  10 KILLS (+10)
-                                </span>
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25 tracking-wide">
-                                  RANK 1 (+12)
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Big Glowing Booyah Points Readout */}
-                          <div className="text-right shrink-0">
-                            <div
-                              className="text-3xl sm:text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 leading-none"
-                              style={{ fontFamily: "'Rajdhani', sans-serif" }}
-                            >
-                              22 <span className="text-sm text-[var(--text-secondary)]">PTS</span>
-                            </div>
-                            <span
-                              className="inline-block text-xs font-black tracking-widest uppercase text-emerald-600 dark:text-emerald-400 mt-1"
-                              style={{ fontFamily: "'Rajdhani', sans-serif" }}
-                            >
-                              BOOYAH!
-                            </span>
-                          </div>
-                        </div>
-
-                      </div>
-                    </div>
-
-                    {/* 3. Live Lobby Rollup: Dynamic Standings Bar */}
-                    <div
-                      className="p-3 rounded-xl border bg-black/[0.02] dark:bg-black/30 border-[var(--border-subtle)] space-y-2"
-                      style={{ fontFamily: "'Rajdhani', sans-serif" }}
-                    >
-                      <div className="flex items-center justify-between text-xs font-bold">
-                        <div className="flex items-center gap-2 text-[var(--text-primary)]">
-                          <span className="text-zinc-400 font-black">#2</span>
-                          <span className="uppercase tracking-wide">GodLike Esports</span>
-                          <span className="text-zinc-500 text-[11px]">[GL]</span>
-                        </div>
-                        <div className="text-right text-[var(--text-secondary)]">
-                          <span className="font-black text-sm text-[var(--text-primary)]">14 PTS</span>{' '}
-                          <span className="text-[11px] text-zinc-400">(5 Kills)</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs font-bold pt-1 border-t border-[var(--border-subtle)]/50">
-                        <div className="flex items-center gap-2 text-[var(--text-primary)]">
-                          <span className="text-zinc-400 font-black">#3</span>
-                          <span className="uppercase tracking-wide">Team SouL</span>
-                          <span className="text-zinc-500 text-[11px]">[SOUL]</span>
-                        </div>
-                        <div className="text-right text-[var(--text-secondary)]">
-                          <span className="font-black text-sm text-[var(--text-primary)]">11 PTS</span>{' '}
-                          <span className="text-[11px] text-zinc-400">(3 Kills)</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 4. Stream Source URL & Telemetry Dock */}
-                    <div className="pt-2 flex items-center justify-between text-xs border-t border-[var(--border-subtle)]">
-                      <div className="flex items-center gap-2 min-w-0 text-[var(--text-secondary)] font-mono">
-                        <Radio className="h-3.5 w-3.5 text-emerald-500 animate-pulse shrink-0" />
-                        <span className="truncate text-[11px]">
-                          pointx.in/obs/live?key=ffws-2026
-                        </span>
-                      </div>
-                      <span
-                        className="shrink-0 px-2.5 py-1 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider text-[10px] border border-amber-500/25"
-                        style={{ fontFamily: "'Rajdhani', sans-serif" }}
-                      >
-                        ⚡ 0.38MS CALC ENGINE
-                      </span>
-                    </div>
-
-                  </div>
-
-                </div>
+                <LandingFeaturesShowcase />
               </FadeIn>
             </div>
 
@@ -476,31 +304,31 @@ const HeroSectionComponent: React.FC<HeroSectionProps> = ({
         <FadeIn delay={0.1}>
           <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6 text-left">
             
-            {/* Card 1: Sub-Second Calculation Matrix */}
+            {/* Card 1: Mobile Match Remote Controller */}
             <div className="relative p-6 rounded-3xl border backdrop-blur-xl space-y-3 group overflow-hidden bg-white/95 dark:bg-[#0d111a]/85 border-slate-200/90 dark:border-white/[0.12] hover:border-amber-400/60 dark:hover:border-amber-400/50 shadow-[0_12px_32px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
               <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-amber-400/70 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="flex items-center justify-between">
                 <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-500 border border-amber-500/25">
-                  <Cpu className="h-5 w-5" />
+                  <Smartphone className="h-5 w-5" />
                 </div>
                 <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-bold">
-                  0.38MS LATENCY
+                  0MS WEBSOCKET
                 </span>
               </div>
               <div>
                 <h3 className="text-base font-bold text-[var(--text-primary)] font-display">
-                  Sub-50ms Calculation Engine
+                  Mobile Match Remote
                 </h3>
                 <p
                   className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed font-normal"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
-                  Automated competitive points matrix with instant tie-breakers, placement multipliers, and kill points.
+                  Turn any smartphone into an official tournament control deck. Increment kills, knock players, and wipe squads with single taps.
                 </p>
               </div>
               <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
-                <span>Rule standard: Official &amp; Custom Presets</span>
-                <span className="text-[var(--accent-primary)] font-bold">Auto-Ranked</span>
+                <span>Pairing: Ephemeral PIN &amp; QR</span>
+                <span className="text-amber-500 font-bold">Instant Sync</span>
               </div>
             </div>
 
@@ -517,46 +345,46 @@ const HeroSectionComponent: React.FC<HeroSectionProps> = ({
               </div>
               <div>
                 <h3 className="text-base font-bold text-[var(--text-primary)] font-display">
-                  Live Stream Overlay Deck
+                  Live OBS Stream Overlay
                 </h3>
                 <p
                   className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed font-normal"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
-                  Zero-latency transparent browser source URL for OBS Studio, vMix, and YouTube/Twitch live broadcasts.
+                  Zero-latency transparent browser source for OBS Studio, vMix, and YouTube live streams with dynamic 4-player health bars.
                 </p>
               </div>
               <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
-                <span>Output: 1080p60 / 4K</span>
-                <span className="text-cyan-500 dark:text-cyan-400 font-bold">WebSocket Sync</span>
+                <span>Output: 1080p60 / 4K UHD</span>
+                <span className="text-cyan-500 dark:text-cyan-400 font-bold">WebSocket Delta</span>
               </div>
             </div>
 
-            {/* Card 3: 4K Production Banner Studio */}
+            {/* Card 3: Graphics Studio & PSD Templates */}
             <div className="relative p-6 rounded-3xl border backdrop-blur-xl space-y-3 group overflow-hidden bg-white/95 dark:bg-[#0d111a]/85 border-slate-200/90 dark:border-white/[0.12] hover:border-emerald-400/60 dark:hover:border-emerald-400/50 shadow-[0_12px_32px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
               <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-emerald-400/70 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="flex items-center justify-between">
                 <div className="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 border border-emerald-500/25">
-                  <Trophy className="h-5 w-5" />
+                  <Palette className="h-5 w-5" />
                 </div>
                 <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-bold">
-                  1-CLICK EXPORT
+                  PSD AUTO-ALIGN
                 </span>
               </div>
               <div>
                 <h3 className="text-base font-bold text-[var(--text-primary)] font-display">
-                  4K Social Poster Generator
+                  Graphics Studio &amp; Templates
                 </h3>
                 <p
                   className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed font-normal"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
-                  Export high-resolution overall standings, match winners, and MVP top-fragger posters in under 1 second.
+                  Drop Photopea or Photoshop .PSD files to auto-align team names, rank slots, and stats with sub-pixel precision in 1-click.
                 </p>
               </div>
               <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
-                <span>Format: 3840×2160 PNG</span>
-                <span className="text-emerald-500 dark:text-emerald-400 font-bold">Embedded Fonts</span>
+                <span>Direct .PSD Layer Import</span>
+                <span className="text-emerald-500 dark:text-emerald-400 font-bold">4K Poster Export</span>
               </div>
             </div>
 

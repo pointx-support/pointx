@@ -27,6 +27,7 @@ export interface TeamLiveStatus {
   pointRushEnabled: boolean;
   isOnFire?: boolean;
   isPointRushManual?: boolean;
+  priorTotalPoints?: number;
   lastKillTimestamp?: number;
 }
 
@@ -203,14 +204,25 @@ export class LiveStateStore {
     const requestedMatch = hasMatches ? tour.matches.find((m: any) => (m.id || m.customId) === matchId) : null;
     const effectiveMatchId = requestedMatch
       ? (requestedMatch.id || requestedMatch.customId)
-      : (matchId && matchId !== 'none' && !tour ? matchId : (hasMatches ? (tour.matches[0].id || tour.matches[0].customId) : 'none'));
-    const matchNumber = requestedMatch?.matchNumber || (hasMatches ? (tour.matches[0].matchNumber || 1) : 0);
+      : (matchId === 'none'
+          ? 'none'
+          : (hasMatches
+              ? (tour.matches[0].id || tour.matches[0].customId)
+              : (matchId || 'none')));
+    const matchNumber = effectiveMatchId === 'none'
+      ? 0
+      : (requestedMatch?.matchNumber || (hasMatches ? (tour.matches[0].matchNumber || 1) : 1));
     const threshold = tour?.scoringPreset?.pointRushThreshold ?? 50;
 
+    // Sum up totalPoints for each team from prior COMPLETED matches
+    const priorCompletedMatches = Array.isArray(tour?.matches)
+      ? tour.matches.filter((m: any) => m.status === 'Completed' && (m.id || m.customId) !== effectiveMatchId)
+      : [];
+
     const teamsMap: Record<string, TeamLiveStatus> = {};
-    const effectiveTeams = (effectiveMatchId !== 'none' && Array.isArray(tour?.teams) && tour.teams.length > 0)
+    const effectiveTeams = Array.isArray(tour?.teams) && tour.teams.length > 0
       ? tour.teams
-      : (effectiveMatchId !== 'none' && !tour && matchId ? [] : []);
+      : [];
 
     const existingMatch = tour?.matches?.find((m: any) => (m.id || m.customId) === effectiveMatchId);
     const resultsMap = new Map<string, any>();
@@ -233,8 +245,22 @@ export class LiveStateStore {
           playersObj[pid] = { status: 'alive', updatedAt: Date.now() };
         });
 
+        // Compute prior matches total points
+        let priorTotalPoints = 0;
+        for (const pm of priorCompletedMatches) {
+          if (Array.isArray(pm.results)) {
+            const priorRes = pm.results.find((r: any) => r.teamId === t.id);
+            if (priorRes && priorRes.totalPoints !== undefined) {
+              priorTotalPoints += Number(priorRes.totalPoints) || 0;
+            }
+          }
+        }
+
         const kills = res?.kills || 0;
-        const points = res?.totalPoints || 0;
+        const killRate = tour?.scoringPreset?.killPoints ?? 1;
+        const killPoints = res?.killPoints || (kills * killRate);
+        const placementPoints = res?.placementPoints || 0;
+        const points = priorTotalPoints + killPoints + placementPoints + (res?.bonusPoints || 0) - (res?.penaltyPoints || 0);
 
         teamsMap[t.id] = {
           teamId: t.id,
@@ -244,14 +270,15 @@ export class LiveStateStore {
           logoUrl: t.logoUrl || '',
           kills,
           points,
-          placementPoints: res?.placementPoints || 0,
-          killPoints: res?.killPoints || (kills * (tour?.scoringPreset?.killPoints ?? 1)),
+          placementPoints,
+          killPoints,
           placement: res?.placement,
           isBooyah: res?.isBooyah || false,
           bonusPoints: res?.bonusPoints || 0,
           penaltyPoints: res?.penaltyPoints || 0,
           players: playersObj,
           pointRushEnabled: points >= threshold,
+          priorTotalPoints,
           lastKillTimestamp: kills > 0 ? Date.now() : undefined,
         };
       });
@@ -327,6 +354,41 @@ export class LiveStateStore {
     }
   }
 
+  public checkAndApplyAutoBooyah(state: CanonicalLiveMatchState, diff: Partial<MatchDeltaPatch>): void {
+    const allSquads = Object.values(state.teams);
+    if (allSquads.length <= 1) return;
+
+    const aliveSquads = allSquads.filter((t) => {
+      const players = Object.values(t.players);
+      return players.some((p) => p.status === 'alive' || p.status === 'knock');
+    });
+
+    if (aliveSquads.length === 1) {
+      const booyahWinner = aliveSquads[0];
+      booyahWinner.isBooyah = true;
+      state.isMatchFinished = true;
+      diff.isMatchFinished = true;
+      if (!diff.teams) diff.teams = {};
+      diff.teams[booyahWinner.teamId] = {
+        ...(diff.teams[booyahWinner.teamId] || {}),
+        isBooyah: true,
+      };
+    } else if (aliveSquads.length > 1 && state.isMatchFinished) {
+      state.isMatchFinished = false;
+      diff.isMatchFinished = false;
+      if (!diff.teams) diff.teams = {};
+      for (const t of allSquads) {
+        if (t.isBooyah) {
+          t.isBooyah = false;
+          diff.teams[t.teamId] = {
+            ...(diff.teams[t.teamId] || {}),
+            isBooyah: false,
+          };
+        }
+      }
+    }
+  }
+
   public async applyCommand(command: RemoteCommand, scoringPreset?: any): Promise<{ state: CanonicalLiveMatchState; patch: MatchDeltaPatch }> {
     const { organizationId, tournamentId, matchId, command: action, payload, commandId } = command;
 
@@ -367,7 +429,7 @@ export class LiveStateStore {
 
           const killRate = scoringPreset?.killPoints ?? 1;
           team.killPoints = team.kills * killRate;
-          team.points = team.placementPoints + team.killPoints + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
+          team.points = (team.priorTotalPoints || 0) + team.placementPoints + team.killPoints + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
 
           if (team.isPointRushManual === undefined) {
             team.pointRushEnabled = team.points >= state.pointRushThreshold;
@@ -419,6 +481,8 @@ export class LiveStateStore {
               },
             },
           };
+
+          this.checkAndApplyAutoBooyah(state, diff);
         }
         break;
       }
@@ -442,6 +506,8 @@ export class LiveStateStore {
               players: team.players,
             },
           };
+
+          this.checkAndApplyAutoBooyah(state, diff);
         }
         break;
       }
@@ -463,6 +529,8 @@ export class LiveStateStore {
               players: team.players,
             },
           };
+
+          this.checkAndApplyAutoBooyah(state, diff);
         }
         break;
       }
@@ -545,14 +613,17 @@ export class LiveStateStore {
       case 'RESET_ALIVE': {
         state.eliminationOrder = [];
         diff.eliminationOrder = [];
+        state.isMatchFinished = false;
+        diff.isMatchFinished = false;
         const updatedTeams: Record<string, Partial<TeamLiveStatus>> = {};
 
         for (const [tid, team] of Object.entries(state.teams)) {
+          team.isBooyah = false;
           for (const pid of Object.keys(team.players)) {
             team.players[pid].status = 'alive';
             team.players[pid].updatedAt = now;
           }
-          updatedTeams[tid] = { players: team.players };
+          updatedTeams[tid] = { players: team.players, isBooyah: false };
         }
         diff.teams = updatedTeams;
         break;
@@ -584,7 +655,7 @@ export class LiveStateStore {
           team.isBooyah = isBooyah;
           team.placementPoints = placePts + (isBooyah ? booyahBonus : 0);
           team.killPoints = team.kills * killRate;
-          team.points = team.placementPoints + team.killPoints + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
+          team.points = (team.priorTotalPoints || 0) + team.placementPoints + team.killPoints + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
           team.pointRushEnabled = team.points >= state.pointRushThreshold;
           updatedTeams[team.teamId] = {
             placement: team.placement,
@@ -606,7 +677,7 @@ export class LiveStateStore {
             team.isBooyah = false;
             team.placementPoints = placePts;
             team.killPoints = team.kills * killRate;
-            team.points = team.placementPoints + team.killPoints + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
+            team.points = (team.priorTotalPoints || 0) + team.placementPoints + team.killPoints + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
             team.pointRushEnabled = team.points >= state.pointRushThreshold;
             updatedTeams[teamId] = {
               placement: team.placement,
@@ -631,7 +702,7 @@ export class LiveStateStore {
           team.placement = undefined;
           team.isBooyah = false;
           team.placementPoints = 0;
-          team.points = team.killPoints + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
+          team.points = (team.priorTotalPoints || 0) + team.killPoints + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
           team.pointRushEnabled = team.points >= state.pointRushThreshold;
           updatedTeams[tid] = {
             placement: undefined,

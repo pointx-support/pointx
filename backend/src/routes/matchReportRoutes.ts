@@ -3,23 +3,30 @@ import {
   getMatchReport,
   getAllMatchReportsForTournament,
   formatMatchReportCsv,
+  generateMatchReportPreview,
+  publishMatchReport,
 } from '../services/matchReportService';
 
 const router = Router();
 
-// 1. Fetch finalized match report
+// 1. Fetch finalized match report or live preview
 router.get('/:tournamentId/:matchId', async (req: Request, res: Response) => {
   try {
     const tournamentId = req.params.tournamentId as string;
     const matchId = req.params.matchId as string;
     const version = req.query.version ? Number(req.query.version) : undefined;
 
-    const report = await getMatchReport(tournamentId, matchId, version);
+    let report = await getMatchReport(tournamentId, matchId, version);
+    if (!report) {
+      // If not yet finalized, dynamically generate live preview report directly from live state
+      report = await generateMatchReportPreview(tournamentId, matchId);
+    }
+
     if (!report) {
       return res.status(404).json({
         success: false,
         error: 'MATCH_REPORT_NOT_FOUND',
-        message: `No finalized match report found for tournament ${tournamentId} match ${matchId}.`,
+        message: `No match report or active state found for tournament ${tournamentId} match ${matchId}.`,
       });
     }
 
@@ -31,6 +38,27 @@ router.get('/:tournamentId/:matchId', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch match report',
+    });
+  }
+});
+
+// 2. Publish verified match report to tournament records on the website
+router.post('/:tournamentId/:matchId/publish', async (req: Request, res: Response) => {
+  try {
+    const tournamentId = req.params.tournamentId as string;
+    const matchId = req.params.matchId as string;
+    const user = (req as any).user;
+
+    const result = await publishMatchReport(tournamentId, matchId, user);
+    return res.status(200).json({
+      success: true,
+      data: result,
+      message: `Match report published successfully to tournament.`,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to publish match report',
     });
   }
 });
