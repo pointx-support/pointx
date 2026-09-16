@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Loader2,
   AlertTriangle,
@@ -12,7 +12,6 @@ import {
   Skull,
   Radio,
   CheckCircle2,
-  Trophy,
   FileCheck,
   Activity,
   ChevronRight,
@@ -25,6 +24,7 @@ import { useToast } from '../ui/Toast';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { MatchReportView, type MatchReportData } from './MatchReportView';
+import { getStoredToken } from '../../services/api';
 
 export interface NewBroadcastRemoteProps {
   tournamentId?: string;
@@ -87,13 +87,30 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         setLoading(true);
         setError(null);
 
-        // Fetch authoritative tournament data from backend
-        const res = await fetch(`/api/tournaments/${encodeURIComponent(effectiveTournamentId)}`);
-        const json = await res.json();
+        // Fetch authoritative tournament data from backend with auth header and public fallback
+        const token = getStoredToken();
+        const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+        let json: any = null;
+
+        try {
+          const res = await fetch(`/api/tournaments/${encodeURIComponent(effectiveTournamentId)}`, { headers });
+          if (res.ok) {
+            json = await res.json();
+          }
+        } catch {}
+
+        if (!json?.success || !json?.data) {
+          try {
+            const pubRes = await fetch(`/api/tournaments/public/${encodeURIComponent(effectiveTournamentId)}`);
+            if (pubRes.ok) {
+              json = await pubRes.json();
+            }
+          } catch {}
+        }
 
         if (isCancelled) return;
 
-        if (!json.success || !json.data) {
+        if (!json?.success || !json?.data) {
           setError(`Tournament "${effectiveTournamentId}" not found.`);
           setLoading(false);
           return;
@@ -107,9 +124,9 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         const orgId = tour.organizationId ? String(tour.organizationId) : 'org-default';
 
         if (matches.length === 0) {
-          // Valid zero-match state: do NOT create fake Match 1!
-          setActiveMatchId('none');
-          liveStore.setMatchContext(orgId, effectiveTournamentId, 'none');
+          // Zero-match state: connect to virtual 'live-match-1' session so Remote deck works seamlessly
+          setActiveMatchId('live-match-1');
+          liveStore.setMatchContext(orgId, effectiveTournamentId, 'live-match-1');
           setLoading(false);
           return;
         }
@@ -259,20 +276,6 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
     CanonicalLiveStore.getInstance().setMatchContext(org, effectiveTournamentId, targetId);
   };
 
-  const handleToggleFinishMatch = () => {
-    if (!canonicalState) return;
-    if (canonicalState.isMatchFinished) {
-      executeCommand('REOPEN_MATCH', {});
-      showToast({
-        type: 'info',
-        title: 'Match Reopened',
-        message: 'Match set back to LIVE. Placements reset.',
-      });
-    } else {
-      executeCommand('FINALIZE_MATCH', {});
-    }
-  };
-
   const handleNextMatch = () => {
     setConfirmNextModalOpen(true);
   };
@@ -329,28 +332,43 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
     }
   };
 
-  const handlePublishReport = async () => {
+  const handlePublishReport = async (editedResults?: any[]) => {
     if (!activeMatchId || activeMatchId === 'none') return;
     try {
       setIsPublishingReport(true);
+      const token = getStoredToken();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
       const res = await fetch(`/api/reports/${encodeURIComponent(effectiveTournamentId)}/${encodeURIComponent(activeMatchId)}/publish`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
+        body: JSON.stringify({ results: editedResults })
       });
       const data = await res.json();
       if (data.success) {
         setIsReportPublished(true);
+        const matchNum = data.data?.match?.matchNumber || data.data?.matchNumber || 1;
         showToast({
           type: 'success',
           title: 'Report Published',
-          message: `Match ${data.data?.matchNumber || 1} report pushed to tournament on website!`,
+          message: `Match ${matchNum} report pushed to tournament on website! Transferring Remote to Match ${matchNum + 1}...`,
         });
+
+        // Automatically transfer Remote to the second/next match
+        setTimeout(() => {
+          setIsReportModalOpen(false);
+          setIsPublishingReport(false);
+          executeCommand('NEXT_MATCH', {});
+        }, 1200);
       } else {
         showToast({
           type: 'error',
           title: 'Publish Failed',
           message: data.message || 'Failed to publish match report.',
         });
+        setIsPublishingReport(false);
       }
     } catch (err: any) {
       showToast({
@@ -358,7 +376,6 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         title: 'Network Error',
         message: err.message || 'Could not push report to website.',
       });
-    } finally {
       setIsPublishingReport(false);
     }
   };
@@ -426,12 +443,40 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   });
 
   const tableVisible = canonicalState?.tableVisible ?? true;
-  const isMatchFinished = canonicalState?.isMatchFinished ?? false;
   const revision = canonicalState?.revision ?? 1;
   const fireTeamId = canonicalState?.fireTeamId;
 
   const currentMatchDoc = availableMatches.find((m: any) => (m.id || m.customId) === activeMatchId);
   const obsUrl = `${window.location.origin}/obs?tournamentId=${encodeURIComponent(effectiveTournamentId)}&matchId=${encodeURIComponent(activeMatchId)}`;
+
+  const totalMatchCount = Math.max(
+    tournamentInfo?.matchCount || 6,
+    availableMatches.length,
+    6
+  );
+
+  const matchOptions = useMemo(() => {
+    const list: Array<{ id: string; label: string; number: number }> = [];
+    for (let i = 1; i <= totalMatchCount; i++) {
+      const existing = availableMatches.find(
+        (m: any) => m.matchNumber === i || (m.id || m.customId) === `live-match-${i}`
+      );
+      if (existing) {
+        list.push({
+          id: existing.id || existing.customId,
+          label: existing.customLabel || `Match ${i}`,
+          number: i,
+        });
+      } else {
+        list.push({
+          id: `live-match-${i}`,
+          label: `Match ${i}`,
+          number: i,
+        });
+      }
+    }
+    return list;
+  }, [availableMatches, totalMatchCount]);
 
   return (
     <div className="min-h-screen bg-[#0d0914] text-slate-100 flex flex-col font-sans select-none pb-12">
@@ -485,42 +530,28 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
             </Button>
 
             {/* Match Select Dropdown */}
-            {availableMatches.length > 1 && (
+            <div className="flex items-center gap-1.5 bg-[#241544] border border-[#482488] rounded-lg px-2.5 py-1">
+              <span className="text-slate-400 font-mono text-xs font-semibold">Match:</span>
               <select
                 value={activeMatchId}
                 onChange={(e) => handleMatchSelect(e.target.value)}
-                className="bg-[#241544] border border-[#482488] text-white text-xs font-bold py-1.5 px-2.5 rounded-lg cursor-pointer focus:outline-none focus:ring-1 focus:ring-purple-400"
+                className="bg-transparent text-white text-xs font-bold py-0.5 focus:outline-none cursor-pointer"
               >
-                {availableMatches.map((m: any) => (
-                  <option key={m.id || m.customId} value={m.id || m.customId}>
-                    {m.customLabel || `Match ${m.matchNumber}`}
+                {matchOptions.map((opt: { id: string; label: string; number: number }) => (
+                  <option key={opt.id} value={opt.id} className="bg-[#1b0d33] text-white">
+                    {opt.label}
                   </option>
                 ))}
               </select>
-            )}
-
-            {/* Finish / Reopen Match */}
-            <Button
-              size="sm"
-              variant={isMatchFinished ? 'secondary' : 'primary'}
-              onClick={handleToggleFinishMatch}
-              className={`flex items-center gap-1.5 text-xs font-bold ${
-                isMatchFinished
-                  ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                  : 'bg-purple-600 hover:bg-purple-500 text-white'
-              }`}
-            >
-              <Trophy className="h-3.5 w-3.5" />
-              <span>{isMatchFinished ? 'Reopen Match' : 'Finalize Match'}</span>
-            </Button>
+            </div>
 
             {/* View Finalized Report Button */}
             <Button
               size="sm"
-              variant="secondary"
+              variant="primary"
               onClick={handleOpenReportModal}
               disabled={isLoadingReport}
-              className="flex items-center gap-1.5 text-xs bg-purple-950/60 hover:bg-purple-900 text-purple-200 border border-purple-800/40"
+              className="flex items-center gap-1.5 text-xs bg-purple-600 hover:bg-purple-500 text-white font-bold shadow-md"
             >
               <FileCheck className="h-3.5 w-3.5" />
               <span>Report</span>

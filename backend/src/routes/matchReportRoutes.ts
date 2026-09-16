@@ -48,8 +48,9 @@ router.post('/:tournamentId/:matchId/publish', async (req: Request, res: Respons
     const tournamentId = req.params.tournamentId as string;
     const matchId = req.params.matchId as string;
     const user = (req as any).user;
+    const { results } = req.body || {};
 
-    const result = await publishMatchReport(tournamentId, matchId, user);
+    const result = await publishMatchReport(tournamentId, matchId, user, results);
     return res.status(200).json({
       success: true,
       data: result,

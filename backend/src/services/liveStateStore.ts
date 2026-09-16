@@ -170,32 +170,39 @@ export class LiveStateStore {
     matchId: string,
     tournamentDoc?: any
   ): Promise<CanonicalLiveMatchState> {
-    const key = this.getKey(organizationId, tournamentId, matchId);
-
-    let state = inMemoryStore.get(key);
-    if (state) return state;
-
-    if (this.isRedisConnected && this.redis) {
-      try {
-        const raw = await this.redis.get(key);
-        if (raw) {
-          state = JSON.parse(raw);
-          if (state) {
-            inMemoryStore.set(key, state);
-            return state;
-          }
-        }
-      } catch {}
-    }
-
     let tour = tournamentDoc;
-    if (!tour && tournamentId && tournamentId !== 'default') {
+    if (!tour && tournamentId && tournamentId !== 'default' && tournamentId !== 'none') {
       try {
         const idQueries: any[] = [{ customId: tournamentId }];
         if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
           idQueries.push({ _id: tournamentId });
         }
         tour = await Tournament.findOne({ $or: idQueries }).lean();
+      } catch {}
+    }
+
+    const canonicalTourId = tour?.customId || (tour?._id ? String(tour._id) : tournamentId);
+    const key = this.getKey(organizationId, canonicalTourId, matchId);
+    const aliasKey = this.getKey(organizationId, tournamentId, matchId);
+
+    let state = inMemoryStore.get(key) || inMemoryStore.get(aliasKey);
+    if (state) {
+      inMemoryStore.set(key, state);
+      inMemoryStore.set(aliasKey, state);
+      return state;
+    }
+
+    if (this.isRedisConnected && this.redis) {
+      try {
+        const raw = await this.redis.get(key) || await this.redis.get(aliasKey);
+        if (raw) {
+          state = JSON.parse(raw);
+          if (state) {
+            inMemoryStore.set(key, state);
+            inMemoryStore.set(aliasKey, state);
+            return state;
+          }
+        }
       } catch {}
     }
 
@@ -305,9 +312,11 @@ export class LiveStateStore {
     };
 
     inMemoryStore.set(key, state);
+    inMemoryStore.set(aliasKey, state);
     if (this.isRedisConnected && this.redis) {
       try {
         await this.redis.set(key, JSON.stringify(state), 'EX', 86400);
+        await this.redis.set(aliasKey, JSON.stringify(state), 'EX', 86400);
       } catch {}
     }
 

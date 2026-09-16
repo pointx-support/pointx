@@ -3,6 +3,7 @@ import { Loader2, AlertTriangle, Flame, Wifi, Activity } from 'lucide-react';
 import type { PlayerState } from '../../types/broadcastSession';
 import { CanonicalLiveStore, type CanonicalLiveMatchState } from '../../services/canonicalLiveStore';
 import { RealtimeSyncClient, type ConnectionState } from '../../services/broadcastSync';
+import { getStoredToken } from '../../services/api';
 
 export interface ObsLiveOverlayProps {
   tournamentId?: string;
@@ -57,10 +58,25 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
       }
 
       try {
-        setLoading(true);
-        // Fetch tournament metadata to resolve actual matches
-        const tourRes = await fetch(`/api/tournaments/${encodeURIComponent(effectiveTournamentId)}`);
-        const tourData = await tourRes.json();
+        const token = getStoredToken();
+        const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+        let tourData: any = null;
+
+        try {
+          const tourRes = await fetch(`/api/tournaments/${encodeURIComponent(effectiveTournamentId)}`, { headers });
+          if (tourRes.ok) {
+            tourData = await tourRes.json();
+          }
+        } catch {}
+
+        if (!tourData?.success || !tourData?.data) {
+          try {
+            const pubRes = await fetch(`/api/tournaments/public/${encodeURIComponent(effectiveTournamentId)}`);
+            if (pubRes.ok) {
+              tourData = await pubRes.json();
+            }
+          } catch {}
+        }
 
         if (isCancelled) return;
 
@@ -302,7 +318,6 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
         })
     : [];
 
-  const booyahWinner = teams.find((t) => t.isBooyah);
   const tableVisible = canonicalState?.tableVisible ?? true;
   const revision = canonicalState?.revision ?? 1;
 
@@ -366,15 +381,6 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
             )}
           </div>
         </div>
-
-        {/* ================= BOOYAH BANNER ================= */}
-        {canonicalState?.isMatchFinished && booyahWinner && (
-          <div className="bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500 text-black px-3 py-1.5 text-center font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg border-b border-amber-300 animate-pulse">
-            <span className="text-sm">👑</span>
-            <span>WINNER: {booyahWinner.name} (BOOYAH!)</span>
-            <span className="text-sm">🏆</span>
-          </div>
-        )}
 
         {/* ================= 2. ROWS 1 TO 12 ================= */}
         <div className="flex flex-col divide-y divide-[#cfb99f]">

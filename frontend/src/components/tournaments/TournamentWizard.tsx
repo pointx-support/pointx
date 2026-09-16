@@ -437,23 +437,16 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
                 <div className="space-y-4 font-mono">
                   <div>
                     <label className="block text-xs sm:text-[13px] font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-1.5 font-sans">
-                      Number of Teams
+                      Number of Teams (Standard 12 Slots)
                     </label>
-                    <div className="grid grid-cols-4 gap-2.5">
-                      {[12, 18, 24, 48].map((count) => (
-                        <button
-                          key={count}
-                          type="button"
-                          onClick={() => setTeamCount(count)}
-                          className={`py-3 rounded-xl border text-center font-bold text-sm transition-all cursor-pointer font-numbers ${
-                            teamCount === count
-                              ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] border-[var(--accent-primary)] font-black shadow-md'
-                              : 'bg-[var(--bg-surface-inset)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] shadow-[var(--shadow-inset)]'
-                          }`}
-                        >
-                          {count} Teams
-                        </button>
-                      ))}
+                    <div className="grid grid-cols-1 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setTeamCount(12)}
+                        className="py-3 rounded-xl border text-center font-bold text-sm bg-[var(--accent-primary)] text-[var(--accent-primary-text)] border-[var(--accent-primary)] font-black shadow-md cursor-default font-numbers"
+                      >
+                        12 Teams (Locked Standard Battle Royale Lobby)
+                      </button>
                     </div>
                   </div>
 

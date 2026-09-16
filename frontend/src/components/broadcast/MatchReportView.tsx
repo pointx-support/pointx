@@ -61,7 +61,7 @@ export interface MatchReportData {
 export interface MatchReportViewProps {
   report: MatchReportData;
   onClose?: () => void;
-  onPublish?: () => Promise<void> | void;
+  onPublish?: (editedResults?: any[]) => Promise<void> | void;
   isPublishing?: boolean;
   isPublished?: boolean;
 }
@@ -73,6 +73,80 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
   isPublishing = false,
   isPublished = false,
 }) => {
+  const [standings, setStandings] = React.useState(report.standings);
+
+  React.useEffect(() => {
+    setStandings(report.standings);
+  }, [report.standings]);
+
+  const handleUpdateKills = (teamId: string, newKills: number) => {
+    const safeKills = Math.max(0, isNaN(newKills) ? 0 : newKills);
+    setStandings((prev) =>
+      prev.map((t) => {
+        if (t.teamId !== teamId) return t;
+        const total = (t.placementPoints || 0) + safeKills + (t.bonusPoints || 0) - (t.penaltyPoints || 0);
+        return { ...t, kills: safeKills, killPoints: safeKills, totalPoints: total };
+      })
+    );
+  };
+
+  const handleUpdatePlacementPoints = (teamId: string, newPts: number) => {
+    const safePts = Math.max(0, isNaN(newPts) ? 0 : newPts);
+    setStandings((prev) =>
+      prev.map((t) => {
+        if (t.teamId !== teamId) return t;
+        const total = safePts + (t.kills || 0) + (t.bonusPoints || 0) - (t.penaltyPoints || 0);
+        return { ...t, placementPoints: safePts, totalPoints: total };
+      })
+    );
+  };
+
+  const handleToggleBooyah = (teamId: string) => {
+    setStandings((prev) =>
+      prev.map((t) => {
+        const isCurrent = t.teamId === teamId;
+        const willBeBooyah = isCurrent ? !t.isBooyah : false;
+        return {
+          ...t,
+          isBooyah: willBeBooyah,
+          placement: willBeBooyah ? 1 : (t.placement === 1 ? 2 : t.placement),
+          placementPoints: willBeBooyah ? 12 : t.placementPoints,
+          totalPoints: (willBeBooyah ? 12 : t.placementPoints) + (t.kills || 0),
+        };
+      })
+    );
+  };
+
+  const dynamicSummary = React.useMemo(() => {
+    const totalEliminations = standings.reduce((acc, t) => acc + (t.kills || 0), 0);
+    const totalPoints = standings.reduce((acc, t) => acc + (t.totalPoints || 0), 0);
+    const winningTeam = standings.find((t) => t.isBooyah || t.placement === 1) || standings[0] || report.summary.winningTeam;
+    const sortedByKills = [...standings].sort((a, b) => (b.kills || 0) - (a.kills || 0));
+    const killLeader = sortedByKills[0] || report.summary.killLeader;
+    return {
+      totalEliminations,
+      totalPoints,
+      winningTeam: {
+        teamId: winningTeam.teamId,
+        name: winningTeam.teamName || (winningTeam as any).name || 'Unknown',
+        kills: winningTeam.kills || 0,
+        totalPoints: winningTeam.totalPoints || 0,
+      },
+      killLeader: {
+        teamId: killLeader.teamId,
+        teamName: killLeader.teamName || 'Unknown',
+        kills: killLeader.kills || 0,
+      },
+      totalTeams: standings.length,
+    };
+  }, [standings, report.summary]);
+
+  const handlePublishClick = () => {
+    if (onPublish) {
+      onPublish(standings);
+    }
+  };
+
   const handlePrint = () => {
     if (typeof window !== 'undefined') {
       window.print();
@@ -128,7 +202,7 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
             <Button
               size="sm"
               variant={isPublished ? "outline" : "booyah"}
-              onClick={onPublish}
+              onClick={handlePublishClick}
               disabled={isPublishing || isPublished}
               className={`flex items-center gap-1.5 text-xs font-bold ${
                 isPublished
@@ -204,10 +278,10 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
             </div>
             <div className="mt-2">
               <p className="text-base font-black text-white truncate print:text-black">
-                {report.summary.winningTeam.name}
+                {dynamicSummary.winningTeam.name}
               </p>
               <p className="text-[11px] text-slate-400 print:text-neutral-600">
-                {report.summary.winningTeam.totalPoints} PTS ({report.summary.winningTeam.kills} elims)
+                {dynamicSummary.winningTeam.totalPoints} PTS ({dynamicSummary.winningTeam.kills} elims)
               </p>
             </div>
           </div>
@@ -220,10 +294,10 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
             </div>
             <div className="mt-2">
               <p className="text-base font-black text-white truncate print:text-black">
-                {report.summary.killLeader.teamName}
+                {dynamicSummary.killLeader.teamName}
               </p>
               <p className="text-[11px] text-slate-400 print:text-neutral-600">
-                {report.summary.killLeader.kills} Total Eliminations
+                {dynamicSummary.killLeader.kills} Total Eliminations
               </p>
             </div>
           </div>
@@ -236,7 +310,7 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
             </div>
             <div className="mt-2">
               <p className="text-xl font-black text-white print:text-black">
-                {report.summary.totalEliminations}
+                {dynamicSummary.totalEliminations}
               </p>
               <p className="text-[11px] text-slate-400 print:text-neutral-600">Across all squads</p>
             </div>
@@ -250,10 +324,10 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
             </div>
             <div className="mt-2">
               <p className="text-xl font-black text-white print:text-black">
-                {report.summary.totalPoints}
+                {dynamicSummary.totalPoints}
               </p>
               <p className="text-[11px] text-slate-400 print:text-neutral-600">
-                {report.summary.totalTeams} Teams Participating
+                {dynamicSummary.totalTeams} Teams Participating
               </p>
             </div>
           </div>
@@ -262,11 +336,16 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
         {/* Official Standings Table */}
         <div className="rounded-xl border border-purple-800/40 overflow-hidden bg-[#160e2b] shadow-lg print:border-neutral-300 print:bg-white">
           <div className="px-4 py-3 bg-[#1e143b] border-b border-purple-800/40 flex items-center justify-between print:bg-neutral-100 print:border-neutral-300">
-            <h3 className="text-xs font-black tracking-wider text-slate-200 uppercase print:text-black">
-              Official Match Standings
-            </h3>
+            <div>
+              <h3 className="text-xs font-black tracking-wider text-slate-200 uppercase print:text-black">
+                Official Match Standings (Editable Audit)
+              </h3>
+              <p className="text-[10px] text-slate-400 mt-0.5 print:hidden">
+                You can correct team kills and placement points inline before pushing to the website.
+              </p>
+            </div>
             <span className="text-[11px] font-mono text-slate-400 print:text-neutral-600">
-              Sorted by Placement & Points
+              Live Verified
             </span>
           </div>
 
@@ -277,16 +356,16 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
                   <th className="py-2.5 px-3 w-12 text-center">Rank</th>
                   <th className="py-2.5 px-3 w-14 text-center">Slot</th>
                   <th className="py-2.5 px-4 font-bold text-slate-200 print:text-black">Team Name</th>
-                  <th className="py-2.5 px-3 text-center">Placement</th>
-                  <th className="py-2.5 px-3 text-center text-rose-400 font-bold print:text-black">Elims</th>
+                  <th className="py-2.5 px-3 text-center">Booyah</th>
+                  <th className="py-2.5 px-3 text-center text-rose-400 font-bold print:text-black">Kills (Elims)</th>
                   <th className="py-2.5 px-3 text-center">Place Pts</th>
                   <th className="py-2.5 px-3 text-center">Kill Pts</th>
                   <th className="py-2.5 px-3 text-right pr-4 font-black text-amber-400 print:text-black">Total Pts</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-purple-900/20 font-medium print:divide-neutral-200">
-                {report.standings.map((team) => {
-                  const isTop3 = team.rank <= 3;
+                {standings.map((team, index) => {
+                  const isTop3 = index < 3;
                   return (
                     <tr
                       key={team.teamId}
@@ -306,14 +385,14 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
                         ) : (
                           <span
                             className={`text-[11px] font-mono ${
-                              team.rank === 2
+                              index === 1
                                 ? 'text-slate-300 font-bold'
-                                : team.rank === 3
+                                : index === 2
                                 ? 'text-amber-600 font-bold'
                                 : 'text-slate-400'
                             }`}
                           >
-                            #{team.rank}
+                            #{index + 1}
                           </span>
                         )}
                       </td>
@@ -330,21 +409,43 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
                               {team.teamTag}
                             </span>
                           )}
-                          {team.isBooyah && (
-                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-500 text-black uppercase tracking-wider shadow-sm">
-                              BOOYAH
-                            </span>
-                          )}
                         </div>
                       </td>
-                      <td className="py-2.5 px-3 text-center font-mono text-[11px] text-slate-300 print:text-black">
-                        {team.placement}
+                      <td className="py-2.5 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleBooyah(team.teamId)}
+                          disabled={isPublished || isPublishing}
+                          className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer ${
+                            team.isBooyah
+                              ? 'bg-amber-500 text-black shadow-sm ring-1 ring-amber-300'
+                              : 'bg-purple-900/40 text-purple-300 hover:bg-purple-800/60 border border-purple-800/50'
+                          }`}
+                        >
+                          {team.isBooyah ? '👑 BOOYAH' : 'SET'}
+                        </button>
                       </td>
-                      <td className="py-2.5 px-3 text-center font-mono text-[11px] text-rose-400 font-bold print:text-black">
-                        {team.kills}
+                      <td className="py-2.5 px-3 text-center">
+                        <input
+                          type="number"
+                          min={0}
+                          max={99}
+                          value={team.kills}
+                          onChange={(e) => handleUpdateKills(team.teamId, Number(e.target.value))}
+                          disabled={isPublished || isPublishing}
+                          className="w-14 bg-[#231544] border border-purple-700/50 text-center text-rose-300 font-mono font-bold rounded py-0.5 text-xs focus:outline-none focus:border-rose-400 disabled:opacity-60"
+                        />
                       </td>
-                      <td className="py-2.5 px-3 text-center font-mono text-[11px] text-slate-300 print:text-black">
-                        {team.placementPoints}
+                      <td className="py-2.5 px-3 text-center">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={team.placementPoints}
+                          onChange={(e) => handleUpdatePlacementPoints(team.teamId, Number(e.target.value))}
+                          disabled={isPublished || isPublishing}
+                          className="w-14 bg-[#231544] border border-purple-700/50 text-center text-slate-200 font-mono font-bold rounded py-0.5 text-xs focus:outline-none focus:border-amber-400 disabled:opacity-60"
+                        />
                       </td>
                       <td className="py-2.5 px-3 text-center font-mono text-[11px] text-slate-300 print:text-black">
                         {team.killPoints}
@@ -374,7 +475,7 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
                 <p className="text-[11px] text-slate-400">
                   {isPublished
                     ? 'This match report has been officially published and recorded to the tournament website.'
-                    : 'Review kills, placement points, and total score. Click to publish directly as an official match.'}
+                    : 'Review kills, placement points, and total score. Click to push directly to the website as Match ' + report.matchNumber + '.'}
                 </p>
               </div>
             </div>
@@ -382,7 +483,7 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
             <Button
               size="md"
               variant={isPublished ? "outline" : "booyah"}
-              onClick={onPublish}
+              onClick={handlePublishClick}
               disabled={isPublishing || isPublished}
               className={`w-full sm:w-auto font-bold text-xs ${
                 isPublished

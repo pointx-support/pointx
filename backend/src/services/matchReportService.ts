@@ -389,7 +389,8 @@ export async function generateMatchReportPreview(
 export async function publishMatchReport(
   tournamentId: string,
   matchId: string,
-  user?: { _id?: any; name?: string; email?: string }
+  user?: { _id?: any; name?: string; email?: string },
+  customResults?: any[]
 ): Promise<{ success: boolean; match: any; report: any; message?: string }> {
   const idQueries: any[] = [{ customId: tournamentId }];
   if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -412,17 +413,31 @@ export async function publishMatchReport(
   let match = tour.matches.find((m: any) => (m.id || m.customId) === matchId);
   const matchNumber = liveState.matchNumber || (match?.matchNumber || tour.matches.length + 1);
 
-  const results = report.standings.map((s) => ({
-    teamId: s.teamId,
-    placement: s.placement,
-    kills: s.kills,
-    placementPoints: s.placementPoints,
-    killPoints: s.killPoints,
-    totalPoints: s.placementPoints + s.killPoints + (s.bonusPoints || 0) - (s.penaltyPoints || 0),
-    isBooyah: s.isBooyah,
-    bonusPoints: s.bonusPoints,
-    penaltyPoints: s.penaltyPoints,
-  }));
+  const results = (Array.isArray(customResults) && customResults.length > 0)
+    ? customResults.map((s) => ({
+        teamId: s.teamId,
+        placement: s.placement || 1,
+        kills: s.kills || 0,
+        placementPoints: s.placementPoints !== undefined ? s.placementPoints : 0,
+        killPoints: s.killPoints !== undefined ? s.killPoints : (s.kills || 0),
+        totalPoints: s.totalPoints !== undefined
+          ? s.totalPoints
+          : (s.placementPoints !== undefined ? s.placementPoints : 0) + (s.kills || 0) + (s.bonusPoints || 0) - (s.penaltyPoints || 0),
+        isBooyah: Boolean(s.isBooyah || s.placement === 1),
+        bonusPoints: s.bonusPoints || 0,
+        penaltyPoints: s.penaltyPoints || 0,
+      }))
+    : report.standings.map((s) => ({
+        teamId: s.teamId,
+        placement: s.placement,
+        kills: s.kills,
+        placementPoints: s.placementPoints,
+        killPoints: s.killPoints,
+        totalPoints: s.placementPoints + s.killPoints + (s.bonusPoints || 0) - (s.penaltyPoints || 0),
+        isBooyah: s.isBooyah,
+        bonusPoints: s.bonusPoints,
+        penaltyPoints: s.penaltyPoints,
+      }));
 
   if (match) {
     match.status = 'Completed';

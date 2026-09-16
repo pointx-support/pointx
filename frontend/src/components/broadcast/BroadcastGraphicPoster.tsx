@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import type { Tournament } from '../../types/tournament';
 import type { GraphicsRenderData } from '../../types/graphics';
 import { useTemplateStore } from '../../store/templateStore';
 import { calculateTournamentStandings } from '../../engine/standingsEngine';
 import { getOrdinalSuffix } from '../../utils/format';
-import { DynamicCustomTemplate } from '../graphics/templates/DynamicCustomTemplate';
+import { MasterGraphicRenderer } from '../graphics/renderers/MasterGraphicRenderer';
+import { templatesApi } from '../../services/api';
 
 export interface BroadcastGraphicPosterProps {
   tournament: Tournament;
@@ -27,11 +28,30 @@ export const BroadcastGraphicPoster: React.FC<BroadcastGraphicPosterProps> = ({
   customTitle: propCustomTitle,
   customOrg: propCustomOrg,
 }) => {
-  const { templates, getActiveTemplate } = useTemplateStore();
+  const { templates, getActiveTemplate, syncTemplates } = useTemplateStore();
 
   const urlParams = useMemo(() => {
     return typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   }, []);
+
+  // Fetch backend templates on mount so custom templates display immediately in OBS
+  useEffect(() => {
+    let isMounted = true;
+    async function loadTemplates() {
+      try {
+        const res = await templatesApi.getAll();
+        if (isMounted && res.success && Array.isArray(res.data)) {
+          syncTemplates(res.data as any);
+        }
+      } catch (err) {
+        console.warn('[BroadcastGraphicPoster] Failed to load templates:', err);
+      }
+    }
+    loadTemplates();
+    return () => {
+      isMounted = false;
+    };
+  }, [syncTemplates]);
 
   const requestedTemplateId = urlParams?.get('templateId') || urlParams?.get('template');
   const requestedHue = urlParams?.get('hue') ? Number(urlParams.get('hue')) : 0;
@@ -100,9 +120,14 @@ export const BroadcastGraphicPoster: React.FC<BroadcastGraphicPosterProps> = ({
         }}
       >
         {template ? (
-          <DynamicCustomTemplate
+          <MasterGraphicRenderer
             template={template}
-            data={renderData}
+            tournament={tournament}
+            options={{
+              customTitle,
+              organizerName: customOrg,
+              standingsData: renderData,
+            }}
             hueRotate={activeHue}
             isInteractive={false}
           />

@@ -129,18 +129,17 @@ export const GraphicsStudioView: React.FC = () => {
     return tmplType === activeTemplateType;
   });
 
-  const currentCategoryTemplate =
-    categoryTemplates.find((t) => t.id === activeTemplateId) ||
-    categoryTemplates[0] ||
-    templates.find((t) => (t.templateType ? t.templateType : normalizeTemplateType(t.category)) === activeTemplateType) ||
-    categoryTemplates[0];
-
   const publishedTemplates = categoryTemplates.filter((t) => {
     if (!t.isPublished) return false;
     if (formatFilter === 'portrait') return t.aspectRatio === '4:5';
     if (formatFilter === 'landscape') return t.aspectRatio === '16:9';
     return true;
   });
+
+  const currentCategoryTemplate =
+    publishedTemplates.find((t) => t.id === activeTemplateId) ||
+    publishedTemplates[0] ||
+    null;
 
   // Keep activeTemplateId in sync when category switches
   useEffect(() => {
@@ -308,9 +307,18 @@ export const GraphicsStudioView: React.FC = () => {
   };
 
   const handleCopyObsLink = () => {
+    if (!currentCategoryTemplate) {
+      showToast({
+        type: 'info',
+        title: 'No Template Selected',
+        message: 'Please select or publish a template in this category before copying the OBS link.',
+      });
+      return;
+    }
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
     const categoryName = GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label || 'Graphics';
-    const obsUrl = `${origin}/?mode=broadcast&tournamentId=${currentTournament.id}&layout=${activeCategory === 'standings' ? 'graphic' : activeCategory}&templateId=${currentCategoryTemplate.id}&hue=${hueRotate}&scope=${selectedScope}&title=${encodeURIComponent(customEventTitle)}&org=${encodeURIComponent(customOrgName)}`;
+    const tourId = (currentTournament as any).customId || currentTournament.id;
+    const obsUrl = `${origin}/?mode=broadcast&tournamentId=${encodeURIComponent(tourId)}&layout=graphic&templateId=${encodeURIComponent(currentCategoryTemplate.id)}&hue=${hueRotate}&scope=${selectedScope}&title=${encodeURIComponent(customEventTitle)}&org=${encodeURIComponent(customOrgName)}`;
     navigator.clipboard.writeText(obsUrl);
     showToast({
       type: 'success',
@@ -676,25 +684,42 @@ export const GraphicsStudioView: React.FC = () => {
 
             {/* Vector Canvas Preview */}
             <div className="flex justify-center">
-              <div className={`relative w-full ${isPortrait ? 'max-w-md aspect-[4/5]' : 'max-w-2xl aspect-video'} rounded-2xl overflow-hidden shadow-2xl bg-black border border-[var(--border-subtle)] transition-all flex items-center justify-center`}>
-                <MasterGraphicRenderer
-                  template={currentCategoryTemplate}
-                  tournament={currentTournament}
-                  options={{
-                    customTitle: customEventTitle,
-                    organizerName: customOrgName,
-                    selectedTeamId,
-                    winnerTeamId,
-                    awardTitle,
-                    awardSubtitle,
-                    tournamentDate: certificateDate,
-                    tournamentTime: certificateTime,
-                    standingsData,
-                  }}
-                  hueRotate={hueRotate}
-                  svgRef={svgRef}
-                />
-              </div>
+              {currentCategoryTemplate ? (
+                <div className={`relative w-full ${isPortrait ? 'max-w-md aspect-[4/5]' : 'max-w-2xl aspect-video'} rounded-2xl overflow-hidden shadow-2xl bg-black border border-[var(--border-subtle)] transition-all flex items-center justify-center`}>
+                  <MasterGraphicRenderer
+                    template={currentCategoryTemplate}
+                    tournament={currentTournament}
+                    options={{
+                      customTitle: customEventTitle,
+                      organizerName: customOrgName,
+                      selectedTeamId,
+                      winnerTeamId,
+                      awardTitle,
+                      awardSubtitle,
+                      tournamentDate: certificateDate,
+                      tournamentTime: certificateTime,
+                      standingsData,
+                    }}
+                    hueRotate={hueRotate}
+                    svgRef={svgRef}
+                  />
+                </div>
+              ) : (
+                <div className="w-full max-w-2xl p-12 rounded-2xl bg-[var(--bg-surface-inset)] border border-dashed border-[var(--border-subtle)] flex flex-col items-center justify-center text-center space-y-3 my-4">
+                  <div className="h-12 w-12 rounded-xl bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] flex items-center justify-center">
+                    <LayoutGrid className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-[var(--text-primary)] font-display">
+                      No Published Templates in This Category
+                    </h4>
+                    <p className="text-xs text-[var(--text-secondary)] max-w-md mt-1 font-sans">
+                      There are currently no active templates available for {GRAPHIC_CATEGORIES.find((c) => c.id === activeCategory)?.label || 'this category'}.
+                      {isAdmin ? ' Use the Template Studio to create or publish a custom template.' : ' Please check back once an administrator publishes a template.'}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -757,60 +782,67 @@ export const GraphicsStudioView: React.FC = () => {
             </div>
 
             {/* COMPACT TEMPLATE THEME CARDS */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2.5 max-h-[620px] overflow-y-auto pr-1 custom-scrollbar">
-              {publishedTemplates.map((t) => {
-                const isSelected = activeTemplateId === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setActiveTemplateId(t.id)}
-                    className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1.5 group ${
-                      isSelected
-                        ? 'bg-[var(--bg-surface-raised)] border-[var(--accent-primary)] ring-2 ring-[var(--accent-primary)]/30 text-[var(--text-primary)] shadow-sm'
-                        : 'bg-[var(--bg-surface-inset)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-primary)]/50'
-                    }`}
-                  >
-                    <div className="space-y-1.5 w-full">
-                      <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden bg-black/40 border border-[var(--border-subtle)]">
-                        <img
-                          src={t.imageUrl}
-                          alt={t.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          style={{
-                            filter: hueRotate ? `hue-rotate(${hueRotate}deg)` : undefined
-                          }}
-                        />
-                        <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[8px] font-mono font-bold text-white uppercase backdrop-blur-xs">
-                          {t.aspectRatio}
-                        </span>
-                        {t.visibility === 'ORGANIZATION_RESTRICTED' ? (
-                          <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-purple-600/90 text-[8px] font-mono font-bold text-white uppercase backdrop-blur-xs shadow-xs">
-                            CUSTOM TEMPLATE
+            {publishedTemplates.length === 0 ? (
+              <div className="p-8 text-center bg-[var(--bg-surface-inset)] border border-dashed border-[var(--border-subtle)] rounded-xl space-y-2">
+                <p className="text-xs font-bold text-[var(--text-primary)]">No Templates Available</p>
+                <p className="text-[11px] text-[var(--text-secondary)]">No published templates match your current filter.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2.5 max-h-[620px] overflow-y-auto pr-1 custom-scrollbar">
+                {publishedTemplates.map((t) => {
+                  const isSelected = activeTemplateId === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setActiveTemplateId(t.id)}
+                      className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1.5 group ${
+                        isSelected
+                          ? 'bg-[var(--bg-surface-raised)] border-[var(--accent-primary)] ring-2 ring-[var(--accent-primary)]/30 text-[var(--text-primary)] shadow-sm'
+                          : 'bg-[var(--bg-surface-inset)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-primary)]/50'
+                      }`}
+                    >
+                      <div className="space-y-1.5 w-full">
+                        <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden bg-black/40 border border-[var(--border-subtle)]">
+                          <img
+                            src={t.imageUrl}
+                            alt={t.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            style={{
+                              filter: hueRotate ? `hue-rotate(${hueRotate}deg)` : undefined
+                            }}
+                          />
+                          <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[8px] font-mono font-bold text-white uppercase backdrop-blur-xs">
+                            {t.aspectRatio}
                           </span>
-                        ) : !t.isBuiltIn ? (
-                          <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-blue-600/90 text-[8px] font-mono font-bold text-white uppercase backdrop-blur-xs shadow-xs">
-                            ORGANIZATION TEMPLATE
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div className="flex items-center justify-between gap-1">
-                        <div className="font-bold text-xs text-[var(--text-primary)] font-display truncate">
-                          {t.name}
+                          {t.visibility === 'ORGANIZATION_RESTRICTED' ? (
+                            <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-purple-600/90 text-[8px] font-mono font-bold text-white uppercase backdrop-blur-xs shadow-xs">
+                              CUSTOM TEMPLATE
+                            </span>
+                          ) : !t.isBuiltIn ? (
+                            <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-blue-600/90 text-[8px] font-mono font-bold text-white uppercase backdrop-blur-xs shadow-xs">
+                              ORGANIZATION TEMPLATE
+                            </span>
+                          ) : null}
                         </div>
-                        {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-[var(--accent-primary)] shrink-0" />}
-                      </div>
-                    </div>
 
-                    <div className="flex items-center justify-between pt-1 border-t border-[var(--border-subtle)] text-[8px] font-mono text-[var(--accent-primary)] font-bold w-full">
-                      <span>{t.aspectRatio === '4:5' ? 'POSTER' : '16:9'}</span>
-                      <span className="truncate max-w-[65px]">{t.alignment.fontFamily}</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                        <div className="flex items-center justify-between gap-1">
+                          <div className="font-bold text-xs text-[var(--text-primary)] font-display truncate">
+                            {t.name}
+                          </div>
+                          {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-[var(--accent-primary)] shrink-0" />}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-[var(--border-subtle)] text-[8px] font-mono text-[var(--accent-primary)] font-bold w-full">
+                        <span>{t.aspectRatio === '4:5' ? 'POSTER' : '16:9'}</span>
+                        <span className="truncate max-w-[65px]">{t.alignment.fontFamily}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Admin Precision Studio Shortcut Button */}
             {isAdmin && (

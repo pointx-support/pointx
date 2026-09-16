@@ -19,6 +19,7 @@ import { BroadcastLowerThird } from './BroadcastLowerThird';
 import { ObsLiveOverlay } from './ObsLiveOverlay';
 import { BroadcastGraphicPoster } from './BroadcastGraphicPoster';
 import { Activity, Wifi } from 'lucide-react';
+import { getStoredToken } from '../../services/api';
 
 interface BroadcastContainerProps {
   layoutType?: 'standings' | 'match' | 'fraggers' | 'lower-third' | 'live-squads' | 'pro' | 'graphic' | 'graphic-poster' | 'poster';
@@ -118,8 +119,26 @@ export const BroadcastContainer: FC<BroadcastContainerProps> = ({
         }
 
         if (effectiveTourId && effectiveTourId !== 'default') {
-          const tourRes = await fetch(`/api/tournaments/${encodeURIComponent(effectiveTourId)}`);
-          const tourData = await tourRes.json();
+          const token = getStoredToken();
+          const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+          let tourData: any = null;
+
+          try {
+            const tourRes = await fetch(`/api/tournaments/${encodeURIComponent(effectiveTourId)}`, { headers });
+            if (tourRes.ok) {
+              tourData = await tourRes.json();
+            }
+          } catch {}
+
+          if (!tourData?.success || !tourData?.data) {
+            try {
+              const pubRes = await fetch(`/api/tournaments/public/${encodeURIComponent(effectiveTourId)}`);
+              if (pubRes.ok) {
+                tourData = await pubRes.json();
+              }
+            } catch {}
+          }
+
           if (tourData?.success && tourData?.data) {
             setTournament(tourData.data);
             cacheAuthoritativeTournament(effectiveTourId, tourData.data);

@@ -456,13 +456,11 @@ export const EditTournamentModal: React.FC<EditTournamentModalProps> = ({
                 />
 
                 <Input
-                  label="Total Teams / Slots"
+                  label="Total Teams / Slots (Standard 12 Slots)"
                   type="number"
-                  min={2}
-                  max={48}
-                  value={teamCount}
-                  onChange={(e) => setTeamCount(Math.max(2, parseInt(e.target.value) || 12))}
-                  helperText="Default standard Free Fire match accommodates 12 team slots."
+                  disabled
+                  value={12}
+                  helperText="PointX strictly standardizes Battle Royale tournaments to 12 team slots."
                 />
               </div>
 
