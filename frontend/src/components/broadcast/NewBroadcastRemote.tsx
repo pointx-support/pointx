@@ -65,6 +65,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   const [isPublishingReport, setIsPublishingReport] = useState<boolean>(false);
   const [isReportPublished, setIsReportPublished] = useState<boolean>(false);
   const [confirmNextModalOpen, setConfirmNextModalOpen] = useState<boolean>(false);
+  const [sortAliveFirst, setSortAliveFirst] = useState<boolean>(true);
   // Diagnostic panel toggle
   const [showDiagnostics, setShowDiagnostics] = useState<boolean>(isDebugUrl);
   const [lastSentCommand, setLastSentCommand] = useState<string>('None');
@@ -467,9 +468,37 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   }
 
   const teamsList = canonicalState?.teams ? Object.values(canonicalState.teams) : [];
-  const sortedTeams = [...teamsList].sort((a, b) => {
-    return (a.slotNumber || 0) - (b.slotNumber || 0);
-  });
+
+  const checkTeamWiped = useCallback((team: any): boolean => {
+    if (team.isEliminated === true) return true;
+    const rawPlayers = team.players ? Object.entries(team.players) : [];
+    if (rawPlayers.length > 0) {
+      return rawPlayers.every(([, p]: any) => p?.status === 'eliminated');
+    }
+    return false;
+  }, []);
+
+  const { aliveTeams, wipedTeams } = useMemo(() => {
+    const alive: any[] = [];
+    const wiped: any[] = [];
+    for (const team of teamsList) {
+      if (checkTeamWiped(team)) {
+        wiped.push(team);
+      } else {
+        alive.push(team);
+      }
+    }
+    alive.sort((a, b) => (a.slotNumber || 0) - (b.slotNumber || 0));
+    wiped.sort((a, b) => (a.slotNumber || 0) - (b.slotNumber || 0));
+    return { aliveTeams: alive, wipedTeams: wiped };
+  }, [teamsList, checkTeamWiped]);
+
+  const sortedTeams = useMemo(() => {
+    if (!sortAliveFirst) {
+      return [...teamsList].sort((a, b) => (a.slotNumber || 0) - (b.slotNumber || 0));
+    }
+    return [...aliveTeams, ...wipedTeams];
+  }, [sortAliveFirst, teamsList, aliveTeams, wipedTeams]);
 
   const tableVisible = canonicalState?.tableVisible ?? true;
   const revision = canonicalState?.revision ?? 1;
@@ -477,6 +506,175 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
 
   const currentMatchDoc = availableMatches.find((m: any) => (m.id || m.customId) === activeMatchId);
   const obsUrl = `${window.location.origin}/obs?tournamentId=${encodeURIComponent(effectiveTournamentId)}&matchId=${encodeURIComponent(activeMatchId)}`;
+
+  const renderTeamCard = (team: any) => {
+    const isFire = team.isOnFire === true || (team.isOnFire !== false && team.teamId === fireTeamId);
+    const isRush = Boolean(team.pointRushEnabled);
+    const rawPlayers = team.players
+      ? (Object.entries(team.players) as [string, { status: PlayerState; updatedAt?: number }][])
+      : [];
+    const players: [string, { status: PlayerState; updatedAt?: number }][] = [...rawPlayers];
+    while (players.length < 4) {
+      const pSlot = players.length + 1;
+      players.push([`${team.teamId}-p${pSlot}`, { status: 'alive', updatedAt: Date.now() }]);
+    }
+    const isWiped = players.length > 0 && players.every(([, p]) => p.status === 'eliminated');
+
+    return (
+      <div
+        key={team.teamId}
+        className={`rounded-xl border transition-all p-4 flex flex-col justify-between shadow-lg relative overflow-hidden ${
+          isFire && !isWiped
+            ? 'bg-gradient-to-b from-[#2d1209] to-[#1a0c06] border-orange-500/80 shadow-orange-950/40'
+            : isWiped
+            ? 'bg-[#140f1a] border-red-950/60 opacity-75'
+            : 'bg-[#1b1031] border-[#371963] hover:border-[#522594]'
+        }`}
+      >
+        {/* Team Card Header */}
+        <div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              {/* Slot Badge */}
+              <span className="h-6 w-6 rounded bg-[#2c1550] border border-[#482382] text-slate-200 text-xs font-bold font-mono flex items-center justify-center shrink-0">
+                {team.slotNumber || 1}
+              </span>
+              <div className="min-w-0">
+                <div className="font-black text-sm text-white tracking-wide truncate">
+                  {team.name || `Team ${team.slotNumber}`}
+                </div>
+                {team.tag && (
+                  <div className="text-[10px] font-mono text-purple-300 uppercase">
+                    {team.tag}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Manual / Automatic Fire and Rush Toggle Controls */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleToggleTeamFire(team.teamId)}
+                title={isFire ? "Turn OFF Fire for this team" : "Turn ON Fire for this team"}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black tracking-wider transition-all cursor-pointer active:scale-95 border ${
+                  isFire
+                    ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white border-orange-400 shadow-md shadow-orange-950/50 animate-pulse'
+                    : 'bg-neutral-900/80 hover:bg-orange-950/40 text-neutral-400 hover:text-orange-300 border-neutral-800'
+                }`}
+              >
+                <Flame className={`h-3 w-3 ${isFire ? 'fill-white text-white' : 'text-neutral-400'}`} />
+                <span>FIRE</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleToggleTeamRush(team.teamId)}
+                title={isRush ? "Turn OFF Rush for this team" : "Turn ON Rush for this team"}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black tracking-wider transition-all cursor-pointer active:scale-95 border ${
+                  isRush
+                    ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-black border-yellow-300 shadow-md shadow-yellow-950/50 font-black'
+                    : 'bg-neutral-900/80 hover:bg-yellow-950/40 text-neutral-400 hover:text-yellow-300 border-neutral-800'
+                }`}
+              >
+                <span className="text-[11px]">⚡</span>
+                <span>RUSH</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Eliminations & Points Row */}
+          <div className="mt-3 flex items-center justify-between bg-black/25 rounded-lg p-2 border border-purple-950">
+            <div className="flex items-center gap-3">
+              <div>
+                <span className="text-[10px] font-mono text-slate-400 block uppercase">Elims</span>
+                <span className="text-lg font-black text-rose-400 font-mono leading-none">
+                  {team.kills}
+                </span>
+              </div>
+              <div className="h-6 w-px bg-purple-900/40" />
+              <div>
+                <span className="text-[10px] font-mono text-slate-400 block uppercase">Total Pts</span>
+                <span className="text-lg font-black text-amber-400 font-mono leading-none">
+                  {team.points}
+                </span>
+              </div>
+            </div>
+
+            {/* Quick +1 / -1 Kill Stepper Buttons */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => handleAddKill(team.teamId, -1)}
+                className="h-8 w-8 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-slate-200 flex items-center justify-center font-bold text-sm transition-colors cursor-pointer active:scale-95 shadow"
+                title="Decrement elimination"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => handleAddKill(team.teamId, 1)}
+                className="h-8 w-11 rounded-lg bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center font-black text-sm transition-colors cursor-pointer active:scale-95 shadow-md shadow-rose-950/50"
+                title="Add elimination (+1)"
+              >
+                <Plus className="h-4 w-4 mr-0.5" />
+                <span>1</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Player Statuses (P1 to P4) */}
+          <div className="mt-3">
+            <span className="text-[10px] font-mono text-slate-400 block mb-1.5 uppercase">
+              Player States (Tap to toggle)
+            </span>
+            <div className="grid grid-cols-4 gap-1.5">
+              {players.map(([pId, pData], idx) => {
+                const status = pData.status;
+                let statusColor = 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300';
+                let label = 'ALIVE';
+
+                if (status === 'knock') {
+                  statusColor = 'bg-amber-950/60 border-amber-500/60 text-amber-300 animate-pulse';
+                  label = 'KNOCK';
+                } else if (status === 'eliminated') {
+                  statusColor = 'bg-neutral-900 border-neutral-700 text-neutral-500';
+                  label = 'DEAD';
+                }
+
+                return (
+                  <button
+                    key={pId}
+                    onClick={() => handlePlayerToggle(team.teamId, pId, status)}
+                    className={`py-1.5 px-1 rounded border text-[10px] font-mono font-bold flex flex-col items-center justify-center transition-all cursor-pointer active:scale-95 ${statusColor}`}
+                  >
+                    <span>P{idx + 1}</span>
+                    <span className="text-[8px] font-black">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Squad Quick Actions: Wipe / Revive */}
+        <div className="mt-4 pt-3 border-t border-purple-900/30 flex items-center justify-between gap-2">
+          <button
+            onClick={() => handleWipeSquad(team.teamId)}
+            className="flex-1 py-1 px-2 rounded bg-neutral-900 hover:bg-neutral-800 text-rose-400 border border-neutral-800 text-[11px] font-mono font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+          >
+            <Skull className="h-3 w-3" />
+            <span>Wipe</span>
+          </button>
+          <button
+            onClick={() => handleReviveSquad(team.teamId)}
+            className="flex-1 py-1 px-2 rounded bg-neutral-900 hover:bg-neutral-800 text-emerald-400 border border-neutral-800 text-[11px] font-mono font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+          >
+            <CheckCircle2 className="h-3 w-3" />
+            <span>Revive</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-[#0d0914] text-slate-100 flex flex-col font-sans select-none pb-12">
@@ -621,8 +819,23 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
             </Button>
           </div>
 
-          {/* Quick Resets */}
+          {/* Quick Resets & Sorting Toggles */}
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setSortAliveFirst((prev) => !prev)}
+              className={`flex items-center gap-1.5 text-[11px] py-1 px-2.5 h-auto transition-colors ${
+                sortAliveFirst
+                  ? 'bg-emerald-950/70 border-emerald-500/50 text-emerald-300'
+                  : 'bg-neutral-800 text-slate-400'
+              }`}
+              title="Toggle alive squads on top vs slot numerical order"
+            >
+              <Activity className="h-3 w-3" />
+              <span>{sortAliveFirst ? 'Alive on Top' : 'By Slot'}</span>
+            </Button>
+
             <Button
               size="sm"
               variant="secondary"
@@ -648,183 +861,58 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         </div>
       </div>
 
-      {/* Main Content Area: Team Grid (1 to 12) */}
+      {/* Main Content Area: Team Grid (Alive Teams on Top, Wiped Teams on Bottom) */}
       <main className="max-w-6xl mx-auto px-4 py-6 w-full flex-1">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sortedTeams.map((team) => {
-            const isFire = team.isOnFire === true || (team.isOnFire !== false && team.teamId === fireTeamId);
-            const isRush = Boolean(team.pointRushEnabled);
-            const rawPlayers = team.players ? Object.entries(team.players) : [];
-            const players: [string, { status: PlayerState; updatedAt?: number }][] = [...rawPlayers];
-            while (players.length < 4) {
-              const pSlot = players.length + 1;
-              players.push([`${team.teamId}-p${pSlot}`, { status: 'alive', updatedAt: Date.now() }]);
-            }
-            const isWiped = players.length > 0 && players.every(([, p]) => p.status === 'eliminated');
-
-            return (
-              <div
-                key={team.teamId}
-                className={`rounded-xl border transition-all p-4 flex flex-col justify-between shadow-lg relative overflow-hidden ${
-                  isFire && !isWiped
-                    ? 'bg-gradient-to-b from-[#2d1209] to-[#1a0c06] border-orange-500/80 shadow-orange-950/40'
-                    : isWiped
-                    ? 'bg-[#140f1a] border-red-950/60 opacity-75'
-                    : 'bg-[#1b1031] border-[#371963] hover:border-[#522594]'
-                }`}
-              >
-                {/* Team Card Header */}
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {/* Slot Badge */}
-                      <span className="h-6 w-6 rounded bg-[#2c1550] border border-[#482382] text-slate-200 text-xs font-bold font-mono flex items-center justify-center shrink-0">
-                        {team.slotNumber || 1}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="font-black text-sm text-white tracking-wide truncate">
-                          {team.name || `Team ${team.slotNumber}`}
-                        </div>
-                        {team.tag && (
-                          <div className="text-[10px] font-mono text-purple-300 uppercase">
-                            {team.tag}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Manual / Automatic Fire and Rush Toggle Controls */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleTeamFire(team.teamId)}
-                        title={isFire ? "Turn OFF Fire for this team" : "Turn ON Fire for this team"}
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black tracking-wider transition-all cursor-pointer active:scale-95 border ${
-                          isFire
-                            ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white border-orange-400 shadow-md shadow-orange-950/50 animate-pulse'
-                            : 'bg-neutral-900/80 hover:bg-orange-950/40 text-neutral-400 hover:text-orange-300 border-neutral-800'
-                        }`}
-                      >
-                        <Flame className={`h-3 w-3 ${isFire ? 'fill-white text-white' : 'text-neutral-400'}`} />
-                        <span>FIRE</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleToggleTeamRush(team.teamId)}
-                        title={isRush ? "Turn OFF Rush for this team" : "Turn ON Rush for this team"}
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black tracking-wider transition-all cursor-pointer active:scale-95 border ${
-                          isRush
-                            ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-black border-yellow-300 shadow-md shadow-yellow-950/50 font-black'
-                            : 'bg-neutral-900/80 hover:bg-yellow-950/40 text-neutral-400 hover:text-yellow-300 border-neutral-800'
-                        }`}
-                      >
-                        <span className="text-[11px]">⚡</span>
-                        <span>RUSH</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Eliminations & Points Row */}
-                  <div className="mt-3 flex items-center justify-between bg-black/25 rounded-lg p-2 border border-purple-950">
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <span className="text-[10px] font-mono text-slate-400 block uppercase">Elims</span>
-                        <span className="text-lg font-black text-rose-400 font-mono leading-none">
-                          {team.kills}
-                        </span>
-                      </div>
-                      <div className="h-6 w-px bg-purple-900/40" />
-                      <div>
-                        <span className="text-[10px] font-mono text-slate-400 block uppercase">Total Pts</span>
-                        <span className="text-lg font-black text-amber-400 font-mono leading-none">
-                          {team.points}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Quick +1 / -1 Kill Stepper Buttons */}
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => handleAddKill(team.teamId, -1)}
-                        className="h-8 w-8 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-slate-200 flex items-center justify-center font-bold text-sm transition-colors cursor-pointer active:scale-95 shadow"
-                        title="Decrement elimination"
-                      >
-                        <Minus className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleAddKill(team.teamId, 1)}
-                        className="h-8 w-11 rounded-lg bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center font-black text-sm transition-colors cursor-pointer active:scale-95 shadow-md shadow-rose-950/50"
-                        title="Add elimination (+1)"
-                      >
-                        <Plus className="h-4 w-4 mr-0.5" />
-                        <span>1</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Player Statuses (P1 to P4) */}
-                  <div className="mt-3">
-                    <span className="text-[10px] font-mono text-slate-400 block mb-1.5 uppercase">
-                      Player States (Tap to toggle)
-                    </span>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {players.map(([pId, pData], idx) => {
-                        const status = pData.status;
-                        let statusColor = 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300';
-                        let label = 'ALIVE';
-
-                        if (status === 'knock') {
-                          statusColor = 'bg-amber-950/60 border-amber-500/60 text-amber-300 animate-pulse';
-                          label = 'KNOCK';
-                        } else if (status === 'eliminated') {
-                          statusColor = 'bg-neutral-900 border-neutral-700 text-neutral-500';
-                          label = 'DEAD';
-                        }
-
-                        return (
-                          <button
-                            key={pId}
-                            onClick={() => handlePlayerToggle(team.teamId, pId, status)}
-                            className={`py-1.5 px-1 rounded border text-[10px] font-mono font-bold flex flex-col items-center justify-center transition-all cursor-pointer active:scale-95 ${statusColor}`}
-                          >
-                            <span>P{idx + 1}</span>
-                            <span className="text-[8px] font-black">{label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+        {sortAliveFirst && wipedTeams.length > 0 ? (
+          <div className="space-y-8">
+            {/* Section 1: ALIVE SQUADS */}
+            <div>
+              <div className="flex items-center justify-between mb-3 px-1">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400" />
+                  <h2 className="text-xs font-black font-mono tracking-wider text-emerald-400 uppercase">
+                    Alive Squads ({aliveTeams.length} Active)
+                  </h2>
                 </div>
-
-                {/* Squad Quick Actions: Wipe / Revive */}
-                <div className="mt-4 pt-3 border-t border-purple-900/30 flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => handleWipeSquad(team.teamId)}
-                    className="flex-1 py-1 px-2 rounded bg-neutral-900 hover:bg-neutral-800 text-rose-400 border border-neutral-800 text-[11px] font-mono font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                  >
-                    <Skull className="h-3 w-3" />
-                    <span>Wipe</span>
-                  </button>
-                  <button
-                    onClick={() => handleReviveSquad(team.teamId)}
-                    className="flex-1 py-1 px-2 rounded bg-neutral-900 hover:bg-neutral-800 text-emerald-400 border border-neutral-800 text-[11px] font-mono font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                  >
-                    <CheckCircle2 className="h-3 w-3" />
-                    <span>Revive</span>
-                  </button>
-                </div>
+                <span className="text-[10px] font-mono text-slate-400">
+                  Easy Access Controls
+                </span>
               </div>
-            );
-          })}
-        </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {aliveTeams.map(renderTeamCard)}
+              </div>
+            </div>
+
+            {/* Section 2: ELIMINATED / WIPED SQUADS (Moved Down) */}
+            <div className="pt-4 border-t border-purple-900/40">
+              <div className="flex items-center justify-between mb-3 px-1">
+                <div className="flex items-center gap-2">
+                  <Skull className="h-3.5 w-3.5 text-neutral-500" />
+                  <h2 className="text-xs font-black font-mono tracking-wider text-neutral-400 uppercase">
+                    Wiped / Eliminated Squads ({wipedTeams.length} Down)
+                  </h2>
+                </div>
+                <span className="text-[10px] font-mono text-neutral-500">
+                  Moved down so active squads are at top
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {wipedTeams.map(renderTeamCard)}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {sortedTeams.map(renderTeamCard)}
+          </div>
+        )}
       </main>
 
       {/* Match Report Modal */}
       <Modal
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
-        maxWidth="2xl"
+        maxWidth="5xl"
       >
         {finalizedReport && (
           <MatchReportView

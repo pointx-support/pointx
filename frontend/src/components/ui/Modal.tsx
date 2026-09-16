@@ -10,7 +10,7 @@ export interface ModalProps {
   title?: string;
   description?: string;
   children: React.ReactNode;
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full';
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -29,7 +29,6 @@ export const Modal: React.FC<ModalProps> = ({
     };
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
     } else {
       document.body.style.overflow = '';
     }
@@ -46,8 +45,12 @@ export const Modal: React.FC<ModalProps> = ({
     md: 'sm:max-w-md',
     lg: 'sm:max-w-lg',
     xl: 'sm:max-w-xl',
-    '2xl': 'sm:max-w-2xl'
-  }[maxWidth];
+    '2xl': 'sm:max-w-2xl',
+    '3xl': 'sm:max-w-3xl',
+    '4xl': 'sm:max-w-4xl',
+    '5xl': 'sm:max-w-5xl',
+    full: 'sm:max-w-6xl w-[95vw]'
+  }[maxWidth] || 'sm:max-w-lg';
 
   return createPortal(
     <AnimatePresence>
