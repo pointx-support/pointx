@@ -124,4 +124,15 @@ describe('PART 4: Google Authentication & Account Linking', () => {
     expect(updatedUser!.googleId).toBe('google-uid-20002');
     expect(updatedUser!.avatarUrl).toBe('https://lh3.googleusercontent.com/newpic.jpg');
   });
+
+  it('serves CSP and COOP headers that allow Google Identity Services script and popup authentication', async () => {
+    const res = await request(app).get('/api/health');
+
+    const csp = res.headers['content-security-policy'] || '';
+    expect(csp).toContain('https://accounts.google.com');
+    expect(csp).toContain('https://accounts.google.com/gsi/');
+
+    const coop = res.headers['cross-origin-opener-policy'] || '';
+    expect(coop).toBe('same-origin-allow-popups');
+  });
 });

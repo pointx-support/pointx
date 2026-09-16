@@ -223,11 +223,18 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
 
   // ─── 2. Failed / Timeout state ──────────────────────────────────────────────
   if (gsiState === 'failed' || gsiState === 'timeout') {
+    const errorDetail = gsiState === 'timeout' 
+      ? 'SDK load timed out. Check network connection or CSP.' 
+      : 'Google Identity Services script failed to load.';
+
     return (
       <div className={`w-full flex flex-col items-center gap-1.5 ${className}`}>
-        <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs font-medium text-center">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden="true" />
-          <span>Google Sign-In is currently unavailable.</span>
+        <div className="w-full flex flex-col items-center justify-center gap-1 py-2 px-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs font-medium text-center">
+          <div className="flex items-center gap-1.5">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden="true" />
+            <span>Google Sign-In unavailable</span>
+          </div>
+          <span className="text-[10px] text-amber-400/80 font-mono">{errorDetail}</span>
         </div>
         <button
           type="button"
@@ -245,7 +252,7 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
   if (!googleClientId && gsiState === 'ready') {
     return (
       <div className={`w-full h-11 px-4 rounded-xl flex items-center justify-center gap-2 border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-muted)] text-xs font-medium ${className}`}>
-        <span>Google Sign-In not configured. Use email/password above.</span>
+        <span>Google Sign-In client ID missing. Use email/password.</span>
       </div>
     );
   }

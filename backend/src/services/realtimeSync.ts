@@ -5,6 +5,7 @@ import { calculateTeamMatchScore, recalculateMatchScores } from './scoringEngine
 import { LiveStateStore, type RemoteCommand } from './liveStateStore';
 import { enqueueBatchedPersistence, flushPersistenceImmediately } from './batchedPersistenceService';
 import { getNextMatchForTournament } from './tournamentService';
+import { generateAndSaveMatchReport } from './matchReportService';
 
 export interface RemoteDeviceSession {
   deviceId: string;
@@ -694,16 +695,43 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
         }
 
         if (parsed.type === 'COMMAND') {
+          if (meta?.role === 'obs') {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              error: 'READ_ONLY_CLIENT',
+              message: 'OBS browser source clients are read-only.',
+              commandId: parsed.commandId,
+            }));
+            return;
+          }
+
+          let effectiveMatchId = parsed.matchId;
+          const tourState = await getOrCreateAuthoritativeState(parsed.tournamentId || activeTourId);
+          if (!effectiveMatchId) {
+            const hasMatches = Array.isArray(tourState.tournament?.matches) && tourState.tournament.matches.length > 0;
+            effectiveMatchId = hasMatches ? (tourState.tournament.matches[0].id || tourState.tournament.matches[0].customId) : 'none';
+          }
+
           const cmd: RemoteCommand = {
             commandId: parsed.commandId || `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
             command: parsed.command,
             sessionId: parsed.sessionId,
-            organizationId: parsed.organizationId || 'org-default',
+            organizationId: parsed.organizationId || (tourState.tournament?.organizationId ? String(tourState.tournament.organizationId) : 'org-default'),
             tournamentId: parsed.tournamentId || activeTourId,
-            matchId: parsed.matchId || 'm1',
+            matchId: effectiveMatchId,
             payload: parsed.payload || {},
             timestamp: parsed.timestamp || Date.now(),
           };
+
+          if (cmd.matchId === 'none' && cmd.command !== 'SET_TABLE_VISIBILITY') {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              error: 'NO_ACTIVE_MATCH',
+              message: 'Cannot execute commands because there are no active matches in this tournament. Create a match first.',
+              commandId: cmd.commandId,
+            }));
+            return;
+          }
 
           if (cmd.command === 'NEXT_MATCH') {
             await flushPersistenceImmediately(cmd.organizationId, cmd.tournamentId, cmd.matchId);
@@ -732,21 +760,71 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
             } else {
               ws.send(JSON.stringify({
                 type: 'NO_NEXT_MATCH',
-                message: nextRes.message || 'No next match',
+                message: nextRes.message || 'No next match available',
                 timestamp: Date.now(),
               }));
             }
             return;
           }
 
+          const scoringPreset = tourState.tournament?.scoringPreset;
+          const { state: updatedLiveState, patch } = await LiveStateStore.getInstance().applyCommand(cmd, scoringPreset);
+
           if (cmd.command === 'FINALIZE_MATCH') {
             await flushPersistenceImmediately(cmd.organizationId, cmd.tournamentId, cmd.matchId);
+
+            let report = null;
+            try {
+              report = await generateAndSaveMatchReport(updatedLiveState, tourState.tournament);
+            } catch (rErr) {
+              console.error('[Finalize Match Report Error]', rErr);
+            }
+
+            const deltaMsg = {
+              type: 'MATCH_DELTA',
+              matchId: cmd.matchId,
+              revision: updatedLiveState.revision,
+              patch,
+              timestamp: updatedLiveState.updatedAt,
+            };
+
+            const finalizedMsg = {
+              type: 'MATCH_FINALIZED',
+              tournamentId: cmd.tournamentId,
+              matchId: cmd.matchId,
+              revision: updatedLiveState.revision,
+              report,
+              timestamp: updatedLiveState.updatedAt,
+            };
+
+            const aliasRooms = getRoomAliases(cmd.tournamentId);
+            broadcastToRooms(aliasRooms, deltaMsg);
+            broadcastToRooms(aliasRooms, finalizedMsg);
+            broadcastToSseRooms(aliasRooms, deltaMsg);
+            broadcastToSseRooms(aliasRooms, finalizedMsg);
+
+            if (updatedLiveState.sessionId) {
+              broadcastToSession(updatedLiveState.sessionId, {
+                type: 'BROADCAST_STATE_UPDATED',
+                sessionId: updatedLiveState.sessionId,
+                revision: updatedLiveState.revision,
+                data: updatedLiveState,
+                state: updatedLiveState,
+                patch,
+                timestamp: updatedLiveState.updatedAt,
+              });
+            }
+
+            ws.send(JSON.stringify({
+              type: 'ACK',
+              commandId: cmd.commandId,
+              revision: updatedLiveState.revision,
+              success: true,
+              data: { report },
+              timestamp: updatedLiveState.updatedAt,
+            }));
+            return;
           }
-
-          const currentTourState = await getOrCreateAuthoritativeState(cmd.tournamentId);
-          const scoringPreset = currentTourState.tournament?.scoringPreset;
-
-          const { state: updatedLiveState, patch } = await LiveStateStore.getInstance().applyCommand(cmd, scoringPreset);
 
           // Batched asynchronous persistence (3s debounce window)
           enqueueBatchedPersistence(updatedLiveState, scoringPreset);
@@ -790,7 +868,13 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
         if (parsed.type === 'JOIN_MATCH') {
           const orgId = parsed.organizationId || 'org-default';
           const tourId = parsed.tournamentId || activeTourId;
-          const matchId = parsed.matchId || 'm1';
+          let matchId = parsed.matchId;
+
+          if (!matchId) {
+            const tourState = await getOrCreateAuthoritativeState(tourId);
+            const hasMatches = Array.isArray(tourState.tournament?.matches) && tourState.tournament.matches.length > 0;
+            matchId = hasMatches ? (tourState.tournament.matches[0].id || tourState.tournament.matches[0].customId) : 'none';
+          }
 
           const liveState = await LiveStateStore.getInstance().getOrCreateLiveState(orgId, tourId, matchId);
           ws.send(JSON.stringify({
@@ -806,7 +890,13 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
         if (parsed.type === 'REQUEST_FULL_STATE') {
           const orgId = parsed.organizationId || 'org-default';
           const tourId = parsed.tournamentId || activeTourId;
-          const matchId = parsed.matchId || 'm1';
+          let matchId = parsed.matchId;
+
+          if (!matchId) {
+            const tourState = await getOrCreateAuthoritativeState(tourId);
+            const hasMatches = Array.isArray(tourState.tournament?.matches) && tourState.tournament.matches.length > 0;
+            matchId = hasMatches ? (tourState.tournament.matches[0].id || tourState.tournament.matches[0].customId) : 'none';
+          }
 
           const liveState = await LiveStateStore.getInstance().getOrCreateLiveState(orgId, tourId, matchId);
           ws.send(JSON.stringify({

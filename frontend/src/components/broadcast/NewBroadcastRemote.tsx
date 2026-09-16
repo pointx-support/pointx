@@ -1,43 +1,30 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Loader2,
   AlertTriangle,
   Flame,
-  Crosshair,
   ExternalLink,
   Eye,
   EyeOff,
   Plus,
   Minus,
   RotateCcw,
-  RefreshCw,
   Skull,
-  ShieldCheck,
   Radio,
-  Tv,
   CheckCircle2,
-  Send,
   Trophy,
-  Clock,
-  Sparkles,
   FileCheck,
+  Activity,
+  ChevronRight,
 } from 'lucide-react';
-import type {
-  AuthoritativeBroadcastState,
-  BroadcastSyncStatus,
-  PlayerState,
-  BroadcastSquadTeam,
-} from '../../types/broadcastSession';
-import {
-  initializeBroadcastSession,
-  fetchSessionState,
-  connectBroadcastSession,
-} from '../../services/broadcastClient';
-import type { BroadcastSessionConnection } from '../../services/broadcastClient';
+import type { PlayerState } from '../../types/broadcastSession';
 import { CanonicalLiveStore, type CanonicalLiveMatchState } from '../../services/canonicalLiveStore';
+import { RealtimeSyncClient, type ConnectionState } from '../../services/broadcastSync';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useToast } from '../ui/Toast';
 import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
+import { MatchReportView, type MatchReportData } from './MatchReportView';
 
 export interface NewBroadcastRemoteProps {
   tournamentId?: string;
@@ -48,52 +35,97 @@ export interface NewBroadcastRemoteProps {
 export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   tournamentId: propTournamentId,
   matchId: propMatchId,
-  sessionId: propSessionId,
 }) => {
   const storeTournament = useTournamentStore((s) => s.currentTournament);
   const { showToast } = useToast();
 
-  // URL Query param fallbacks
   const [urlParams] = useState(() =>
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
   );
 
-  const effectiveSessionId = propSessionId || urlParams?.get('sessionId') || urlParams?.get('session') || '';
   const effectiveTournamentId =
     propTournamentId || urlParams?.get('tournamentId') || urlParams?.get('tournament') || storeTournament?.id || '';
   const effectiveMatchId = propMatchId || urlParams?.get('matchId') || urlParams?.get('match') || undefined;
+  const isDebugUrl = urlParams?.get('debug') === 'true';
 
   const [canonicalState, setCanonicalState] = useState<CanonicalLiveMatchState | null>(null);
-  const [activeMatchId, setActiveMatchId] = useState<string>(effectiveMatchId || 'm1');
+  const [activeMatchId, setActiveMatchId] = useState<string>(effectiveMatchId || 'none');
   const [pointRushThresholdInput, setPointRushThresholdInput] = useState<number>(50);
   const [isSwitchingMatch, setIsSwitchingMatch] = useState<boolean>(false);
-
-  const [state, setState] = useState<AuthoritativeBroadcastState | null>(null);
-  const [syncStatus, setSyncStatus] = useState<BroadcastSyncStatus>('CONNECTING');
+  const [syncStatus, setSyncStatus] = useState<'LIVE' | 'CONNECTING' | 'DISCONNECTED'>('CONNECTING');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [connection, setConnection] = useState<BroadcastSessionConnection | null>(null);
-
-  // FIFO Command Queue for sequential background delivery without drops
-  const commandQueueRef = useRef<Array<{ commandType: string; targetTeamId?: string; payload?: any }>>([]);
-  const isProcessingQueueRef = useRef<boolean>(false);
-  const connectionRef = useRef<BroadcastSessionConnection | null>(null);
-
-  // Rapid Action Coalescing for Kills: debounces rapid clicks into a single delta command
-  const pendingKillDeltasRef = useRef<Map<string, { delta: number; timer: any }>>(new Map());
+  const [availableMatches, setAvailableMatches] = useState<any[]>([]);
+  const [tournamentInfo, setTournamentInfo] = useState<any>(null);
 
   // Match Report Modal State
   const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
-  const [isSubmittingReport, setIsSubmittingReport] = useState<boolean>(false);
-  const [reportOverrides, setReportOverrides] = useState<Record<string, { placement?: number; kills?: number }>>({});
-  // Connect to Centralized Canonical Live Store for Immediate WebSocket Live State
+  const [finalizedReport, setFinalizedReport] = useState<MatchReportData | null>(null);
+  const [isLoadingReport, setIsLoadingReport] = useState<boolean>(false);
+
+
+  // Initialize and resolve actual matches (strictly zero-match valid)
   useEffect(() => {
     let isCancelled = false;
     const liveStore = CanonicalLiveStore.getInstance();
-    if (effectiveTournamentId) {
-      liveStore.setMatchContext('org-default', effectiveTournamentId, activeMatchId);
+    const syncClient = RealtimeSyncClient.getInstance();
+
+    async function loadTournamentContext() {
+      if (!effectiveTournamentId) {
+        setLoading(false);
+        setError('No tournament ID specified for Remote Control.');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch authoritative tournament data from backend
+        const res = await fetch(`/api/tournaments/${encodeURIComponent(effectiveTournamentId)}`);
+        const json = await res.json();
+
+        if (isCancelled) return;
+
+        if (!json.success || !json.data) {
+          setError(`Tournament "${effectiveTournamentId}" not found.`);
+          setLoading(false);
+          return;
+        }
+
+        const tour = json.data;
+        setTournamentInfo(tour);
+        const matches = Array.isArray(tour.matches) ? tour.matches : [];
+        setAvailableMatches(matches);
+
+        const orgId = tour.organizationId ? String(tour.organizationId) : 'org-default';
+
+        if (matches.length === 0) {
+          // Valid zero-match state: do NOT create fake Match 1!
+          setActiveMatchId('none');
+          liveStore.setMatchContext(orgId, effectiveTournamentId, 'none');
+          setLoading(false);
+          return;
+        }
+
+        const currentTargetMatch = effectiveMatchId
+          ? matches.find((m: any) => (m.id || m.customId) === effectiveMatchId) || matches[0]
+          : matches[0];
+
+        const targetId = currentTargetMatch.id || currentTargetMatch.customId;
+        setActiveMatchId(targetId);
+        liveStore.setMatchContext(orgId, effectiveTournamentId, targetId);
+      } catch (err: any) {
+        if (!isCancelled) {
+          setError(err.message || 'Failed to connect to tournament.');
+          setLoading(false);
+        }
+      }
     }
 
+    loadTournamentContext();
+
+    // Subscribe to Authoritative Live State updates
     const unsubLive = liveStore.subscribe((cState) => {
       if (!isCancelled && cState) {
         setCanonicalState(cState);
@@ -106,11 +138,13 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       }
     });
 
+    // Subscribe to Next Match transitions
     const unsubNext = liveStore.subscribeNextMatch((nextData) => {
       setIsSwitchingMatch(false);
       if (!isCancelled && nextData && nextData.nextMatchId) {
         setActiveMatchId(nextData.nextMatchId);
-        liveStore.setMatchContext('org-default', effectiveTournamentId, nextData.nextMatchId);
+        const org = canonicalState?.organizationId || 'org-default';
+        liveStore.setMatchContext(org, effectiveTournamentId, nextData.nextMatchId);
         showToast({
           type: 'success',
           title: 'Switched to Next Match',
@@ -119,398 +153,160 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       }
     });
 
+    // Subscribe to Match Finalization event
+    const unsubFinalized = liveStore.subscribeFinalizedMatch((report) => {
+      if (!isCancelled && report) {
+        setFinalizedReport(report);
+        setIsReportModalOpen(true);
+        showToast({
+          type: 'success',
+          title: 'Match Finalized!',
+          message: 'Authoritative match report generated and ready for review.',
+        });
+      }
+    });
+
+    // Track WebSocket connection health
+    const unsubConn = syncClient.subscribeConnection((connState: ConnectionState) => {
+      if (!isCancelled) {
+        setSyncStatus(connState === 'CONNECTED' ? 'LIVE' : 'CONNECTING');
+      }
+    });
+
     return () => {
       isCancelled = true;
       unsubLive();
       unsubNext();
+      unsubFinalized();
+      unsubConn();
     };
-  }, [effectiveTournamentId, activeMatchId, showToast]);
+  }, [effectiveTournamentId, effectiveMatchId, showToast]);
 
-  useEffect(() => {
-    let conn: BroadcastSessionConnection | null = null;
-    let isCancelled = false;
-
-    async function init() {
-      setLoading(true);
-      setError(null);
-
-      try {
-        let activeSessionId = effectiveSessionId;
-        let initialData: AuthoritativeBroadcastState;
-
-        if (activeSessionId) {
-          initialData = await fetchSessionState(activeSessionId);
-        } else if (effectiveTournamentId) {
-          const initRes = await initializeBroadcastSession(effectiveTournamentId, effectiveMatchId);
-          activeSessionId = initRes.sessionId;
-          initialData = initRes.state;
-        } else {
-          setError('No tournament or session ID specified for Remote Control.');
-          setLoading(false);
-          return;
-        }
-
-        if (isCancelled) return;
-
-        setState(initialData);
-        setLoading(false);
-        setSyncStatus('LIVE');
-
-        // Connect real-time WebSocket room
-        conn = connectBroadcastSession(activeSessionId, initialData, {
-          onState: (newState) => {
-            if (!isCancelled && newState && (newState.sessionId || newState.tournamentId)) {
-              setState(newState);
-              setError(null);
-            }
-          },
-          onStatusChange: (status) => {
-            if (!isCancelled) {
-              setSyncStatus(status);
-            }
-          },
-          onError: (err) => {
-            console.warn('[NewBroadcastRemote] Sync error:', err);
-          },
-        });
-
-        if (!isCancelled) {
-          connectionRef.current = conn;
-          setConnection(conn);
-        }
-      } catch (err: any) {
-        if (!isCancelled) {
-          setError(err.message || 'Failed to initialize broadcast remote session.');
-          setLoading(false);
-          setSyncStatus('DISCONNECTED');
-        }
-      }
-    }
-
-    init();
-
-    return () => {
-      isCancelled = true;
-      if (conn) {
-        conn.disconnect();
-      }
-      connectionRef.current = null;
-      for (const pending of pendingKillDeltasRef.current.values()) {
-        if (pending.timer) clearTimeout(pending.timer);
-      }
-    };
-  }, [effectiveSessionId, effectiveTournamentId, effectiveMatchId]);
-
-  // Synchronous optimistic state update (<16ms, zero tap delay)
-  const applyOptimisticUpdate = useCallback((commandType: string, targetTeamId?: string, payload?: any) => {
-    setState((prevState) => {
-      if (!prevState) return prevState;
-      const next: AuthoritativeBroadcastState = {
-        ...prevState,
-        teams: [...prevState.teams],
-      };
-
-      if (commandType === 'SET_TABLE_VISIBILITY' && payload?.visible !== undefined) {
-        next.tableVisible = payload.visible;
-      } else if (commandType === 'SET_POINT_RUSH' && !targetTeamId && payload?.enabled !== undefined) {
-        next.pointRushEnabled = payload.enabled;
-      } else if (commandType === 'FINISH_MATCH') {
-        next.isMatchFinished = true;
-      } else if (commandType === 'REOPEN_MATCH') {
-        next.isMatchFinished = false;
-        next.isSubmittedToWebsite = false;
-      } else if (commandType === 'RESET_ALIVE') {
-        next.teams = next.teams.map((t) => ({
-          ...t,
-          squadPlayers: ['alive', 'alive', 'alive', 'alive'] as [PlayerState, PlayerState, PlayerState, PlayerState],
-          alivePlayersCount: 4,
-          isWiped: false,
-        }));
-        next.aliveSquadsCount = next.teams.length;
-      } else if (commandType === 'ADD_POINT_ALL_TEAMS') {
-        next.teams = next.teams.map((t) => ({
-          ...t,
-          totalPoints: t.totalPoints + 1,
-        }));
-      } else if (targetTeamId) {
-        next.teams = next.teams.map((t) => {
-          if (t.teamId !== targetTeamId) return t;
-          const teamCopy: BroadcastSquadTeam = { ...t };
-          if (commandType === 'ADD_KILL') {
-            const delta = Number(payload?.delta ?? 1);
-            teamCopy.kills = (teamCopy.kills || 0) + delta;
-            teamCopy.killPoints = (teamCopy.killPoints || 0) + delta;
-            teamCopy.totalPoints = (teamCopy.totalPoints || 0) + delta;
-          } else if (commandType === 'REMOVE_KILL') {
-            const delta = Number(payload?.delta ?? 1);
-            const actualDelta = Math.min(teamCopy.kills || 0, delta);
-            teamCopy.kills = Math.max(0, (teamCopy.kills || 0) - delta);
-            teamCopy.killPoints = Math.max(0, (teamCopy.killPoints || 0) - actualDelta);
-            teamCopy.totalPoints = Math.max(0, (teamCopy.totalPoints || 0) - actualDelta);
-          } else if (commandType === 'SET_PLAYER_STATUS') {
-            const { playerIndex, status } = payload || {};
-            if (playerIndex !== undefined && status) {
-              const newPlayers = [...teamCopy.squadPlayers] as [PlayerState, PlayerState, PlayerState, PlayerState];
-              newPlayers[playerIndex] = status;
-              teamCopy.squadPlayers = newPlayers;
-              const aliveCount = newPlayers.filter((p) => p === 'alive' || p === 'knock').length;
-              teamCopy.alivePlayersCount = aliveCount;
-              teamCopy.isWiped = aliveCount === 0;
-            }
-          } else if (commandType === 'WIPE_SQUAD') {
-            teamCopy.squadPlayers = ['eliminated', 'eliminated', 'eliminated', 'eliminated'];
-            teamCopy.alivePlayersCount = 0;
-            teamCopy.isWiped = true;
-          } else if (commandType === 'REVIVE_SQUAD') {
-            teamCopy.squadPlayers = ['alive', 'alive', 'alive', 'alive'];
-            teamCopy.alivePlayersCount = 4;
-            teamCopy.isWiped = false;
-          } else if (commandType === 'SET_MODE' || commandType === 'SET_FIRE' || commandType === 'TOGGLE_FIRE') {
-            teamCopy.isFireActive = payload?.fire !== undefined ? !!payload.fire : (payload?.mode === 'FIRE');
-          } else if (commandType === 'SET_POINT_RUSH') {
-            teamCopy.isPointRushActive = payload?.rush !== undefined ? !!payload.rush : !!payload?.enabled;
-          }
-          return teamCopy;
-        });
-        next.aliveSquadsCount = next.teams.filter((t) => !t.isWiped).length;
-      }
-      return next;
-    });
-  }, []);
-
-  // Batch queue processor: drains queue in batches to eliminate serial network roundtrip lag
-  const processQueue = useCallback(async () => {
-    const conn = connectionRef.current || connection;
-    if (isProcessingQueueRef.current || !conn) return;
-    if (commandQueueRef.current.length === 0) return;
-
-    isProcessingQueueRef.current = true;
-    while (commandQueueRef.current.length > 0) {
-      const batch = commandQueueRef.current.splice(0, commandQueueRef.current.length);
-      try {
-        if (batch.length === 1) {
-          await conn.sendCommand(batch[0].commandType, batch[0].targetTeamId, batch[0].payload);
-        } else if (batch.length > 1) {
-          await conn.sendBatchCommands(batch);
-        }
-      } catch (err: any) {
-        console.error('[RemoteCommand Error]', batch, err);
-      }
-    }
-    isProcessingQueueRef.current = false;
-  }, [connection]);
-
-  // Flush pending kill accumulation for a specific team
-  const flushPendingKill = useCallback(
-    (targetTeamId: string) => {
-      const pending = pendingKillDeltasRef.current.get(targetTeamId);
-      if (!pending) return;
-      if (pending.timer) clearTimeout(pending.timer);
-      pendingKillDeltasRef.current.delete(targetTeamId);
-
-      if (pending.delta === 0) return;
-
-      const liveStore = CanonicalLiveStore.getInstance();
-      liveStore.sendCommand('ADD_KILLS', {
-        teamId: targetTeamId,
-        delta: pending.delta,
-      });
-
-      const cmdType = pending.delta > 0 ? 'ADD_KILL' : 'REMOVE_KILL';
-      const absDelta = Math.abs(pending.delta);
-      const commandId = `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-      commandQueueRef.current.push({
-        commandType: cmdType,
-        targetTeamId,
-        payload: { delta: absDelta, commandId },
-      });
-      processQueue();
-    },
-    [processQueue]
-  );
-
-  // Flush all pending kills across all teams immediately
-  const flushAllPendingKills = useCallback(() => {
-    const teamIds = Array.from(pendingKillDeltasRef.current.keys());
-    for (const tId of teamIds) {
-      flushPendingKill(tId);
-    }
-  }, [flushPendingKill]);
-
-  // Command dispatcher: instant local feedback + rapid action coalescing for kills
+  // Command dispatcher: direct WebSocket execution
   const executeCommand = useCallback(
-    (commandType: string, targetTeamId?: string, payload?: any) => {
-      // 1. Instant local optimistic update for immediate tactile response (<16ms)
-      applyOptimisticUpdate(commandType, targetTeamId, payload);
-
-      const liveStore = CanonicalLiveStore.getInstance();
-
-      // 2. Rapid Action Coalescing for rapid +1 / -1 kill clicks (120ms aggregation window)
-      if ((commandType === 'ADD_KILL' || commandType === 'REMOVE_KILL') && targetTeamId) {
-        const rawDelta = Number(payload?.delta ?? 1);
-        const signedDelta = commandType === 'ADD_KILL' ? rawDelta : -rawDelta;
-        const existing = pendingKillDeltasRef.current.get(targetTeamId);
-
-        if (existing?.timer) {
-          clearTimeout(existing.timer);
-        }
-
-        const newDelta = (existing ? existing.delta : 0) + signedDelta;
-        const timer = setTimeout(() => {
-          flushPendingKill(targetTeamId);
-        }, 120);
-
-        pendingKillDeltasRef.current.set(targetTeamId, { delta: newDelta, timer });
+    (commandType: any, payload: any = {}) => {
+      if (activeMatchId === 'none' && commandType !== 'SET_TABLE_VISIBILITY') {
+        showToast({
+          type: 'error',
+          title: 'No Active Match',
+          message: 'Cannot execute commands because there are no matches in this tournament.',
+        });
         return;
       }
 
-      // 3. For any other command: flush pending kill increments first so all clicks persist
-      flushAllPendingKills();
-
-      // Dispatch to Live State Store over WebSocket
-      if (commandType === 'SET_PLAYER_STATUS' && targetTeamId) {
-        const pIndex = payload?.playerIndex ?? 0;
-        const pId = `${targetTeamId}-p${pIndex + 1}`;
-        liveStore.sendCommand('SET_PLAYER_STATUS', { teamId: targetTeamId, playerId: pId, status: payload.status });
-      } else if (commandType === 'WIPE_SQUAD' && targetTeamId) {
-        liveStore.sendCommand('WIPE_SQUAD', { teamId: targetTeamId });
-      } else if (commandType === 'REVIVE_SQUAD' && targetTeamId) {
-        liveStore.sendCommand('REVIVE_SQUAD', { teamId: targetTeamId });
-      } else if (commandType === 'RESET_ALIVE') {
-        liveStore.sendCommand('RESET_ALIVE', {});
-      } else if (commandType === 'SET_TABLE_VISIBILITY') {
-        liveStore.sendCommand('SET_TABLE_VISIBILITY', { visible: payload.visible });
-      } else if (commandType === 'SET_POINT_RUSH_THRESHOLD') {
-        liveStore.sendCommand('SET_POINT_RUSH_THRESHOLD', { threshold: payload.threshold });
-      } else if (commandType === 'FINISH_MATCH') {
-        liveStore.sendCommand('FINALIZE_MATCH', {});
-      } else if (commandType === 'REOPEN_MATCH') {
-        liveStore.sendCommand('REOPEN_MATCH', {});
-      } else if (commandType === 'NEXT_MATCH') {
-        liveStore.sendCommand('NEXT_MATCH', {});
-      }
-
-      const commandId = payload?.commandId || `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      commandQueueRef.current.push({
-        commandType,
-        targetTeamId,
-        payload: { ...(payload || {}), commandId },
-      });
-
-      processQueue();
+      const liveStore = CanonicalLiveStore.getInstance();
+      const cmdId = liveStore.sendCommand(commandType, payload);
+      setLastSentCommand(commandType);
+      setLastCommandId(cmdId);
     },
-    [applyOptimisticUpdate, flushAllPendingKills, flushPendingKill, processQueue]
+    [activeMatchId, showToast]
   );
 
-  const handlePlayerToggle = (teamId: string, playerIndex: number, currentStatus: PlayerState) => {
+  const handleAddKill = (teamId: string, delta: number) => {
+    executeCommand('ADD_KILLS', { teamId, delta });
+  };
+
+  const handlePlayerToggle = (teamId: string, playerId: string, currentStatus: PlayerState) => {
     const nextMap: Record<PlayerState, PlayerState> = {
       alive: 'knock',
       knock: 'eliminated',
       eliminated: 'alive',
     };
     const nextStatus = nextMap[currentStatus];
-    executeCommand('SET_PLAYER_STATUS', teamId, { playerIndex, status: nextStatus });
+    executeCommand('SET_PLAYER_STATUS', { teamId, playerId, status: nextStatus });
   };
 
-  const handleMatchChange = (newMatchId: string) => {
-    executeCommand('CHANGE_MATCH', undefined, { matchId: newMatchId });
+  const handleWipeSquad = (teamId: string) => {
+    executeCommand('WIPE_SQUAD', { teamId });
+  };
+
+  const handleReviveSquad = (teamId: string) => {
+    executeCommand('REVIVE_SQUAD', { teamId });
+  };
+
+  const handleResetAlive = () => {
+    executeCommand('RESET_ALIVE', {});
+    showToast({
+      type: 'info',
+      title: 'Squads Reset',
+      message: 'All players reset to ALIVE.',
+    });
+  };
+
+  const handleToggleTableVisibility = () => {
+    const currentVis = canonicalState?.tableVisible ?? true;
+    executeCommand('SET_TABLE_VISIBILITY', { visible: !currentVis });
+  };
+
+  const handleMatchSelect = (targetId: string) => {
+    if (targetId === activeMatchId) return;
+    setActiveMatchId(targetId);
+    const org = canonicalState?.organizationId || tournamentInfo?.organizationId || 'org-default';
+    CanonicalLiveStore.getInstance().setMatchContext(org, effectiveTournamentId, targetId);
   };
 
   const handleToggleFinishMatch = () => {
-    if (!state) return;
-    const isFinished = canonicalState ? canonicalState.isMatchFinished : state.isMatchFinished;
-    if (isFinished) {
-      executeCommand('REOPEN_MATCH');
+    if (!canonicalState) return;
+    if (canonicalState.isMatchFinished) {
+      executeCommand('REOPEN_MATCH', {});
       showToast({
         type: 'info',
         title: 'Match Reopened',
-        message: 'Match set back to LIVE. Placement points reset.',
+        message: 'Match set back to LIVE. Placements reset.',
       });
     } else {
-      executeCommand('FINISH_MATCH');
-      showToast({
-        type: 'success',
-        title: 'Match Finished!',
-        message: 'Placement points computed! Review Match Report before pushing to website.',
-      });
+      executeCommand('FINALIZE_MATCH', {});
     }
   };
 
   const handleNextMatch = () => {
     setIsSwitchingMatch(true);
-    executeCommand('NEXT_MATCH');
-    showToast({
-      type: 'info',
-      title: 'Switching Match...',
-      message: 'Transitioning to next match...',
-    });
+    executeCommand('NEXT_MATCH', {});
   };
 
-  const handleSavePointRushThreshold = (val: number) => {
-    const threshold = Math.max(1, Math.min(999, Math.floor(val)));
-    setPointRushThresholdInput(threshold);
-    executeCommand('SET_POINT_RUSH_THRESHOLD', undefined, { threshold });
+  const handleSavePointRushThreshold = () => {
+    executeCommand('SET_POINT_RUSH_THRESHOLD', { threshold: pointRushThresholdInput });
     showToast({
       type: 'success',
-      title: 'Threshold Updated',
-      message: `Point Rush threshold set to ${threshold} pts.`,
+      title: 'Point Rush Updated',
+      message: `Threshold set to ${pointRushThresholdInput} points.`,
     });
   };
 
-  const [isRefreshingObs, setIsRefreshingObs] = useState<boolean>(false);
-
-  const handleRefreshObs = async () => {
-    setIsRefreshingObs(true);
-    try {
-      executeCommand('REFRESH_OVERLAY', undefined, { hardReload: false });
-      showToast({
-        type: 'success',
-        title: 'OBS Overlay Refreshed',
-        message: 'Sent instant refresh signal to OBS broadcast view.',
-      });
-    } catch (err: any) {
-      showToast({
-        type: 'error',
-        title: 'Refresh Failed',
-        message: err.message || 'Could not refresh OBS overlay.',
-      });
-    } finally {
-      setTimeout(() => setIsRefreshingObs(false), 600);
+  const handleOpenReportModal = async () => {
+    if (finalizedReport) {
+      setIsReportModalOpen(true);
+      return;
     }
-  };
 
-  const handleSubmitMatchReport = async () => {
-    if (!connection || !state) return;
-    setIsSubmittingReport(true);
+    if (!activeMatchId || activeMatchId === 'none') return;
+
     try {
-      const overridesList = Object.entries(reportOverrides).map(([teamId, ov]) => ({
-        teamId,
-        placement: ov.placement,
-        kills: ov.kills,
-      }));
-
-      const res = await connection.submitMatchReport(overridesList.length > 0 ? overridesList : undefined);
-      if (res.success) {
+      setIsLoadingReport(true);
+      const res = await fetch(`/api/reports/${encodeURIComponent(effectiveTournamentId)}/${encodeURIComponent(activeMatchId)}`);
+      const data = await res.json();
+      if (data.success && data.data) {
+        setFinalizedReport(data.data);
+        setIsReportModalOpen(true);
+      } else {
         showToast({
-          type: 'success',
-          title: 'Report Pushed to Website!',
-          message: 'Official match results & standings have been updated on the website.',
+          type: 'info',
+          title: 'Report Unavailable',
+          message: 'Finalize the match first to generate an official match report.',
         });
-        setIsReportModalOpen(false);
-        setReportOverrides({});
       }
-    } catch (err: any) {
+    } catch {
       showToast({
         type: 'error',
-        title: 'Failed to Submit Report',
-        message: err?.message || 'Could not push report to website.',
+        title: 'Error',
+        message: 'Could not load match report.',
       });
     } finally {
-      setIsSubmittingReport(false);
+      setIsLoadingReport(false);
     }
   };
 
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0d0914] text-white flex flex-col items-center justify-center p-6 select-none font-sans">
@@ -518,28 +314,30 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
           <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
           <div>
             <div className="font-bold text-sm">Connecting Remote Deck...</div>
-            <div className="text-xs text-slate-400 font-mono">Initializing Authoritative Broadcast Session</div>
+            <div className="text-xs text-slate-400 font-mono">Initializing Authoritative Live Sync</div>
           </div>
         </div>
       </div>
     );
   }
 
-  if (error || !state) {
+  // Error state
+  if (error) {
     return (
       <div className="min-h-screen bg-[#0d0914] text-white flex flex-col items-center justify-center p-6 select-none font-sans">
         <div className="flex items-center gap-3 bg-red-950/90 border border-red-700 text-red-200 px-6 py-4 rounded-xl shadow-2xl max-w-md">
           <AlertTriangle className="h-6 w-6 text-red-400 shrink-0" />
           <div>
             <div className="font-bold text-sm">Remote Connection Error</div>
-            <div className="text-xs text-red-300/80 font-mono mt-0.5">{error || 'Session unavailable.'}</div>
+            <div className="text-xs text-red-300/80 font-mono mt-0.5">{error}</div>
           </div>
         </div>
       </div>
     );
   }
 
-  if (!state.match || state.match.matchNumber === 0 || !state.match.id || state.match.id === 'none') {
+  // Zero-Match Empty State (Zero-Match Valid Guarantee)
+  if (availableMatches.length === 0 || activeMatchId === 'none') {
     return (
       <div className="min-h-screen bg-[#0d0914] text-white flex flex-col items-center justify-center p-6 select-none font-sans">
         <div className="flex flex-col items-center gap-4 bg-[#1b0d33] border border-[#3b1d6e] text-slate-200 p-8 rounded-2xl shadow-2xl max-w-md text-center">
@@ -547,783 +345,384 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
             <Radio className="h-7 w-7" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white">No Match Available</h2>
+            <h2 className="text-lg font-bold text-white">No Matches Created Yet</h2>
             <p className="text-xs text-slate-400 mt-1">
-              {state.tournament?.title || 'This tournament'} does not have any matches created yet. Create your first match from Tournament Management.
+              "{tournamentInfo?.title || 'This tournament'}" currently has 0 matches.
+              Opening the Remote does not create matches automatically.
             </p>
           </div>
           <a
-            href="/"
-            className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition-colors"
+            href={`/workspace?tournamentId=${encodeURIComponent(effectiveTournamentId)}&tab=matches`}
+            className="px-4 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-lg cursor-pointer"
           >
-            Go to Tournament Management
+            <span>Create Match 1 in Workspace</span>
+            <ChevronRight className="h-4 w-4" />
           </a>
         </div>
       </div>
     );
   }
 
-  const {
-    tournament,
-    match,
-    availableMatches,
-    teams: rawTeams,
-    revision: fallbackRevision,
-    tableVisible: fallbackTableVisible,
-    pointRushEnabled: fallbackPointRushEnabled,
-    isMatchFinished: fallbackIsMatchFinished = false,
-    isSubmittedToWebsite = false,
-  } = state;
-
-  const revision = canonicalState ? canonicalState.revision : fallbackRevision;
-  const tableVisible = canonicalState ? canonicalState.tableVisible : fallbackTableVisible;
-  const pointRushEnabled = fallbackPointRushEnabled;
-  const isMatchFinished = canonicalState ? canonicalState.isMatchFinished : fallbackIsMatchFinished;
-
-  // Real-time authoritative live teams mapped from CanonicalLiveStore
-  const teams: BroadcastSquadTeam[] = rawTeams.map((t) => {
-    const cTeam = canonicalState?.teams ? canonicalState.teams[t.teamId] : undefined;
-    if (!cTeam) {
-      return {
-        ...t,
-        isFireActive: canonicalState?.fireTeamId ? canonicalState.fireTeamId === t.teamId : t.isFireActive,
-      };
-    }
-
-    let squadPlayers: [PlayerState, PlayerState, PlayerState, PlayerState] = t.squadPlayers;
-    if (cTeam.players) {
-      const playerList = Object.values(cTeam.players);
-      if (playerList.length > 0) {
-        squadPlayers = [
-          (playerList[0]?.status as PlayerState) || 'alive',
-          (playerList[1]?.status as PlayerState) || 'alive',
-          (playerList[2]?.status as PlayerState) || 'alive',
-          (playerList[3]?.status as PlayerState) || 'alive',
-        ];
-      }
-    }
-
-    const kills = cTeam.kills !== undefined ? cTeam.kills : t.kills;
-    const placement = cTeam.placement ?? t.placement;
-    const placementPoints = cTeam.placementPoints ?? t.placementPoints;
-    const totalPoints = cTeam.points !== undefined ? cTeam.points : (kills + placementPoints);
-    const aliveCount = squadPlayers.filter((p) => p === 'alive' || p === 'knock').length;
-    const isWiped = aliveCount === 0;
-
-    return {
-      ...t,
-      name: cTeam.name || t.name,
-      tag: cTeam.tag || t.tag,
-      slotNumber: cTeam.slotNumber ?? t.slotNumber,
-      logoUrl: cTeam.logoUrl || t.logoUrl,
-      kills,
-      placement,
-      placementPoints,
-      totalPoints,
-      isWiped,
-      alivePlayersCount: aliveCount,
-      squadPlayers,
-      isFireActive: canonicalState?.fireTeamId ? canonicalState.fireTeamId === t.teamId : t.isFireActive,
-      isPointRushActive: cTeam.pointRushEnabled !== undefined ? cTeam.pointRushEnabled : t.isPointRushActive,
-    };
+  const teamsList = canonicalState?.teams ? Object.values(canonicalState.teams) : [];
+  const sortedTeams = [...teamsList].sort((a, b) => {
+    return (a.slotNumber || 0) - (b.slotNumber || 0);
   });
 
-  const aliveSquadsCount = teams.filter((t) => !t.isWiped).length;
+  const tableVisible = canonicalState?.tableVisible ?? true;
+  const isMatchFinished = canonicalState?.isMatchFinished ?? false;
+  const revision = canonicalState?.revision ?? 1;
+  const fireTeamId = canonicalState?.fireTeamId;
 
-  const obsUrl = `${window.location.origin}/obs?tournamentId=${encodeURIComponent(tournament.id)}&matchId=${encodeURIComponent(match.id)}`;
-
-  // Sorted teams for the Match Report
-  const sortedReportTeams = [...teams].sort((a, b) => {
-    if (a.placement !== b.placement) return a.placement - b.placement;
-    return b.totalPoints - a.totalPoints;
-  });
+  const currentMatchDoc = availableMatches.find((m: any) => (m.id || m.customId) === activeMatchId);
+  const obsUrl = `${window.location.origin}/obs?tournamentId=${encodeURIComponent(effectiveTournamentId)}&matchId=${encodeURIComponent(activeMatchId)}`;
 
   return (
-    <div className="min-h-screen bg-[#0a0711] text-slate-100 flex flex-col font-sans pb-20 select-none">
-      {/* ================= HEADER BAR ================= */}
-      <header className="sticky top-0 z-40 bg-[#120a22]/95 backdrop-blur-md border-b border-[#2d1752] px-4 py-3 shadow-lg">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          {/* Tournament & Match Details */}
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-9 w-9 rounded-lg bg-amber-500/20 border border-amber-500/50 flex items-center justify-center font-black text-amber-300 shrink-0">
-              <Radio className="h-5 w-5 animate-pulse" />
+    <div className="min-h-screen bg-[#0d0914] text-slate-100 flex flex-col font-sans select-none pb-12">
+      {/* Top Navigation Header */}
+      <header className="bg-[#170e2b] border-b border-[#3b1d6e] px-4 py-3 sticky top-0 z-40 shadow-xl">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+          {/* Brand & Tournament Identity */}
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-purple-600 flex items-center justify-center text-white shadow-inner font-black text-sm">
+              PX
             </div>
-            <div className="min-w-0">
-              <h1 className="text-sm sm:text-base font-bold text-white truncate flex items-center gap-2">
-                {tournament.title}
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-purple-950/70 border border-purple-700 text-purple-200">
-                  {tournament.game}
-                </span>
-              </h1>
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                <span>Match:</span>
-                <select
-                  aria-label="Select Match"
-                  value={match.id}
-                  onChange={(e) => handleMatchChange(e.target.value)}
-                  className="bg-[#1b0d33] border border-[#3b1d6e] text-slate-200 rounded px-2 py-0.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer"
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm font-black text-white tracking-wide truncate max-w-[200px] sm:max-w-xs">
+                  {tournamentInfo?.title || 'Live Match Remote'}
+                </h1>
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                    syncStatus === 'LIVE'
+                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                      : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                  }`}
                 >
-                  {availableMatches.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      M{m.matchNumber} ({m.mapName || 'Map'}) {m.status ? `[${m.status}]` : ''}
-                    </option>
-                  ))}
-                </select>
+                  <span className={`h-1.5 w-1.5 rounded-full ${syncStatus === 'LIVE' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                  {syncStatus}
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-400 font-mono mt-0.5 flex items-center gap-2">
+                <span>Rev #{revision}</span>
+                <span>•</span>
+                <span>Match: {currentMatchDoc?.customLabel || `Match ${canonicalState?.matchNumber || 1}`}</span>
               </div>
             </div>
           </div>
 
-          {/* Status Badges & Quick Action Controls */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-            {/* Match State Badge */}
-            <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-black border ${
-                isMatchFinished
-                  ? 'bg-purple-950/70 border-purple-600 text-purple-300'
-                  : 'bg-amber-950/60 border-amber-500 text-amber-300'
-              }`}
-            >
-              {isMatchFinished ? (
-                <>
-                  <Trophy className="h-3.5 w-3.5 text-purple-400" />
-                  <span>FINISHED (Pts Added)</span>
-                </>
-              ) : (
-                <>
-                  <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                  <span>LIVE (No Placement Pts)</span>
-                </>
-              )}
-            </div>
-
-            {/* Website Submission Badge */}
-            <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-bold border ${
-                isSubmittedToWebsite
-                  ? 'bg-emerald-950/70 border-emerald-600 text-emerald-300'
-                  : 'bg-neutral-900 border-neutral-700 text-slate-400'
-              }`}
-            >
-              {isSubmittedToWebsite ? (
-                <>
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>Website: Published</span>
-                </>
-              ) : (
-                <>
-                  <span className="h-2 w-2 rounded-full bg-slate-500" />
-                  <span>Website: Staged</span>
-                </>
-              )}
-            </div>
-
-            {/* Squads in Battle */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#1d1136] border border-[#3c1d6e] text-xs font-mono">
-              <span className="text-slate-400">Squads Alive:</span>
-              <span className="font-bold text-emerald-400">
-                {aliveSquadsCount}/{teams.length}
-              </span>
-            </div>
-
-            {/* Sync Status Badge */}
-            <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-bold border ${
-                syncStatus === 'LIVE'
-                  ? 'bg-emerald-950/50 border-emerald-600 text-emerald-300'
-                  : syncStatus === 'RECONNECTING'
-                  ? 'bg-amber-950/50 border-amber-600 text-amber-300'
-                  : 'bg-red-950/50 border-red-600 text-red-300'
-              }`}
-            >
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  syncStatus === 'LIVE'
-                    ? 'bg-emerald-400 animate-pulse'
-                    : syncStatus === 'RECONNECTING'
-                    ? 'bg-amber-400 animate-ping'
-                    : 'bg-red-500'
-                }`}
-              />
-              <span>{syncStatus === 'LIVE' ? `LIVE (r${revision})` : syncStatus}</span>
-            </div>
-
-            {/* OBS Overlay Link */}
-            <a
-              href={obsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-bold hover:bg-amber-500/30 transition-colors"
-            >
-              <Tv className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">OBS View</span>
-              <ExternalLink className="h-3 w-3" />
-            </a>
-
-            {/* MATCH REPORT BUTTON (Highlighted) */}
-            <button
-              type="button"
-              onClick={() => setIsReportModalOpen(true)}
-              style={{ touchAction: 'manipulation' }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-black shadow-lg transition-all active:scale-95 cursor-pointer ${
-                isMatchFinished && !isSubmittedToWebsite
-                  ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-black animate-pulse shadow-amber-500/30'
-                  : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30'
-              }`}
-            >
-              <FileCheck className="h-4 w-4" />
-              <span>Match Report</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Global Action Toolbar */}
-        <div className="max-w-7xl mx-auto mt-3 pt-2 border-t border-[#231240] flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Table Visibility Toggle */}
-            <button
-              type="button"
-              style={{ touchAction: 'manipulation' }}
-              onClick={() => executeCommand('SET_TABLE_VISIBILITY', undefined, { visible: !tableVisible })}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold transition-all active:scale-95 cursor-pointer ${
+          {/* Quick Global Actions */}
+          <div className="flex items-center gap-2">
+            {/* Table Hide / Show Toggle */}
+            <Button
+              size="sm"
+              variant={tableVisible ? 'primary' : 'secondary'}
+              onClick={handleToggleTableVisibility}
+              className={`flex items-center gap-1.5 text-xs font-bold ${
                 tableVisible
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md'
-                  : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300'
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                  : 'bg-neutral-800 hover:bg-neutral-700 text-slate-300'
               }`}
             >
               {tableVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-              <span>{tableVisible ? 'Hide Table on OBS' : 'Show Table on OBS'}</span>
-            </button>
+              <span>{tableVisible ? 'Table Visible' : 'Table Hidden'}</span>
+            </Button>
 
-            {/* Point Rush Toggle */}
-            <button
-              type="button"
-              style={{ touchAction: 'manipulation' }}
-              onClick={() => executeCommand('SET_POINT_RUSH', undefined, { enabled: !pointRushEnabled })}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold transition-all active:scale-95 cursor-pointer ${
-                pointRushEnabled
-                  ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/30'
-                  : 'bg-[#22133e] hover:bg-[#2e1a54] text-amber-300 border border-amber-500/30'
-              }`}
-            >
-              <Crosshair className="h-3.5 w-3.5" />
-              <span>{pointRushEnabled ? 'Point Rush: ON' : 'Point Rush: OFF'}</span>
-            </button>
+            {/* Match Select Dropdown */}
+            {availableMatches.length > 1 && (
+              <select
+                value={activeMatchId}
+                onChange={(e) => handleMatchSelect(e.target.value)}
+                className="bg-[#241544] border border-[#482488] text-white text-xs font-bold py-1.5 px-2.5 rounded-lg cursor-pointer focus:outline-none focus:ring-1 focus:ring-purple-400"
+              >
+                {availableMatches.map((m: any) => (
+                  <option key={m.id || m.customId} value={m.id || m.customId}>
+                    {m.customLabel || `Match ${m.matchNumber}`}
+                  </option>
+                ))}
+              </select>
+            )}
 
-            {/* Point Rush Threshold Input */}
-            <div className="flex items-center gap-1 bg-[#1a0e30] border border-amber-500/30 px-2 py-1 rounded text-xs font-mono">
-              <span className="text-amber-400 text-[10px] font-bold uppercase tracking-wider">Rush Threshold:</span>
-              <input
-                type="number"
-                min="1"
-                max="999"
-                value={pointRushThresholdInput}
-                onChange={(e) => setPointRushThresholdInput(Number(e.target.value) || 0)}
-                onBlur={(e) => handleSavePointRushThreshold(Number(e.target.value) || 50)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleSavePointRushThreshold(pointRushThresholdInput);
-                  }
-                }}
-                className="w-12 bg-[#0e071a] border border-amber-500/50 rounded px-1.5 py-0.5 text-amber-300 text-center font-bold text-xs focus:outline-none focus:ring-1 focus:ring-amber-400"
-                title="Teams with points >= threshold get Point Rush status"
-              />
-              <span className="text-slate-400 text-[10px]">pts</span>
-            </div>
-
-            {/* +1 Pt All Teams */}
-            <button
-              type="button"
-              style={{ touchAction: 'manipulation' }}
-              onClick={() => executeCommand('ADD_POINT_ALL_TEAMS')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#22133e] hover:bg-[#2f1b57] border border-purple-500/40 text-purple-200 text-xs font-bold transition-all active:scale-95 cursor-pointer"
-            >
-              <Plus className="h-3.5 w-3.5 text-amber-400" />
-              <span>+1 Pt All Teams</span>
-            </button>
-
-            {/* Reset 4 Alive */}
-            <button
-              type="button"
-              style={{ touchAction: 'manipulation' }}
-              onClick={() => executeCommand('RESET_ALIVE')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-xs font-bold transition-all active:scale-95 cursor-pointer"
-            >
-              <RotateCcw className="h-3.5 w-3.5 text-sky-400" />
-              <span>Reset 4 Alive</span>
-            </button>
-
-            {/* Refresh OBS Overlay */}
-            <button
-              type="button"
-              style={{ touchAction: 'manipulation' }}
-              onClick={handleRefreshObs}
-              disabled={isRefreshingObs}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-sky-950/80 hover:bg-sky-900 border border-sky-500/40 text-sky-200 text-xs font-bold transition-all active:scale-95 cursor-pointer disabled:opacity-50"
-              title="Instantly send refresh/re-sync signal to the OBS overlay"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 text-sky-400 ${isRefreshingObs ? 'animate-spin' : ''}`} />
-              <span>{isRefreshingObs ? 'Refreshing...' : 'Refresh OBS'}</span>
-            </button>
-          </div>
-
-          {/* Finish / Reopen Match & Next Match Buttons */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              style={{ touchAction: 'manipulation' }}
+            {/* Finish / Reopen Match */}
+            <Button
+              size="sm"
+              variant={isMatchFinished ? 'secondary' : 'primary'}
               onClick={handleToggleFinishMatch}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded text-xs font-black transition-all active:scale-95 cursor-pointer ${
+              className={`flex items-center gap-1.5 text-xs font-bold ${
                 isMatchFinished
-                  ? 'bg-neutral-800 hover:bg-neutral-700 text-amber-400 border border-amber-500/40'
-                  : 'bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white shadow-lg'
+                  ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                  : 'bg-purple-600 hover:bg-purple-500 text-white'
               }`}
             >
-              {isMatchFinished ? (
-                <>
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  <span>Re-open Match</span>
-                </>
-              ) : (
-                <>
-                  <Trophy className="h-3.5 w-3.5 text-yellow-300" />
-                  <span>Finish Match (Award Placements)</span>
-                </>
-              )}
-            </button>
+              <Trophy className="h-3.5 w-3.5" />
+              <span>{isMatchFinished ? 'Reopen Match' : 'Finalize Match'}</span>
+            </Button>
 
-            {/* NEXT MATCH → Button */}
-            <button
-              type="button"
-              style={{ touchAction: 'manipulation' }}
-              onClick={handleNextMatch}
-              disabled={isSwitchingMatch}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black transition-all active:scale-95 cursor-pointer shadow-lg shadow-emerald-950/40 disabled:opacity-50"
-              title="Save current match and advance cleanly to the next scheduled match"
+            {/* View Finalized Report Button */}
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleOpenReportModal}
+              disabled={isLoadingReport}
+              className="flex items-center gap-1.5 text-xs bg-purple-950/60 hover:bg-purple-900 text-purple-200 border border-purple-800/40"
             >
-              <Sparkles className="h-3.5 w-3.5 text-yellow-300" />
-              <span>{isSwitchingMatch ? 'Switching...' : 'NEXT MATCH →'}</span>
+              <FileCheck className="h-3.5 w-3.5" />
+              <span>Report</span>
+            </Button>
+
+            {/* Diagnostics Toggle */}
+            <button
+              onClick={() => setShowDiagnostics((prev) => !prev)}
+              className="p-1.5 rounded-lg bg-[#241544] hover:bg-[#341d63] text-slate-300 border border-[#482488] text-xs font-mono transition-colors"
+              title="Toggle Diagnostic HUD"
+            >
+              <Activity className="h-4 w-4" />
             </button>
           </div>
         </div>
       </header>
 
-      {/* ================= TEAMS GRID ================= */}
-      <main className="max-w-7xl mx-auto w-full px-4 mt-6">
-        {teams.length === 0 ? (
-          <div className="bg-[#120a22] border border-[#2d1752] rounded-xl p-12 text-center text-slate-400 font-mono text-sm">
-            No teams configured in this tournament.
+      {/* Optional Diagnostic HUD Panel */}
+      {showDiagnostics && (
+        <div className="bg-black/90 border-b border-purple-800/40 px-4 py-2.5 text-[11px] font-mono text-slate-300 shadow-inner">
+          <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-4">
+              <span>Connection: <strong className="text-emerald-400">{syncStatus}</strong></span>
+              <span>Tour ID: <strong className="text-slate-100">{effectiveTournamentId}</strong></span>
+              <span>Match ID: <strong className="text-slate-100">{activeMatchId}</strong></span>
+              <span>Revision: <strong className="text-amber-400">#{revision}</strong></span>
+              <span>Fire Team: <strong className="text-rose-400">{fireTeamId || 'None'}</strong></span>
+              <span>Source: <strong className="text-cyan-400">AUTHORITATIVE SERVER</strong></span>
+            </div>
+            <div className="flex items-center gap-3 text-[10px] text-slate-400">
+              <span>Last Cmd: {lastSentCommand} ({lastCommandId.slice(0, 10)})</span>
+              <a
+                href={obsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-purple-400 hover:text-purple-300 underline flex items-center gap-1"
+              >
+                <span>OBS Browser URL</span>
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {teams.map((team, idx) => {
-              const {
-                teamId,
-                name,
-                tag,
-                slotNumber,
-                logoUrl,
-                kills,
-                placement,
-                placementPoints,
-                totalPoints,
-                squadPlayers,
-                isWiped,
-                isFireActive,
-                isPointRushActive,
-                isFocused,
-              } = team;
+        </div>
+      )}
 
-              return (
-                <div
-                  key={teamId}
-                  className={`rounded-xl border transition-all p-3.5 flex flex-col justify-between ${
-                    isFireActive
-                      ? 'bg-gradient-to-br from-[#2a0e08] via-[#1b091f] to-[#120a22] border-orange-500 shadow-lg shadow-orange-950/30'
-                      : isFocused
-                      ? 'bg-[#1a0e33] border-amber-400 shadow-md ring-1 ring-amber-400'
-                      : isWiped
-                      ? 'bg-[#100c14] border-red-900/50 opacity-80'
-                      : 'bg-[#130b24] border-[#2d1752] hover:border-[#45237c]'
-                  }`}
-                >
-                  {/* Team Card Header */}
-                  <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-[#231240]">
-                    <div className="flex items-center gap-2.5 min-w-0">
+      {/* Sub-header Controls: Quick Actions & Scoring Rule Controls */}
+      <div className="bg-[#120a22] border-b border-[#2d1554] px-4 py-2 text-xs">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+          {/* Point Rush Threshold Input */}
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 font-mono text-[11px]">Point Rush Threshold:</span>
+            <input
+              type="number"
+              min={1}
+              max={500}
+              value={pointRushThresholdInput}
+              onChange={(e) => setPointRushThresholdInput(Number(e.target.value))}
+              className="w-16 bg-[#1f103a] border border-[#3e1b73] text-white text-xs font-mono font-bold rounded px-2 py-1 text-center focus:outline-none focus:ring-1 focus:ring-purple-400"
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleSavePointRushThreshold}
+              className="text-[11px] py-1 px-2.5 h-auto bg-purple-900/40 hover:bg-purple-800/60 text-purple-200"
+            >
+              Apply
+            </Button>
+          </div>
+
+          {/* Quick Resets */}
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleResetAlive}
+              className="flex items-center gap-1 text-[11px] py-1 px-2.5 h-auto bg-neutral-800 hover:bg-neutral-700 text-slate-300"
+            >
+              <RotateCcw className="h-3 w-3" />
+              <span>Reset All Alive</span>
+            </Button>
+
+            {availableMatches.length > 1 && (
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={handleNextMatch}
+                disabled={isSwitchingMatch}
+                className="flex items-center gap-1 text-[11px] py-1 px-3 h-auto bg-purple-600 hover:bg-purple-500 text-white font-bold"
+              >
+                <span>Next Match →</span>
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area: Team Grid (1 to 12) */}
+      <main className="max-w-6xl mx-auto px-4 py-6 w-full flex-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {sortedTeams.map((team) => {
+            const isFire = team.teamId === fireTeamId;
+            const isRush = team.pointRushEnabled;
+            const players = team.players ? Object.entries(team.players) : [];
+            const isWiped = players.length > 0 && players.every(([, p]) => p.status === 'eliminated');
+
+            return (
+              <div
+                key={team.teamId}
+                className={`rounded-xl border transition-all p-4 flex flex-col justify-between shadow-lg relative overflow-hidden ${
+                  isFire && !isWiped
+                    ? 'bg-gradient-to-b from-[#2d1209] to-[#1a0c06] border-orange-500/80 shadow-orange-950/40'
+                    : isWiped
+                    ? 'bg-[#140f1a] border-red-950/60 opacity-75'
+                    : 'bg-[#1b1031] border-[#371963] hover:border-[#522594]'
+                }`}
+              >
+                {/* Team Card Header */}
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       {/* Slot Badge */}
-                      <span className="h-7 w-7 rounded bg-[#231240] border border-[#3b1d6e] flex items-center justify-center font-mono font-bold text-xs text-amber-400 shrink-0">
-                        #{slotNumber || idx + 1}
+                      <span className="h-6 w-6 rounded bg-[#2c1550] border border-[#482382] text-slate-200 text-xs font-bold font-mono flex items-center justify-center shrink-0">
+                        {team.slotNumber || 1}
                       </span>
-
-                      {/* Team Logo */}
-                      <div className="h-8 w-8 rounded bg-[#201038] border border-[#3b1d6e] overflow-hidden flex items-center justify-center shrink-0">
-                        {logoUrl ? (
-                          <img src={logoUrl} alt={name} className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="font-bold text-[10px] text-slate-300">{tag.slice(0, 3)}</span>
-                        )}
-                      </div>
-
-                      {/* Team Tag & Name & Badges */}
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-black text-sm text-white truncate uppercase tracking-wide">
-                            {tag}
-                          </span>
-                          {isFireActive && (
-                            <span className="px-1.5 py-0.5 rounded bg-orange-600 text-white font-mono text-[9px] font-black uppercase tracking-wider flex items-center gap-0.5 animate-pulse">
-                              <Flame className="h-2.5 w-2.5" />
-                              FIRE
-                            </span>
-                          )}
-                          {isPointRushActive && (
-                            <span className="px-1.5 py-0.5 rounded bg-amber-500 text-black font-mono text-[9px] font-black uppercase tracking-wider flex items-center gap-0.5">
-                              <Crosshair className="h-2.5 w-2.5" />
-                              RUSH
-                            </span>
-                          )}
+                        <div className="font-black text-sm text-white tracking-wide truncate">
+                          {team.name || `Team ${team.slotNumber}`}
                         </div>
-                        <div className="text-[11px] text-slate-400 truncate max-w-[120px]">{name}</div>
+                        {team.tag && (
+                          <div className="text-[10px] font-mono text-purple-300 uppercase">
+                            {team.tag}
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Quick Points & Kills Indicator */}
-                    <div className="flex items-center gap-2 text-right">
-                      <div>
-                        <div className="text-xs font-mono font-black text-amber-400">
-                          {totalPoints} PTS
-                          {placementPoints > 0 && (
-                            <span className="text-[10px] text-emerald-400 font-bold ml-1">
-                              (+{placementPoints}pl)
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] font-mono text-slate-400">
-                          {kills} KILLS {placement ? `• #${placement}` : ''}
-                        </div>
-                      </div>
-
-                      {/* Kill Adjuster Buttons (Instant clicks, zero-lag) */}
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          aria-label={`Remove kill from ${tag}`}
-                          style={{ touchAction: 'manipulation' }}
-                          onClick={() => executeCommand('REMOVE_KILL', teamId)}
-                          className="h-8 w-8 rounded bg-[#231240] hover:bg-red-900/60 active:scale-90 border border-red-700/50 text-red-300 flex items-center justify-center transition-transform cursor-pointer"
-                        >
-                          <Minus className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Add kill to ${tag}`}
-                          style={{ touchAction: 'manipulation' }}
-                          onClick={() => executeCommand('ADD_KILL', teamId)}
-                          className="h-8 w-9 rounded bg-[#231240] hover:bg-emerald-900/60 active:scale-90 border border-emerald-600/50 text-emerald-300 font-black text-xs flex items-center justify-center transition-transform cursor-pointer"
-                        >
-                          +1
-                        </button>
-                      </div>
+                    {/* Special Mode Badges */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {isFire && !isWiped && (
+                        <span className="flex items-center gap-0.5 px-2 py-0.5 rounded bg-orange-500 text-black text-[10px] font-black tracking-wider shadow">
+                          <Flame className="h-3 w-3 fill-black" />
+                          FIRE
+                        </span>
+                      )}
+                      {isRush && !isWiped && (
+                        <span className="px-2 py-0.5 rounded bg-yellow-400 text-black text-[10px] font-black tracking-wider shadow">
+                          RUSH
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {/* 4 Players Alive / Knock / Elim Toggles (Instant clicks, zero-lag) */}
-                  <div className="py-3">
-                    <div className="text-[10px] uppercase font-mono font-bold text-slate-400 mb-1.5 flex items-center justify-between">
-                      <span>Squad Status (Tap to cycle):</span>
-                      <span className="text-amber-400 font-bold">
-                        {isWiped
-                          ? 'ALL ELIMINATED'
-                          : `${squadPlayers.filter((p) => p === 'alive' || p === 'knock').length}/4 Alive`}
-                      </span>
+                  {/* Eliminations & Points Row */}
+                  <div className="mt-3 flex items-center justify-between bg-black/25 rounded-lg p-2 border border-purple-950">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <span className="text-[10px] font-mono text-slate-400 block uppercase">Elims</span>
+                        <span className="text-lg font-black text-rose-400 font-mono leading-none">
+                          {team.kills}
+                        </span>
+                      </div>
+                      <div className="h-6 w-px bg-purple-900/40" />
+                      <div>
+                        <span className="text-[10px] font-mono text-slate-400 block uppercase">Total Pts</span>
+                        <span className="text-lg font-black text-amber-400 font-mono leading-none">
+                          {team.points}
+                        </span>
+                      </div>
                     </div>
 
+                    {/* Quick +1 / -1 Kill Stepper Buttons */}
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleAddKill(team.teamId, -1)}
+                        className="h-8 w-8 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-slate-200 flex items-center justify-center font-bold text-sm transition-colors cursor-pointer active:scale-95 shadow"
+                        title="Decrement elimination"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleAddKill(team.teamId, 1)}
+                        className="h-8 w-11 rounded-lg bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center font-black text-sm transition-colors cursor-pointer active:scale-95 shadow-md shadow-rose-950/50"
+                        title="Add elimination (+1)"
+                      >
+                        <Plus className="h-4 w-4 mr-0.5" />
+                        <span>1</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Player Statuses (P1 to P4) */}
+                  <div className="mt-3">
+                    <span className="text-[10px] font-mono text-slate-400 block mb-1.5 uppercase">
+                      Player States (Tap to toggle)
+                    </span>
                     <div className="grid grid-cols-4 gap-1.5">
-                      {squadPlayers.map((status: PlayerState, pIdx: number) => {
-                        const statusColors: Record<PlayerState, string> = {
-                          alive: 'bg-emerald-950/80 border-emerald-500 text-emerald-200 hover:bg-emerald-900',
-                          knock: 'bg-red-950/90 border-red-500 text-red-200 animate-pulse hover:bg-red-900',
-                          eliminated: 'bg-neutral-900/90 border-neutral-700 text-neutral-500 hover:bg-neutral-800',
-                        };
+                      {players.map(([pId, pData], idx) => {
+                        const status = pData.status;
+                        let statusColor = 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300';
+                        let label = 'ALIVE';
+
+                        if (status === 'knock') {
+                          statusColor = 'bg-amber-950/60 border-amber-500/60 text-amber-300 animate-pulse';
+                          label = 'KNOCK';
+                        } else if (status === 'eliminated') {
+                          statusColor = 'bg-neutral-900 border-neutral-700 text-neutral-500';
+                          label = 'DEAD';
+                        }
 
                         return (
                           <button
-                            key={pIdx}
-                            type="button"
-                            style={{ touchAction: 'manipulation' }}
-                            onClick={() => handlePlayerToggle(teamId, pIdx, status)}
-                            className={`py-2 px-1 rounded-md border text-[11px] font-mono font-bold flex flex-col items-center justify-center gap-0.5 transition-transform active:scale-90 cursor-pointer ${statusColors[status]}`}
+                            key={pId}
+                            onClick={() => handlePlayerToggle(team.teamId, pId, status)}
+                            className={`py-1.5 px-1 rounded border text-[10px] font-mono font-bold flex flex-col items-center justify-center transition-all cursor-pointer active:scale-95 ${statusColor}`}
                           >
-                            <span className="text-[9px] text-slate-400">P{pIdx + 1}</span>
-                            <span className="uppercase text-[10px] font-black">{status.slice(0, 5)}</span>
+                            <span>P{idx + 1}</span>
+                            <span className="text-[8px] font-black">{label}</span>
                           </button>
                         );
                       })}
                     </div>
                   </div>
-
-                  {/* Mode & Squad Actions */}
-                  <div className="pt-2 border-t border-[#231240] flex items-center justify-between gap-1.5 flex-wrap">
-                    {/* Fire Button */}
-                    <button
-                      type="button"
-                      style={{ touchAction: 'manipulation' }}
-                      onClick={() => executeCommand('SET_MODE', teamId, { mode: isFireActive ? 'NORMAL' : 'FIRE', fire: !isFireActive })}
-                      className={`px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
-                        isFireActive
-                          ? 'bg-orange-600 text-white shadow-md'
-                          : 'bg-[#201038] text-orange-400 border border-orange-500/30 hover:bg-orange-950/40'
-                      }`}
-                    >
-                      <Flame className="h-3 w-3" />
-                      <span>FIRE</span>
-                    </button>
-
-                    {/* Point Rush Team Toggle */}
-                    <button
-                      type="button"
-                      style={{ touchAction: 'manipulation' }}
-                      onClick={() => executeCommand('SET_POINT_RUSH', teamId, { enabled: !isPointRushActive })}
-                      className={`px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
-                        isPointRushActive
-                          ? 'bg-amber-500 text-black shadow-md'
-                          : 'bg-[#201038] text-amber-300 border border-amber-500/30 hover:bg-amber-950/40'
-                      }`}
-                    >
-                      <Crosshair className="h-3 w-3" />
-                      <span>RUSH</span>
-                    </button>
-
-                    {/* Wipe / Revive */}
-                    {isWiped ? (
-                      <button
-                        type="button"
-                        style={{ touchAction: 'manipulation' }}
-                        onClick={() => executeCommand('REVIVE_SQUAD', teamId)}
-                        className="px-2.5 py-1 rounded text-xs font-bold bg-emerald-950/70 border border-emerald-600 text-emerald-300 hover:bg-emerald-900/60 flex items-center gap-1 transition-all active:scale-95 cursor-pointer ml-auto"
-                      >
-                        <ShieldCheck className="h-3 w-3" />
-                        <span>Revive</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        style={{ touchAction: 'manipulation' }}
-                        onClick={() => executeCommand('WIPE_SQUAD', teamId)}
-                        className="px-2.5 py-1 rounded text-xs font-bold bg-red-950/70 border border-red-700 text-red-300 hover:bg-red-900/60 flex items-center gap-1 transition-all active:scale-95 cursor-pointer ml-auto"
-                      >
-                        <Skull className="h-3 w-3" />
-                        <span>Wipe</span>
-                      </button>
-                    )}
-                  </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+
+                {/* Squad Quick Actions: Wipe / Revive */}
+                <div className="mt-4 pt-3 border-t border-purple-900/30 flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => handleWipeSquad(team.teamId)}
+                    className="flex-1 py-1 px-2 rounded bg-neutral-900 hover:bg-neutral-800 text-rose-400 border border-neutral-800 text-[11px] font-mono font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Skull className="h-3 w-3" />
+                    <span>Wipe</span>
+                  </button>
+                  <button
+                    onClick={() => handleReviveSquad(team.teamId)}
+                    className="flex-1 py-1 px-2 rounded bg-neutral-900 hover:bg-neutral-800 text-emerald-400 border border-neutral-800 text-[11px] font-mono font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>Revive</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </main>
 
-      {/* ================= MATCH REPORT MODAL ================= */}
+      {/* Match Report Modal */}
       <Modal
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
-        title="Verify Match Report & Push to Website"
-        description={`Review final placements, kills, and points for Match ${match.matchNumber} (${match.mapName || 'Map'}) before publishing to the official tournament standings.`}
         maxWidth="2xl"
       >
-        <div className="space-y-4 pt-2">
-          {/* Status & Placement info banner */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-[#190d30] border border-[#3b1d6e] text-xs">
-            <div className="flex items-center gap-2 text-slate-300">
-              <Clock className="h-4 w-4 text-amber-400 shrink-0" />
-              <span>
-                {isMatchFinished ? (
-                  <strong className="text-emerald-400 font-bold">
-                    Match is Finished. Placement points are calculated.
-                  </strong>
-                ) : (
-                  <strong className="text-amber-400 font-bold">
-                    Match is Live. Placement points are deferred until finished.
-                  </strong>
-                )}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              style={{ touchAction: 'manipulation' }}
-              onClick={handleToggleFinishMatch}
-              className={`px-3 py-1 rounded font-bold text-xs cursor-pointer active:scale-95 transition-all ${
-                isMatchFinished
-                  ? 'bg-neutral-800 text-slate-300 hover:bg-neutral-700'
-                  : 'bg-purple-600 hover:bg-purple-500 text-white'
-              }`}
-            >
-              {isMatchFinished ? 'Re-open Match' : 'Mark Match Finished'}
-            </button>
-          </div>
-
-          {/* Teams Placements & Points Table */}
-          <div className="border border-[#2d1752] rounded-lg overflow-hidden bg-[#100a1c]">
-            <div className="max-h-[380px] overflow-y-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#1b0e33] text-slate-300 font-mono text-[11px] sticky top-0 z-10 border-b border-[#3b1d6e]">
-                  <tr>
-                    <th className="py-2.5 px-3 w-14 text-center">Rank</th>
-                    <th className="py-2.5 px-3">Team</th>
-                    <th className="py-2.5 px-3 text-center">Status</th>
-                    <th className="py-2.5 px-3 text-center">Kills</th>
-                    <th className="py-2.5 px-3 text-right">Pl. Pts</th>
-                    <th className="py-2.5 px-3 text-right">Kill Pts</th>
-                    <th className="py-2.5 px-3 text-right font-black">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#23133d] font-mono">
-                  {sortedReportTeams.map((t, idx) => {
-                    const currentKills = reportOverrides[t.teamId]?.kills !== undefined
-                      ? reportOverrides[t.teamId].kills!
-                      : t.kills;
-
-                    return (
-                      <tr
-                        key={t.teamId}
-                        className={`hover:bg-[#1f113a]/50 transition-colors ${
-                          idx === 0 ? 'bg-amber-500/10' : ''
-                        }`}
-                      >
-                        <td className="py-2 px-3 text-center font-bold">
-                          {idx === 0 ? (
-                            <span className="inline-flex items-center gap-1 text-amber-400 font-black">
-                              <Trophy className="h-3.5 w-3.5" /> #1
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">#{t.placement || idx + 1}</span>
-                          )}
-                        </td>
-                        <td className="py-2 px-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-white uppercase">{t.tag}</span>
-                            <span className="text-slate-400 text-[11px] truncate max-w-[120px]">{t.name}</span>
-                          </div>
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          {idx === 0 && !t.isWiped ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                              BOOYAH
-                            </span>
-                          ) : t.isWiped ? (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-950/60 text-red-400 border border-red-800/40">
-                              ELIM
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
-                              ALIVE
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          <div className="inline-flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              style={{ touchAction: 'manipulation' }}
-                              onClick={() => {
-                                const newKills = Math.max(0, currentKills - 1);
-                                setReportOverrides((prev) => ({
-                                  ...prev,
-                                  [t.teamId]: { ...prev[t.teamId], kills: newKills },
-                                }));
-                              }}
-                              className="h-5 w-5 rounded bg-[#231240] hover:bg-red-900/60 text-red-300 flex items-center justify-center cursor-pointer active:scale-90"
-                            >
-                              -
-                            </button>
-                            <span className="w-6 text-center font-bold text-white">{currentKills}</span>
-                            <button
-                              type="button"
-                              style={{ touchAction: 'manipulation' }}
-                              onClick={() => {
-                                const newKills = currentKills + 1;
-                                setReportOverrides((prev) => ({
-                                  ...prev,
-                                  [t.teamId]: { ...prev[t.teamId], kills: newKills },
-                                }));
-                              }}
-                              className="h-5 w-5 rounded bg-[#231240] hover:bg-emerald-900/60 text-emerald-300 flex items-center justify-center cursor-pointer active:scale-90"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </td>
-                        <td className="py-2 px-3 text-right font-bold text-slate-300">
-                          {isMatchFinished ? t.placementPoints : '-'}
-                        </td>
-                        <td className="py-2 px-3 text-right font-bold text-slate-300">
-                          {currentKills}
-                        </td>
-                        <td className="py-2 px-3 text-right font-black text-amber-400">
-                          {isMatchFinished ? t.placementPoints + currentKills : currentKills}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Modal Footer Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[#231240]">
-            <div className="text-xs text-slate-400 font-mono">
-              {isSubmittedToWebsite ? (
-                <span className="text-emerald-400 font-bold flex items-center gap-1.5">
-                  <CheckCircle2 className="h-4 w-4" /> Report is currently LIVE on the website.
-                </span>
-              ) : (
-                <span className="text-amber-400 font-bold flex items-center gap-1.5">
-                  <Sparkles className="h-4 w-4" /> Website standings are NOT updated until pushed below.
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                style={{ touchAction: 'manipulation' }}
-                onClick={() => setIsReportModalOpen(false)}
-                className="px-4 py-2 rounded-lg bg-[#1f1338] hover:bg-[#2c1b4f] text-slate-300 text-xs font-bold active:scale-95 transition-all cursor-pointer"
-              >
-                Close
-              </button>
-
-              <button
-                type="button"
-                style={{ touchAction: 'manipulation' }}
-                disabled={isSubmittingReport}
-                onClick={handleSubmitMatchReport}
-                className={`px-5 py-2 rounded-lg text-xs font-black flex items-center gap-2 transition-all shadow-lg active:scale-95 cursor-pointer disabled:opacity-50 ${
-                  isSubmittedToWebsite
-                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                    : 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black shadow-amber-500/25'
-                }`}
-              >
-                {isSubmittingReport ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : isSubmittedToWebsite ? (
-                  <CheckCircle2 className="h-4 w-4" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-                <span>
-                  {isSubmittingReport
-                    ? 'Publishing...'
-                    : isSubmittedToWebsite
-                    ? 'Re-Push Updated Report to Website'
-                    : 'Push Report to Website & Standings'}
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
+        {finalizedReport && (
+          <MatchReportView
+            report={finalizedReport}
+            onClose={() => setIsReportModalOpen(false)}
+          />
+        )}
       </Modal>
     </div>
   );

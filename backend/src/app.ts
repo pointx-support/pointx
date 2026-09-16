@@ -25,6 +25,7 @@ import syncRoutes from './routes/syncRoutes';
 import platformRoutes from './routes/platformRoutes';
 import broadcastSessionRoutes from './routes/broadcastSessionRoutes';
 import remotePairingRoutes from './routes/remotePairingRoutes';
+import matchReportRoutes from './routes/matchReportRoutes';
 import { enforceMaintenanceMode } from './middleware/maintenance';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -36,21 +37,62 @@ export function createApp(): Application {
   // Trust reverse proxy (Render, AWS ALB, NGINX) for accurate client IP & rate limiting
   app.set('trust proxy', 1);
 
-  // 1. Security Headers & Content Security Policy
+  // 1. Security Headers & Content Security Policy (allows Google Identity Services & OBS Studio)
   app.use(
     helmet({
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+          scriptSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            "'unsafe-eval'",
+            'https://accounts.google.com',
+            'https://accounts.google.com/gsi/',
+            'https://apis.google.com',
+          ],
+          scriptSrcElem: [
+            "'self'",
+            "'unsafe-inline'",
+            'https://accounts.google.com',
+            'https://accounts.google.com/gsi/',
+            'https://apis.google.com',
+          ],
+          frameSrc: [
+            "'self'",
+            'https://accounts.google.com',
+            'https://accounts.google.com/gsi/',
+          ],
+          styleSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            'https://fonts.googleapis.com',
+            'https://accounts.google.com/gsi/style',
+          ],
           fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
-          imgSrc: ["'self'", 'data:', 'blob:', 'https:', 'http:'],
+          imgSrc: [
+            "'self'",
+            'data:',
+            'blob:',
+            'https:',
+            'http:',
+            'https://*.googleusercontent.com',
+            'https://lh3.googleusercontent.com',
+          ],
           mediaSrc: ["'self'", 'data:', 'blob:', 'https:', 'http:'],
-          connectSrc: ["'self'", 'ws:', 'wss:', 'https:', 'http:'],
+          connectSrc: [
+            "'self'",
+            'ws:',
+            'wss:',
+            'https:',
+            'http:',
+            'https://accounts.google.com/gsi/',
+            'https://oauth2.googleapis.com',
+          ],
           frameAncestors: ["*"], // Allow embedding in OBS Studio Browser Source
         },
       },
+      crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
       crossOriginResourcePolicy: { policy: 'cross-origin' },
       crossOriginEmbedderPolicy: false,
     })
@@ -142,6 +184,8 @@ export function createApp(): Application {
   app.use('/api/sync', syncRoutes);
   app.use('/api/broadcast/sessions', broadcastSessionRoutes);
   app.use('/api/broadcast/remote-pairing', remotePairingRoutes);
+  app.use('/api/reports', matchReportRoutes);
+  app.use('/api/match-reports', matchReportRoutes);
   app.use('/api', healthRoutes);
   app.get('/health', handleLivenessHealth); // Root alias for health checks
   app.get('/ready', handleReadiness); // Root alias for readiness checks

@@ -101,31 +101,36 @@ export class CanonicalLiveStore {
     });
   }
 
+  public finalizedListeners = new Set<(report: any) => void>();
+
   public setMatchContext(orgId: string, tourId: string, matchId: string): void {
-    if (this.activeMatchId !== matchId || this.activeTourId !== tourId) {
+    const cleanMatchId = matchId || 'none';
+    if (this.activeMatchId !== cleanMatchId || this.activeTourId !== tourId) {
       this.activeOrgId = orgId || 'org-default';
       this.activeTourId = tourId || 'default';
-      this.activeMatchId = matchId || 'm1';
+      this.activeMatchId = cleanMatchId;
       this.lastAppliedRevision = 0;
       this.currentState = null;
 
-      // Join new room on WebSocket
-      const client = RealtimeSyncClient.getInstance();
-      client.sendRawMessage({
-        type: 'JOIN_MATCH',
-        organizationId: this.activeOrgId,
-        tournamentId: this.activeTourId,
-        matchId: this.activeMatchId,
-      });
+      if (cleanMatchId !== 'none') {
+        // Join new room on WebSocket
+        const client = RealtimeSyncClient.getInstance();
+        client.sendRawMessage({
+          type: 'JOIN_MATCH',
+          organizationId: this.activeOrgId,
+          tournamentId: this.activeTourId,
+          matchId: this.activeMatchId,
+        });
 
-      // Request full state
-      client.sendRawMessage({
-        type: 'REQUEST_FULL_STATE',
-        organizationId: this.activeOrgId,
-        tournamentId: this.activeTourId,
-        matchId: this.activeMatchId,
-        lastAppliedRevision: 0,
-      });
+        // Request full state
+        client.sendRawMessage({
+          type: 'REQUEST_FULL_STATE',
+          organizationId: this.activeOrgId,
+          tournamentId: this.activeTourId,
+          matchId: this.activeMatchId,
+          lastAppliedRevision: 0,
+        });
+      }
     }
   }
 
@@ -151,6 +156,13 @@ export class CanonicalLiveStore {
     this.nextMatchListeners.add(listener);
     return () => {
       this.nextMatchListeners.delete(listener);
+    };
+  }
+
+  public subscribeFinalizedMatch(listener: (report: any) => void): () => void {
+    this.finalizedListeners.add(listener);
+    return () => {
+      this.finalizedListeners.delete(listener);
     };
   }
 
@@ -397,6 +409,16 @@ export class CanonicalLiveStore {
       for (const listener of this.nextMatchListeners) {
         try {
           listener(data);
+        } catch {}
+      }
+    } else if (msg.type === 'MATCH_FINALIZED') {
+      if (this.currentState) {
+        this.currentState.isMatchFinished = true;
+        this.notify();
+      }
+      for (const listener of this.finalizedListeners) {
+        try {
+          listener(msg.report);
         } catch {}
       }
     } else if (msg.type === 'BROADCAST_STATE_UPDATED') {

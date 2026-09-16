@@ -1,16 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, AlertTriangle, Flame, Crosshair } from 'lucide-react';
-import type {
-  AuthoritativeBroadcastState,
-  BroadcastSyncStatus,
-  PlayerState,
-} from '../../types/broadcastSession';
-import {
-  initializeBroadcastSession,
-  fetchSessionState,
-  connectBroadcastSession,
-} from '../../services/broadcastClient';
+import { Loader2, AlertTriangle, Flame, Wifi, Activity } from 'lucide-react';
+import type { PlayerState } from '../../types/broadcastSession';
 import { CanonicalLiveStore, type CanonicalLiveMatchState } from '../../services/canonicalLiveStore';
+import { RealtimeSyncClient, type ConnectionState } from '../../services/broadcastSync';
 
 export interface ObsLiveOverlayProps {
   tournamentId?: string;
@@ -22,7 +14,7 @@ export interface ObsLiveOverlayProps {
 export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
   tournamentId: propTournamentId,
   matchId: propMatchId,
-  sessionId: propSessionId,
+  sessionId: _propSessionId,
   isTransparent = true,
 }) => {
   // Query param fallbacks from window.location
@@ -30,116 +22,110 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
   );
 
-  const effectiveSessionId = propSessionId || urlParams?.get('sessionId') || urlParams?.get('session') || '';
   const effectiveTournamentId = propTournamentId || urlParams?.get('tournamentId') || urlParams?.get('tournament') || '';
   const effectiveMatchId = propMatchId || urlParams?.get('matchId') || urlParams?.get('match') || undefined;
+  const isDebugMode = urlParams?.get('debug') === 'true';
 
   const [canonicalState, setCanonicalState] = useState<CanonicalLiveMatchState | null>(null);
-  const [state, setState] = useState<AuthoritativeBroadcastState | null>(null);
-  const [syncStatus, setSyncStatus] = useState<BroadcastSyncStatus>('CONNECTING');
+  const [syncStatus, setSyncStatus] = useState<'LIVE' | 'CONNECTING' | 'DISCONNECTED'>('CONNECTING');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<number>(Date.now());
+  const [hasNoMatches, setHasNoMatches] = useState<boolean>(false);
 
   useEffect(() => {
-    let connection: { disconnect: () => void } | null = null;
     let isCancelled = false;
-
-    // Connect to centralized Realtime Live State Store (Immediate WebSocket Path)
     const liveStore = CanonicalLiveStore.getInstance();
-    if (effectiveTournamentId) {
-      liveStore.setMatchContext('org-default', effectiveTournamentId, effectiveMatchId || 'm1');
+    const syncClient = RealtimeSyncClient.getInstance();
+
+    async function setupContextAndConnect() {
+      if (!effectiveTournamentId) {
+        setLoading(false);
+        setError('No tournament ID provided for OBS overlay.');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        // Fetch tournament metadata to resolve actual matches
+        const tourRes = await fetch(`/api/tournaments/${encodeURIComponent(effectiveTournamentId)}`);
+        const tourData = await tourRes.json();
+
+        if (isCancelled) return;
+
+        if (!tourData?.success || !tourData?.data) {
+          setError(`Tournament "${effectiveTournamentId}" not found.`);
+          setLoading(false);
+          return;
+        }
+
+        const tour = tourData.data;
+        const orgId = tour.organizationId ? String(tour.organizationId) : 'org-default';
+        const matches = Array.isArray(tour.matches) ? tour.matches : [];
+
+        if (matches.length === 0) {
+          // Zero-match tournament state: do NOT create fake match!
+          setHasNoMatches(true);
+          setLoading(false);
+          liveStore.setMatchContext(orgId, effectiveTournamentId, 'none');
+          return;
+        }
+
+        setHasNoMatches(false);
+        const resolvedMatch = effectiveMatchId
+          ? matches.find((m: any) => (m.id || m.customId) === effectiveMatchId) || matches[0]
+          : matches[0];
+
+        const targetMatchId = resolvedMatch.id || resolvedMatch.customId;
+        liveStore.setMatchContext(orgId, effectiveTournamentId, targetMatchId);
+      } catch {
+        if (!isCancelled) {
+          // Fallback if fetch failed
+          liveStore.setMatchContext('org-default', effectiveTournamentId, effectiveMatchId || 'none');
+          setLoading(false);
+        }
+      }
     }
 
+    setupContextAndConnect();
+
+    // Subscribe to Authoritative Live State Store
     const unsubLive = liveStore.subscribe((cState) => {
       if (!isCancelled && cState) {
         setCanonicalState(cState);
         setLoading(false);
         setError(null);
         setSyncStatus('LIVE');
+        setLastSyncTime(Date.now());
       }
     });
 
+    // Subscribe to Next Match transitions
     const unsubNext = liveStore.subscribeNextMatch((nextData) => {
       if (!isCancelled && nextData && nextData.nextMatchId) {
-        liveStore.setMatchContext('org-default', effectiveTournamentId, nextData.nextMatchId);
+        const org = canonicalState?.organizationId || 'org-default';
+        liveStore.setMatchContext(org, effectiveTournamentId, nextData.nextMatchId);
+        setLastSyncTime(Date.now());
       }
     });
 
-    async function init() {
-      try {
-        let activeSessionId = effectiveSessionId;
-        let initialData: AuthoritativeBroadcastState | null = null;
-
-        if (activeSessionId) {
-          initialData = await fetchSessionState(activeSessionId);
-        } else if (effectiveTournamentId) {
-          const initRes = await initializeBroadcastSession(effectiveTournamentId, effectiveMatchId);
-          activeSessionId = initRes.sessionId;
-          initialData = initRes.state;
-        }
-
-        if (isCancelled) return;
-
-        if (initialData) {
-          setState(initialData);
-          setLoading(false);
-          setSyncStatus('LIVE');
-
-          // Connect real-time WebSocket room with gap detection
-          connection = connectBroadcastSession(activeSessionId, initialData, {
-            onState: (newState) => {
-              if (!isCancelled && newState && (newState.sessionId || newState.tournamentId)) {
-                setState(newState);
-                setError(null);
-              }
-            },
-            onStatusChange: (status) => {
-              if (!isCancelled) {
-                setSyncStatus(status);
-              }
-            },
-            onOverlayEvent: (evt) => {
-              if (evt?.hardReload) {
-                window.location.reload();
-              } else {
-                fetchSessionState(activeSessionId)
-                  .then((fresh) => {
-                    if (!isCancelled && fresh) {
-                      setState(fresh);
-                    }
-                  })
-                  .catch(() => {
-                    window.location.reload();
-                  });
-              }
-            },
-            onError: (err) => {
-              console.warn('[ObsLiveOverlay] Sync error:', err);
-            },
-          });
-        }
-      } catch (err: any) {
-        if (!isCancelled && !liveStore.getState()) {
-          setError(err.message || 'Failed to connect to broadcast session.');
-          setLoading(false);
-          setSyncStatus('DISCONNECTED');
-        }
+    // Track WebSocket health
+    const unsubConn = syncClient.subscribeConnection((status: ConnectionState) => {
+      if (!isCancelled) {
+        setSyncStatus(status === 'CONNECTED' ? 'LIVE' : 'CONNECTING');
+        if (status === 'CONNECTED') setLastSyncTime(Date.now());
       }
-    }
-
-    init();
+    });
 
     return () => {
       isCancelled = true;
       unsubLive();
       unsubNext();
-      if (connection) {
-        connection.disconnect();
-      }
+      unsubConn();
     };
-  }, [effectiveSessionId, effectiveTournamentId, effectiveMatchId]);
+  }, [effectiveTournamentId, effectiveMatchId]);
 
-  if (loading && !canonicalState) {
+  if (loading && !canonicalState && !hasNoMatches) {
     return (
       <div
         className={`w-full min-h-screen flex items-center justify-center p-8 select-none font-sans ${
@@ -156,7 +142,26 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
     );
   }
 
-  if (error && !canonicalState && !state) {
+  if (hasNoMatches) {
+    return (
+      <div
+        className={`w-full min-h-screen flex items-start justify-end p-4 sm:p-8 select-none font-sans overflow-hidden ${
+          isTransparent ? 'bg-transparent' : 'bg-[#0f0c1b]'
+        }`}
+      >
+        <div className="w-[340px] sm:w-[360px] rounded-lg overflow-hidden shadow-2xl border border-[#3b1d6e] bg-[#1b0d33]/95 p-6 text-center text-slate-300">
+          <p className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider">
+            Waiting for Match
+          </p>
+          <p className="text-[11px] text-slate-400 mt-2 font-mono">
+            No matches currently created for this tournament.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !canonicalState) {
     return (
       <div
         className={`w-full min-h-screen flex items-center justify-center p-8 select-none font-sans ${
@@ -173,7 +178,7 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
     );
   }
 
-  const teams = canonicalState
+  const teams = canonicalState?.teams
     ? Object.values(canonicalState.teams)
         .map((t) => {
           const squadPlayers: PlayerState[] = t.players
@@ -211,11 +216,10 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
           if (b.kills !== a.kills) return b.kills - a.kills;
           return (a.slotNumber || 1) - (b.slotNumber || 1);
         })
-    : state?.teams || [];
+    : [];
 
-  const tableVisible = canonicalState ? canonicalState.tableVisible : state?.tableVisible ?? true;
-  const activeMode = state?.activeMode || 'NORMAL';
-  const revision = canonicalState ? canonicalState.revision : state?.revision ?? 1;
+  const tableVisible = canonicalState?.tableVisible ?? true;
+  const revision = canonicalState?.revision ?? 1;
 
   return (
     <div
@@ -224,6 +228,27 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
       }`}
       style={{ boxSizing: 'border-box' }}
     >
+      {/* Optional Debug HUD for OBS operators */}
+      {isDebugMode && (
+        <div className="fixed top-2 left-2 z-50 rounded-xl bg-black/95 border border-[#2ea66e]/40 p-2.5 text-[10px] font-mono text-slate-300 shadow-2xl flex items-center gap-3">
+          <div className="flex items-center gap-1 text-[#2ea66e] font-bold">
+            <Wifi className="h-3 w-3" />
+            <span>{syncStatus}</span>
+          </div>
+          <span>•</span>
+          <span>Rev: {revision}</span>
+          <span>•</span>
+          <span>Match: {canonicalState?.matchId || 'None'}</span>
+          <span>•</span>
+          <span>Fire: {canonicalState?.fireTeamId || 'None'}</span>
+          <span>•</span>
+          <span className="flex items-center gap-1 text-slate-400">
+            <Activity className="h-3 w-3 text-[#e0684b]" />
+            {new Date(lastSyncTime).toLocaleTimeString()}
+          </span>
+        </div>
+      )}
+
       {/* Container matching standard 360px Free Fire broadcast vertical overlay */}
       <div
         className={`w-[340px] sm:w-[360px] rounded-lg overflow-hidden shadow-[0_10px_35px_rgba(0,0,0,0.85)] border border-[#3b1d6e] transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] transform ${
@@ -238,29 +263,13 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
         {/* ================= 1. HEADER ROW ================= */}
         <div className="bg-[#1b0d33] text-white flex items-center h-10 px-2.5 text-xs font-black tracking-wider border-b border-[#3b1d6e] justify-between">
           <div className="flex items-center flex-1">
-            {/* # Rank Header */}
             <div className="w-8 text-center text-[13px] font-bold text-slate-200">#</div>
-
-            {/* TEAMS Header */}
             <div className="flex-1 pl-2 text-[12px] uppercase font-bold text-slate-100">TEAMS</div>
-
-            {/* ALIVE Header */}
-            <div className="w-20 text-center text-[11px] uppercase font-bold text-slate-100">
-              ALIVE
-            </div>
-
-            {/* ELIMS Header */}
-            <div className="w-11 text-center text-[11px] uppercase font-bold text-slate-100">
-              ELIMS
-            </div>
-
-            {/* T.PTS. Header */}
-            <div className="w-12 text-right pr-1 text-[11px] uppercase font-bold text-slate-100">
-              T.PTS.
-            </div>
+            <div className="w-20 text-center text-[11px] uppercase font-bold text-slate-100">ALIVE</div>
+            <div className="w-11 text-center text-[11px] uppercase font-bold text-slate-100">ELIMS</div>
+            <div className="w-12 text-right pr-1 text-[11px] uppercase font-bold text-slate-100">T.PTS.</div>
           </div>
 
-          {/* Sync indicator pill */}
           <div
             className="pl-2 flex items-center gap-1 text-[9px] font-mono text-slate-400"
             title={`Rev ${revision} | ${syncStatus}`}
@@ -296,7 +305,7 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
                 isFocused,
               } = team;
 
-              const isFire = isFireActive || activeMode === 'FIRE';
+              const isFire = isFireActive;
 
               return (
                 <div
@@ -349,110 +358,76 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
                       {logoUrl ? (
                         <img src={logoUrl} alt={name} className="h-full w-full object-cover" />
                       ) : (
-                        tag.slice(0, 3)
+                        tag.slice(0, 3).toUpperCase()
                       )}
                     </div>
 
-                    {/* Team Tag */}
-                    <div className="flex items-center gap-1 min-w-0">
-                      <span
-                        className={`font-black text-sm uppercase tracking-tight truncate ${
-                          (isFire && !isWiped) || isFocused
-                            ? 'text-white'
-                            : isFire && isWiped
-                            ? 'text-[#f0d8c2]'
-                            : isWiped
-                            ? 'text-[#9c8e82] line-through'
-                            : 'text-[#1a110a]'
-                        }`}
-                        style={{ fontFamily: "'Rajdhani', sans-serif" }}
-                      >
-                        {tag}
-                      </span>
-
-                      {/* Point Rush Badge */}
-                      {isPointRushActive && (
-                        <div
-                          className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/25 border border-amber-400/80 text-amber-300 font-mono text-[9px] font-black shrink-0 shadow-sm animate-pulse"
-                          title="Point Rush Active"
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span
+                          className={`font-black text-[13px] tracking-wide truncate ${
+                            isFire || isFocused
+                              ? 'text-white'
+                              : isWiped
+                              ? 'text-[#8f847b] line-through decoration-red-500/80 decoration-2'
+                              : 'text-[#19110a]'
+                          }`}
                         >
-                          <Crosshair className="h-3 w-3 text-amber-300 shrink-0" />
-                          <span className="hidden sm:inline tracking-wider">RUSH</span>
-                        </div>
-                      )}
+                          {name}
+                        </span>
 
-                      {/* Fire Mode Flame */}
-                      {isFire && !isWiped && (
-                        <Flame className="h-4 w-4 text-amber-200 fill-amber-300 animate-pulse shrink-0" />
-                      )}
+                        {isFire && !isWiped && (
+                          <span className="flex items-center gap-0.5 bg-black/40 text-[#ffeedd] px-1 py-0.2 rounded text-[9px] font-black tracking-wider border border-amber-400/60 shadow-sm shrink-0">
+                            <Flame className="h-2.5 w-2.5 text-amber-300 fill-amber-300 animate-pulse" />
+                            FIRE
+                          </span>
+                        )}
+
+                        {isPointRushActive && !isWiped && (
+                          <span className="flex items-center gap-0.5 bg-yellow-400 text-black px-1 py-0.2 rounded text-[9px] font-black tracking-wider shrink-0 shadow-sm">
+                            RUSH
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  {/* ALIVE 4-Player Status Indicator Bars OR Wipeout Status */}
-                  <div className="w-20 flex items-center justify-center px-1">
-                    {isWiped ? (
-                      <div className="flex items-center justify-center bg-red-950/90 border border-red-600/70 rounded px-1.5 py-0.5 shadow-sm">
-                        <span className="text-[10px] font-black tracking-wider text-red-400 uppercase font-mono leading-none">
-                          ELIMINATED
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center gap-[3.5px]">
-                        {squadPlayers.map((status: PlayerState, pIdx: number) => (
-                          <div
-                            key={pIdx}
-                            title={`Player ${pIdx + 1}: ${status.toUpperCase()}`}
-                            className={`h-5 w-[11px] rounded-[2px] transition-all ${
-                              status === 'alive'
-                                ? isFire
-                                  ? 'bg-[#fff4e6] shadow-sm'
-                                  : 'bg-[#c3822d] shadow-sm'
-                                : status === 'knock'
-                                ? 'bg-[#b91c1c] animate-pulse shadow-sm'
-                                : isFire
-                                ? 'border-[1.5px] border-[#fff4e6]/80 bg-transparent'
-                                : isFocused
-                                ? 'border-[1.5px] border-[#c3822d]/60 bg-transparent'
-                                : 'border-[1.5px] border-[#a0743a] bg-transparent'
-                            }`}
-                          />
-                        ))}
-                      </div>
-                    )}
+                  {/* Alive Players 4-Pill Squad Indicator */}
+                  <div className="w-20 flex items-center justify-center gap-1 px-1">
+                    {squadPlayers.map((status, pIdx) => {
+                      let colorClass = 'bg-emerald-500 border-emerald-400';
+                      if (status === 'knock') {
+                        colorClass = 'bg-amber-400 border-amber-300 animate-pulse';
+                      } else if (status === 'eliminated' || isWiped) {
+                        colorClass = 'bg-neutral-800/80 border-neutral-700';
+                      }
+
+                      return (
+                        <div
+                          key={pIdx}
+                          className={`h-5 w-2.5 rounded-xs border transition-colors ${colorClass}`}
+                          title={`Player ${pIdx + 1}: ${status}`}
+                        />
+                      );
+                    })}
                   </div>
 
-                  {/* ELIMS Count */}
+                  {/* Kills (ELIMS) */}
                   <div
-                    className={`w-11 text-center font-bold text-base flex items-center justify-center ${
-                      isFire && !isWiped
-                        ? 'text-white font-black'
-                        : isFire && isWiped
-                        ? 'text-[#f0d8c2]'
-                        : isFocused
-                        ? 'text-white'
-                        : isWiped
-                        ? 'text-red-400/80'
-                        : 'text-[#1b120a]'
+                    className={`w-11 text-center font-bold text-sm tracking-wide ${
+                      isFire || isFocused ? 'text-white' : isWiped ? 'text-[#8f847b]' : 'text-[#8a2211]'
                     }`}
-                    style={{ fontFamily: "'Rajdhani', sans-serif" }}
+                    style={{ fontFamily: "'Space Grotesk', 'Rajdhani', sans-serif" }}
                   >
                     {kills}
                   </div>
 
-                  {/* T.PTS. Count */}
+                  {/* Total Points (T.PTS) */}
                   <div
-                    className={`w-12 text-right pr-2 font-black text-base ${
-                      isFire && !isWiped
-                        ? 'text-white font-black'
-                        : isFire && isWiped
-                        ? 'text-[#f0d8c2]'
-                        : isFocused
-                        ? 'text-white'
-                        : isWiped
-                        ? 'text-[#9c8e82]'
-                        : 'text-[#1b120a]'
+                    className={`w-12 text-right pr-2 font-black text-sm tracking-tight ${
+                      isFire || isFocused ? 'text-white' : isWiped ? 'text-[#8f847b]' : 'text-[#19110a]'
                     }`}
-                    style={{ fontFamily: "'Rajdhani', sans-serif" }}
+                    style={{ fontFamily: "'Space Grotesk', 'Rajdhani', sans-serif" }}
                   >
                     {totalPoints}
                   </div>
@@ -460,24 +435,6 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
               );
             })
           )}
-        </div>
-
-        {/* ================= 3. BOTTOM LEGEND BAR ================= */}
-        <div className="bg-[#1b0d33] text-white flex items-center justify-center gap-4 py-2 px-3 text-[11px] font-bold tracking-wider border-t border-[#3b1d6e]">
-          <div className="flex items-center gap-1.5">
-            <span className="h-3.5 w-2.5 rounded-[1px] bg-[#c3822d]" />
-            <span className="text-slate-200">ALIVE</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="h-3.5 w-2.5 rounded-[1px] bg-[#b91c1c]" />
-            <span className="text-slate-200">KNOCK</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="h-3.5 w-2.5 rounded-[1px] border-[1.5px] border-[#c3822d]" />
-            <span className="text-slate-200">ELIMINATED</span>
-          </div>
         </div>
       </div>
     </div>
