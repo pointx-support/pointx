@@ -40,7 +40,13 @@ import {
   AlignRight,
   Upload,
   Maximize2,
-  X
+  X,
+  Wand2,
+  RotateCcw,
+  ArrowUpDown,
+  MoveVertical,
+  MoveHorizontal,
+  Grid
 } from 'lucide-react';
 import type { GraphicsRenderData } from '../../types/graphics';
 import { normalizeTemplateType, type TemplateAlignmentConfig, type TextElementStyle, type GraphicTemplateCategory } from '../../types/customTemplate';
@@ -86,6 +92,27 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
   const [selectedPresetLabel, setSelectedPresetLabel] = useState<string>('Slot 1: Team Name');
   const [stepSize, setStepSize] = useState<number>(5);
   const [zoomScale, setZoomScale] = useState<number>(1);
+  const [userSelectedColumn, setUserSelectedColumn] = useState<'total' | 'kills' | 'rank' | 'teamName' | 'logo' | 'place' | 'match' | 'booyah' | null>(null);
+
+  const detectedColumn = (() => {
+    for (const k of selectedKeys) {
+      if (k.startsWith('slot_')) {
+        const parts = k.split('_');
+        const item = parts[2] as any;
+        if (['total', 'kills', 'rank', 'teamName', 'logo', 'place', 'match', 'booyah'].includes(item)) {
+          return item;
+        }
+      } else if (['total', 'kills', 'rank', 'teamName', 'place', 'match', 'booyah'].includes(k)) {
+        return k as any;
+      }
+    }
+    return null;
+  })();
+
+  const smartAlignColumn: 'total' | 'kills' | 'rank' | 'teamName' | 'logo' | 'place' | 'match' | 'booyah' =
+    userSelectedColumn || detectedColumn || 'total';
+  const setSmartAlignColumn = (col: 'total' | 'kills' | 'rank' | 'teamName' | 'logo' | 'place' | 'match' | 'booyah') =>
+    setUserSelectedColumn(col);
 
   // Hold / long-press interval ref for directional buttons
   const holdTimerRef = useRef<number | null>(null);
@@ -465,9 +492,9 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
   }, [alignment, selectedKeys, getElementStyleByKey, activeTemplate.id, updateTemplateAlignment]);
 
   // Tactile Nudge Action
-  const handleNudge = (dx: number, dy: number) => {
+  const handleNudge = useCallback((dx: number, dy: number) => {
     updateSelectedElements({}, dx, dy);
-  };
+  }, [updateSelectedElements]);
 
   // Direct Canvas Drag Handler
   const handleDragElement = (_key: string, dx: number, dy: number) => {
@@ -566,6 +593,328 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
     setSelectedKeys(keys);
     setSelectedPresetLabel(label);
     showToast({ type: 'info', title: `Selected ${label}`, message: `${keys.length} elements ready to align.` });
+  };
+
+  // 1. Smart Auto-Align Entire Column to standard table row grid
+  const handleSmartAutoAlignColumn = (itemOverride?: string) => {
+    const item = (itemOverride || smartAlignColumn || 'total') as 'total' | 'kills' | 'rank' | 'teamName' | 'logo' | 'place' | 'match' | 'booyah';
+    const currentSlots = { ...(alignment.slots || {}) };
+    const isSingleColumn = alignment.layoutMode === 'single-column';
+
+    const defaultLeft = item === 'logo'
+      ? alignment.leftTeamX - 36
+      : item === 'rank'
+      ? alignment.leftRankX
+      : item === 'total'
+      ? alignment.leftTotalX
+      : item === 'kills'
+      ? alignment.leftKillsX
+      : item === 'place'
+      ? alignment.leftPlaceX || alignment.leftKillsX
+      : item === 'match'
+      ? alignment.leftMatchX || alignment.leftRankX
+      : item === 'booyah'
+      ? alignment.leftBooyahX || alignment.leftTotalX
+      : alignment.leftTeamX;
+
+    const defaultRight = item === 'logo'
+      ? (alignment.rightTeamX || alignment.leftTeamX + 800) - 36
+      : item === 'rank'
+      ? (alignment.rightRankX || alignment.leftRankX + 800)
+      : item === 'total'
+      ? (alignment.rightTotalX || alignment.leftTotalX + 800)
+      : item === 'kills'
+      ? (alignment.rightKillsX || alignment.leftKillsX + 800)
+      : item === 'place'
+      ? (alignment.rightPlaceX || alignment.leftPlaceX + 800)
+      : item === 'match'
+      ? (alignment.rightMatchX || alignment.leftMatchX + 800)
+      : item === 'booyah'
+      ? (alignment.rightBooyahX || alignment.leftBooyahX + 800)
+      : (alignment.rightTeamX || alignment.leftTeamX + 800);
+
+    const slot1OverrideX = (currentSlots[1] as any)?.[item]?.x;
+    const targetLeftX = slot1OverrideX !== undefined ? slot1OverrideX : defaultLeft;
+
+    const slot7OverrideX = (currentSlots[7] as any)?.[item]?.x;
+    const targetRightX = slot7OverrideX !== undefined ? slot7OverrideX : defaultRight;
+
+    for (let slotNum = 1; slotNum <= 12; slotNum++) {
+      const isRight = !isSingleColumn && slotNum > 6;
+      const rowIndex = isRight ? slotNum - 7 : slotNum - 1;
+      const targetX = isRight ? targetRightX : targetLeftX;
+
+      let targetY = alignment.baseY + rowIndex * alignment.rowGap + 32;
+      if (item === 'logo') {
+        targetY = alignment.baseY + rowIndex * alignment.rowGap + 31 - (alignment.teamFontSize || 24);
+      } else if (item === 'teamName') {
+        targetY = alignment.baseY + rowIndex * alignment.rowGap + 31;
+      }
+
+      const curSlot = currentSlots[slotNum] || {};
+      const curItem = (curSlot as any)[item] || {};
+
+      currentSlots[slotNum] = {
+        ...curSlot,
+        [item]: {
+          ...curItem,
+          x: targetX,
+          y: targetY
+        }
+      };
+    }
+
+    updateTemplateAlignment(activeTemplate.id, {
+      slots: currentSlots
+    });
+
+    showToast({
+      type: 'success',
+      title: 'Auto-Aligned Column!',
+      message: `All 12 ${item.toUpperCase()} elements aligned to straight column and row grid.`
+    });
+  };
+
+  // 2. Distribute Column Vertically (Equal spacing between top and bottom slot)
+  const handleDistributeColumnVertically = (itemOverride?: string) => {
+    const item = (itemOverride || smartAlignColumn || 'total') as 'total' | 'kills' | 'rank' | 'teamName' | 'logo' | 'place' | 'match' | 'booyah';
+    const currentSlots = { ...(alignment.slots || {}) };
+    const isSingleColumn = alignment.layoutMode === 'single-column';
+
+    const distributeRange = (startSlot: number, endSlot: number) => {
+      const topStyle = getElementStyleByKey(`slot_${startSlot}_${item}`);
+      const bottomStyle = getElementStyleByKey(`slot_${endSlot}_${item}`);
+      const topY = topStyle.y;
+      const bottomY = bottomStyle.y;
+      const count = endSlot - startSlot + 1;
+      const step = count > 1 ? (bottomY - topY) / (count - 1) : 0;
+
+      for (let slotNum = startSlot; slotNum <= endSlot; slotNum++) {
+        const idx = slotNum - startSlot;
+        const targetY = Math.round(topY + idx * step);
+        const curSlot = currentSlots[slotNum] || {};
+        const curItem = (curSlot as any)[item] || {};
+
+        currentSlots[slotNum] = {
+          ...curSlot,
+          [item]: {
+            ...curItem,
+            y: targetY
+          }
+        };
+      }
+    };
+
+    if (isSingleColumn) {
+      distributeRange(1, 12);
+    } else {
+      distributeRange(1, 6);
+      distributeRange(7, 12);
+    }
+
+    updateTemplateAlignment(activeTemplate.id, {
+      slots: currentSlots
+    });
+
+    showToast({
+      type: 'success',
+      title: 'Distributed Vertically!',
+      message: `Evenly spaced ${item.toUpperCase()} slots between top and bottom rows.`
+    });
+  };
+
+  // 3. Straighten Column (Align X)
+  const handleStraightenColumnX = (itemOverride?: string) => {
+    const item = (itemOverride || smartAlignColumn || 'total') as 'total' | 'kills' | 'rank' | 'teamName' | 'logo' | 'place' | 'match' | 'booyah';
+    const currentSlots = { ...(alignment.slots || {}) };
+    const isSingleColumn = alignment.layoutMode === 'single-column';
+
+    const curPrimary = getElementStyleByKey(primaryKey);
+    const targetX = curPrimary.x;
+
+    for (let slotNum = 1; slotNum <= 12; slotNum++) {
+      const isRight = !isSingleColumn && slotNum > 6;
+      if (isSingleColumn || (slotNum <= 6 && !primaryKey.includes('_7_') && !primaryKey.includes('_8_') && !primaryKey.includes('_9_') && !primaryKey.includes('_10_') && !primaryKey.includes('_11_') && !primaryKey.includes('_12_')) || (isRight && primaryKey.includes(`_${slotNum}_`))) {
+        const curSlot = currentSlots[slotNum] || {};
+        const curItem = (curSlot as any)[item] || {};
+
+        currentSlots[slotNum] = {
+          ...curSlot,
+          [item]: {
+            ...curItem,
+            x: targetX
+          }
+        };
+      }
+    }
+
+    updateTemplateAlignment(activeTemplate.id, {
+      slots: currentSlots
+    });
+
+    showToast({
+      type: 'success',
+      title: 'Straightened Column X!',
+      message: `All ${item.toUpperCase()} elements aligned to X: ${targetX}px.`
+    });
+  };
+
+  // 4. Reset Column to Default Template Grid
+  const handleResetColumnToGrid = (itemOverride?: string) => {
+    const item = (itemOverride || smartAlignColumn || 'total') as 'total' | 'kills' | 'rank' | 'teamName' | 'logo' | 'place' | 'match' | 'booyah';
+    const currentSlots = { ...(alignment.slots || {}) };
+
+    for (let slotNum = 1; slotNum <= 16; slotNum++) {
+      if (currentSlots[slotNum] && (currentSlots[slotNum] as any)[item]) {
+        const updatedSlot = { ...(currentSlots[slotNum] as any) };
+        delete updatedSlot[item];
+        currentSlots[slotNum] = updatedSlot;
+      }
+    }
+
+    updateTemplateAlignment(activeTemplate.id, {
+      slots: currentSlots
+    });
+
+    showToast({
+      type: 'info',
+      title: 'Reset to Template Grid',
+      message: `Cleared manual overrides for ${item.toUpperCase()}. Inheriting master table grid.`
+    });
+  };
+
+  // 5. Adjust Row Gap Live
+  const handleAdjustRowGap = (delta: number) => {
+    const newRowGap = Math.max(10, Math.min(250, (alignment.rowGap || 68) + delta));
+    const currentSlots = { ...(alignment.slots || {}) };
+    const isSingleColumn = alignment.layoutMode === 'single-column';
+
+    for (let slotNum = 1; slotNum <= 12; slotNum++) {
+      const isRight = !isSingleColumn && slotNum > 6;
+      const rowIndex = isRight ? slotNum - 7 : slotNum - 1;
+      const curSlot = currentSlots[slotNum];
+      if (curSlot && (curSlot as any)[smartAlignColumn]?.y !== undefined) {
+        const baseSlot = isRight ? 7 : 1;
+        const baseY = getElementStyleByKey(`slot_${baseSlot}_${smartAlignColumn}`).y;
+        (curSlot as any)[smartAlignColumn].y = Math.round(baseY + rowIndex * newRowGap);
+      }
+    }
+
+    updateTemplateAlignment(activeTemplate.id, {
+      rowGap: newRowGap,
+      slots: currentSlots
+    });
+  };
+
+  // 6. Multi-Selection Alignment Bar (Figma-style)
+  const handleAlignSelected = (direction: 'left' | 'centerX' | 'right' | 'top' | 'centerY' | 'bottom') => {
+    if (selectedKeys.length < 2) return;
+
+    const styles = selectedKeys.map((k) => ({ key: k, style: getElementStyleByKey(k) }));
+    const xs = styles.map((s) => s.style.x);
+    const ys = styles.map((s) => s.style.y);
+
+    let targetVal = 0;
+    if (direction === 'left') targetVal = Math.min(...xs);
+    else if (direction === 'centerX') targetVal = Math.round((Math.min(...xs) + Math.max(...xs)) / 2);
+    else if (direction === 'right') targetVal = Math.max(...xs);
+    else if (direction === 'top') targetVal = Math.min(...ys);
+    else if (direction === 'centerY') targetVal = Math.round((Math.min(...ys) + Math.max(...ys)) / 2);
+    else if (direction === 'bottom') targetVal = Math.max(...ys);
+
+    const currentElements = { ...(alignment.elements || {}) };
+    const currentSlots = { ...(alignment.slots || {}) };
+
+    selectedKeys.forEach((key) => {
+      const isSlotKey = key.startsWith('slot_');
+      const slotParts = isSlotKey ? key.split('_') : [];
+      const slotNum = isSlotKey ? Number(slotParts[1]) : null;
+      const slotItem = isSlotKey ? slotParts[2] : null;
+
+      if (isSlotKey && slotNum && slotItem) {
+        const curSlot = currentSlots[slotNum] || {};
+        const curItem = (curSlot as any)[slotItem] || {};
+        const isX = direction === 'left' || direction === 'centerX' || direction === 'right';
+        currentSlots[slotNum] = {
+          ...curSlot,
+          [slotItem]: {
+            ...curItem,
+            ...(isX ? { x: targetVal } : { y: targetVal })
+          }
+        };
+      } else {
+        const curEl = (currentElements as any)[key] || {};
+        const isX = direction === 'left' || direction === 'centerX' || direction === 'right';
+        (currentElements as any)[key] = {
+          ...curEl,
+          ...(isX ? { x: targetVal } : { y: targetVal })
+        };
+      }
+    });
+
+    updateTemplateAlignment(activeTemplate.id, {
+      elements: currentElements,
+      slots: currentSlots
+    });
+
+    showToast({
+      type: 'success',
+      title: `Aligned Elements`,
+      message: `Aligned ${selectedKeys.length} elements to ${direction}.`
+    });
+  };
+
+  // 7. Multi-Selection Distribution Bar (Figma-style)
+  const handleDistributeSelected = (axis: 'x' | 'y') => {
+    if (selectedKeys.length < 3) return;
+
+    const items = selectedKeys.map((k) => ({ key: k, style: getElementStyleByKey(k) }));
+    items.sort((a, b) => (axis === 'x' ? a.style.x - b.style.x : a.style.y - b.style.y));
+
+    const firstVal = axis === 'x' ? items[0].style.x : items[0].style.y;
+    const lastVal = axis === 'x' ? items[items.length - 1].style.x : items[items.length - 1].style.y;
+    const step = (lastVal - firstVal) / (items.length - 1);
+
+    const currentElements = { ...(alignment.elements || {}) };
+    const currentSlots = { ...(alignment.slots || {}) };
+
+    items.forEach((item, idx) => {
+      const targetVal = Math.round(firstVal + idx * step);
+      const key = item.key;
+      const isSlotKey = key.startsWith('slot_');
+      const slotParts = isSlotKey ? key.split('_') : [];
+      const slotNum = isSlotKey ? Number(slotParts[1]) : null;
+      const slotItem = isSlotKey ? slotParts[2] : null;
+
+      if (isSlotKey && slotNum && slotItem) {
+        const curSlot = currentSlots[slotNum] || {};
+        const curItem = (curSlot as any)[slotItem] || {};
+        currentSlots[slotNum] = {
+          ...curSlot,
+          [slotItem]: {
+            ...curItem,
+            ...(axis === 'x' ? { x: targetVal } : { y: targetVal })
+          }
+        };
+      } else {
+        const curEl = (currentElements as any)[key] || {};
+        (currentElements as any)[key] = {
+          ...curEl,
+          ...(axis === 'x' ? { x: targetVal } : { y: targetVal })
+        };
+      }
+    });
+
+    updateTemplateAlignment(activeTemplate.id, {
+      elements: currentElements,
+      slots: currentSlots
+    });
+
+    showToast({
+      type: 'success',
+      title: `Distributed Evenly`,
+      message: `Equally spaced ${selectedKeys.length} elements along ${axis.toUpperCase()} axis.`
+    });
   };
 
   // Replace Poster Artwork Handler
@@ -1362,13 +1711,227 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
             )}
           </div>
 
-          {/* CARD 3: TACTILE NUDGE & DIRECT COORDINATE SLIDERS */}
+          {/* CARD 3: SMART AUTO-ALIGN & DISTRIBUTION */}
+          <div className="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-[var(--shadow-flat)] space-y-3.5">
+            <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-2">
+              <div className="flex items-center gap-2">
+                <Wand2 className="h-4 w-4 text-[var(--accent-primary)]" />
+                <span className="font-bold text-sm text-[var(--text-primary)] font-display">
+                  3. Smart Auto-Align & Distribution
+                </span>
+              </div>
+              <span className="text-[10px] font-mono font-bold uppercase text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 px-2 py-0.5 rounded-lg border border-[var(--accent-primary)]/20">
+                {smartAlignColumn.toUpperCase()}
+              </span>
+            </div>
+
+            {/* Column Target Selector */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-mono font-bold uppercase text-[var(--text-secondary)]">
+                  Target Column:
+                </label>
+                <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                  {isPointsTable ? '12 Slots' : 'Active'}
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-1">
+                {[
+                  { id: 'total', label: '🎯 Total' },
+                  { id: 'kills', label: '💥 Kills' },
+                  { id: 'rank', label: '🔢 Rank' },
+                  { id: 'teamName', label: '🛡️ Teams' },
+                  { id: 'logo', label: '🖼️ Logos' },
+                  { id: 'place', label: '🎖️ Place' },
+                  { id: 'match', label: '🎮 Match' },
+                  { id: 'booyah', label: '🏆 Booyah' }
+                ].map((col) => (
+                  <button
+                    key={col.id}
+                    type="button"
+                    onClick={() => {
+                      setSmartAlignColumn(col.id as any);
+                      selectPreset(col.label, Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_${col.id}`));
+                    }}
+                    className={`px-1.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer truncate ${
+                      smartAlignColumn === col.id
+                        ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] font-extrabold shadow-xs'
+                        : 'bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)]/20 text-[var(--text-secondary)] border border-[var(--border-subtle)]'
+                    }`}
+                  >
+                    {col.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Primary Action: ⚡ Auto-Align Entire Column */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => handleSmartAutoAlignColumn()}
+                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2"
+                title="Automatically align all 12 rows to straight column and standard table row grid"
+              >
+                <Sparkles className="h-4 w-4 shrink-0" />
+                <span>⚡ Auto-Align All 12 {smartAlignColumn.toUpperCase()}s to Rows</span>
+              </button>
+              <p className="text-[10px] text-[var(--text-muted)] text-center pt-1">
+                Instantly repairs squashed, overlapping, or displaced slots into a clean, uniform column.
+              </p>
+            </div>
+
+            {/* Secondary Column Alignment Actions */}
+            <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+              <button
+                type="button"
+                onClick={() => handleDistributeColumnVertically()}
+                className="p-2 rounded-xl bg-[var(--bg-surface-inset)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] text-[11px] font-bold text-[var(--text-primary)] cursor-pointer flex flex-col items-center justify-center gap-1 transition-all"
+                title="Evenly distribute spacing between top and bottom slots"
+              >
+                <ArrowUpDown className="h-3.5 w-3.5 text-indigo-400" />
+                <span>Distribute Y</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleStraightenColumnX()}
+                className="p-2 rounded-xl bg-[var(--bg-surface-inset)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] text-[11px] font-bold text-[var(--text-primary)] cursor-pointer flex flex-col items-center justify-center gap-1 transition-all"
+                title="Align all rows to the exact same X coordinate"
+              >
+                <MoveHorizontal className="h-3.5 w-3.5 text-amber-400" />
+                <span>Straighten X</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleResetColumnToGrid()}
+                className="p-2 rounded-xl bg-[var(--bg-surface-inset)] hover:bg-rose-500/20 hover:text-rose-300 border border-[var(--border-subtle)] text-[11px] font-bold text-[var(--text-secondary)] cursor-pointer flex flex-col items-center justify-center gap-1 transition-all"
+                title="Clear all manual overrides for this column and snap to table grid"
+              >
+                <RotateCcw className="h-3.5 w-3.5 text-rose-400" />
+                <span>Reset to Grid</span>
+              </button>
+            </div>
+
+            {/* Table Row Spacing Adjuster */}
+            <div className="pt-2 border-t border-[var(--border-subtle)] space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-[var(--text-secondary)] flex items-center gap-1">
+                  <Grid className="h-3 w-3 text-[var(--accent-primary)]" />
+                  Row Gap Spacing:
+                </span>
+                <span className="font-bold text-[var(--accent-primary)] font-numbers">
+                  {alignment.rowGap || 68}px
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleAdjustRowGap(-5)}
+                  className="px-2 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] text-[10px] font-bold text-[var(--text-secondary)] cursor-pointer font-mono"
+                  title="Contract row gap by 5px"
+                >
+                  -5px
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAdjustRowGap(-1)}
+                  className="px-2 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] text-[10px] font-bold text-[var(--text-secondary)] cursor-pointer font-mono"
+                  title="Contract row gap by 1px"
+                >
+                  -1px
+                </button>
+                <input
+                  type="range"
+                  min="20"
+                  max="180"
+                  value={alignment.rowGap || 68}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    handleAdjustRowGap(val - (alignment.rowGap || 68));
+                  }}
+                  className="flex-1 accent-[var(--accent-primary)] cursor-pointer"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAdjustRowGap(1)}
+                  className="px-2 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] text-[10px] font-bold text-[var(--accent-primary)] cursor-pointer font-mono"
+                  title="Expand row gap by 1px"
+                >
+                  +1px
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAdjustRowGap(5)}
+                  className="px-2 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] text-[10px] font-bold text-[var(--accent-primary)] cursor-pointer font-mono"
+                  title="Expand row gap by 5px"
+                >
+                  +5px
+                </button>
+              </div>
+            </div>
+
+            {/* Multi-Selection Figma-Style Quick Alignment Bar */}
+            {selectedKeys.length >= 2 && (
+              <div className="pt-2 border-t border-[var(--border-subtle)] space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] font-mono">
+                  <span className="text-[var(--text-secondary)] font-bold">
+                    Align Selected ({selectedKeys.length}):
+                  </span>
+                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded">
+                    Multi-Active
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleAlignSelected('left')}
+                    className="p-1.5 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] cursor-pointer flex items-center justify-center gap-1 font-mono"
+                    title="Align Left"
+                  >
+                    <AlignLeft className="h-3 w-3" />
+                    <span className="text-[10px]">Left</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAlignSelected('centerX')}
+                    className="p-1.5 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] cursor-pointer flex items-center justify-center gap-1 font-mono"
+                    title="Align Center X"
+                  >
+                    <AlignCenter className="h-3 w-3" />
+                    <span className="text-[10px]">Center</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAlignSelected('right')}
+                    className="p-1.5 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] cursor-pointer flex items-center justify-center gap-1 font-mono"
+                    title="Align Right"
+                  >
+                    <AlignRight className="h-3 w-3" />
+                    <span className="text-[10px]">Right</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDistributeSelected('y')}
+                    className="p-1.5 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] text-xs text-indigo-400 cursor-pointer flex items-center justify-center gap-1 font-mono"
+                    title="Distribute Evenly on Y"
+                  >
+                    <MoveVertical className="h-3 w-3" />
+                    <span className="text-[10px]">Space Y</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* CARD 4: TACTILE NUDGE & DIRECT COORDINATE SLIDERS */}
           <div className="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-[var(--shadow-flat)] space-y-3.5">
             <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-2">
               <div className="flex items-center gap-2">
                 <Move className="h-4 w-4 text-[var(--accent-primary)]" />
                 <span className="font-bold text-sm text-[var(--text-primary)] font-display">
-                  3. Precision Nudge & Coordinates
+                  4. Precision Nudge & Coordinates
                 </span>
               </div>
 
@@ -1920,6 +2483,45 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                   <ArrowRightIcon className="h-3.5 w-3.5" />
                 </button>
               </div>
+
+              {/* Quick Smart Align in HUD */}
+              {isPointsTable && (
+                <div className="flex items-center gap-1 border-l border-white/15 pl-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleSmartAutoAlignColumn()}
+                    className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-black border border-emerald-500/30 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                    title={`Auto-align all 12 ${smartAlignColumn.toUpperCase()} elements to standard row grid`}
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    <span>⚡ Auto-Align {smartAlignColumn.toUpperCase()}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDistributeColumnVertically()}
+                    className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                    title="Distribute Vertically"
+                  >
+                    <ArrowUpDown className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleStraightenColumnX()}
+                    className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                    title="Straighten Column X"
+                  >
+                    <MoveHorizontal className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleResetColumnToGrid()}
+                    className="p-1 rounded-lg bg-white/10 hover:bg-rose-500/30 text-rose-300 cursor-pointer"
+                    title="Reset to Template Grid"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
 
               {/* Coordinates read out */}
               <div className="text-[11px] font-mono text-[var(--accent-primary)] font-bold px-2 py-0.5 rounded bg-white/5 border border-white/10">
