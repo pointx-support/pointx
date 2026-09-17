@@ -44,6 +44,7 @@ import {
   X,
   Wand2,
   RotateCcw,
+  RotateCw,
   ArrowUpDown,
   MoveVertical,
   MoveHorizontal,
@@ -187,22 +188,47 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
     }
   });
 
+  // Undo & Redo History Stacks (stores snapshots of TemplateAlignmentConfig)
+  const undoStackRef = useRef<TemplateAlignmentConfig[]>([]);
+  const redoStackRef = useRef<TemplateAlignmentConfig[]>([]);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const isDraggingRef = useRef(false);
+
+  // Helper to push an undo snapshot before any mutation
+  const pushUndoSnapshot = useCallback((customAlignment?: TemplateAlignmentConfig) => {
+    const storeState = useTemplateStore.getState();
+    const current = customAlignment || storeState.templates.find((t) => t.id === activeTemplateId)?.alignment;
+    if (!current) return;
+
+    const snapshot: TemplateAlignmentConfig = JSON.parse(JSON.stringify(current));
+    undoStackRef.current.push(snapshot);
+    if (undoStackRef.current.length > 50) {
+      undoStackRef.current.shift();
+    }
+    redoStackRef.current = [];
+    setCanUndo(true);
+    setCanRedo(false);
+  }, [activeTemplateId]);
+
   const handleSaveAlignment = useCallback(async (isAutosave = false) => {
-    if (!activeTemplate) return;
+    // ALWAYS read the freshest active template from store state to avoid stale closures!
+    const storeState = useTemplateStore.getState();
+    const currentTemplate = storeState.templates.find((t) => t.id === activeTemplateId) || storeState.getActiveTemplate();
+    if (!currentTemplate) return;
+
     setSaveStatus('saving');
     try {
       try {
-        await templatesApi.update(activeTemplate.id, {
-          alignment: activeTemplate.alignment,
-          name: activeTemplate.name,
-          category: activeTemplate.category,
-          aspectRatio: activeTemplate.aspectRatio
+        await templatesApi.update(currentTemplate.id, {
+          alignment: currentTemplate.alignment,
+          name: currentTemplate.name,
+          category: currentTemplate.category,
+          aspectRatio: currentTemplate.aspectRatio
         });
       } catch (apiErr) {
         console.warn('API save note (preset or local template):', apiErr);
       }
-
-      updateTemplateAlignment(activeTemplate.id, activeTemplate.alignment);
 
       setSaveStatus('saved');
       const now = new Date();
@@ -213,7 +239,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
         showToast({
           type: 'success',
           title: 'Alignment Saved',
-          message: `All coordinates and styling for "${activeTemplate.name}" saved successfully!`
+          message: `All coordinates and styling for "${currentTemplate.name}" saved successfully!`
         });
       }
     } catch (err) {
@@ -227,7 +253,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
         });
       }
     }
-  }, [activeTemplate, updateTemplateAlignment, showToast]);
+  }, [activeTemplateId, showToast]);
 
   const triggerAutosave = useCallback(() => {
     setSaveStatus('unsaved');
@@ -246,6 +272,81 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       }
     };
   }, []);
+
+  const handleUndo = useCallback(() => {
+    if (undoStackRef.current.length === 0) return;
+    const storeState = useTemplateStore.getState();
+    const currentTemplate = storeState.templates.find((t) => t.id === activeTemplateId);
+    if (!currentTemplate) return;
+
+    redoStackRef.current.push(JSON.parse(JSON.stringify(currentTemplate.alignment)));
+    if (redoStackRef.current.length > 50) {
+      redoStackRef.current.shift();
+    }
+
+    const previousAlignment = undoStackRef.current.pop()!;
+    updateTemplateAlignment(activeTemplateId, previousAlignment);
+    triggerAutosave();
+
+    setCanUndo(undoStackRef.current.length > 0);
+    setCanRedo(true);
+
+    showToast({
+      type: 'info',
+      title: 'Undone',
+      message: 'Reverted previous change (Ctrl+Z).'
+    });
+  }, [activeTemplateId, updateTemplateAlignment, triggerAutosave, showToast]);
+
+  const handleRedo = useCallback(() => {
+    if (redoStackRef.current.length === 0) return;
+    const storeState = useTemplateStore.getState();
+    const currentTemplate = storeState.templates.find((t) => t.id === activeTemplateId);
+    if (!currentTemplate) return;
+
+    undoStackRef.current.push(JSON.parse(JSON.stringify(currentTemplate.alignment)));
+    if (undoStackRef.current.length > 50) {
+      undoStackRef.current.shift();
+    }
+
+    const nextAlignment = redoStackRef.current.pop()!;
+    updateTemplateAlignment(activeTemplateId, nextAlignment);
+    triggerAutosave();
+
+    setCanUndo(true);
+    setCanRedo(redoStackRef.current.length > 0);
+
+    showToast({
+      type: 'info',
+      title: 'Redone',
+      message: 'Re-applied change.'
+    });
+  }, [activeTemplateId, updateTemplateAlignment, triggerAutosave, showToast]);
+
+  // Global Keyboard shortcut listener for Undo (Ctrl+Z) and Redo (Ctrl+Y or Ctrl+Shift+Z)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (isInput) return;
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        if (isInput) return;
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
 
   const handleCopyAlignment = () => {
     if (!activeTemplate?.alignment) return;
@@ -286,6 +387,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
         height: activeTemplate.alignment.height || sourceConfig.height,
       };
 
+      pushUndoSnapshot();
       updateTemplateAlignment(activeTemplate.id, mergedAlignment);
       triggerAutosave();
       showToast({
@@ -569,9 +671,15 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
   const isSubtitle = primaryKey === 'subtitle';
 
   // Batch / Multi-element updater
-  const updateSelectedElements = useCallback((props: Partial<TextElementStyle>, deltaX = 0, deltaY = 0) => {
-    const currentElements = { ...(alignment.elements || {}) };
-    const currentSlots = { ...(alignment.slots || {}) };
+  const updateSelectedElements = useCallback((props: Partial<TextElementStyle>, deltaX = 0, deltaY = 0, shouldSnapshot = true) => {
+    if (shouldSnapshot) {
+      pushUndoSnapshot();
+    }
+    const storeState = useTemplateStore.getState();
+    const currentLatest = storeState.templates.find((t) => t.id === activeTemplateId);
+    const baseAlignment = currentLatest?.alignment || alignment;
+    const currentElements = { ...(baseAlignment.elements || {}) };
+    const currentSlots = { ...(baseAlignment.slots || {}) };
     const syncTopLevel: Partial<TemplateAlignmentConfig> = {};
 
     selectedKeys.forEach((key) => {
@@ -621,21 +729,39 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       };
       (currentElements as any)[key] = updatedEl;
 
+      // When toggling visibility on a column key, also propagate to all slot item overrides
+      if (props.visible !== undefined && ['total', 'kills', 'rank', 'teamName', 'logo', 'teamLogo', 'place', 'match', 'booyah'].includes(key)) {
+        const normKey = key === 'teamLogo' ? 'logo' : key;
+        for (let s = 1; s <= 16; s++) {
+          const sObj = (currentSlots[s] as any) || {};
+          currentSlots[s] = {
+            ...sObj,
+            [normKey]: {
+              ...(sObj[normKey] || {}),
+              visible: props.visible
+            }
+          };
+        }
+      }
+
       if (key === 'organizer') {
         if (deltaX !== 0 || props.x !== undefined) syncTopLevel.organizerX = updatedEl.x;
         if (deltaY !== 0 || props.y !== undefined) syncTopLevel.organizerY = updatedEl.y;
         if (props.fontSize !== undefined) syncTopLevel.organizerFontSize = props.fontSize;
         if (props.fill !== undefined) syncTopLevel.organizerColor = props.fill;
+        if (props.visible !== undefined) syncTopLevel.showOrganizerHeader = props.visible;
       } else if (key === 'tournamentTitle') {
         if (deltaX !== 0 || props.x !== undefined) syncTopLevel.tournamentX = updatedEl.x;
         if (deltaY !== 0 || props.y !== undefined) syncTopLevel.tournamentY = updatedEl.y;
         if (props.fontSize !== undefined) syncTopLevel.tournamentFontSize = props.fontSize;
         if (props.fill !== undefined) syncTopLevel.tournamentColor = props.fill;
+        if (props.visible !== undefined) syncTopLevel.showTournamentHeader = props.visible;
       } else if (key === 'subtitle') {
         if (deltaX !== 0 || props.x !== undefined) syncTopLevel.subtitleX = updatedEl.x;
         if (deltaY !== 0 || props.y !== undefined) syncTopLevel.subtitleY = updatedEl.y;
         if (props.fontSize !== undefined) syncTopLevel.subtitleFontSize = props.fontSize;
         if (props.fill !== undefined) syncTopLevel.subtitleTextColor = props.fill;
+        if (props.visible !== undefined) syncTopLevel.showSubtitleBanner = props.visible;
       } else if (key === 'rank') {
         if (deltaX !== 0 || props.x !== undefined) syncTopLevel.leftRankX = updatedEl.x;
         if (props.fontSize !== undefined) syncTopLevel.rankFontSize = props.fontSize;
@@ -655,13 +781,13 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       }
     });
 
-    updateTemplateAlignment(activeTemplate.id, {
+    updateTemplateAlignment(activeTemplateId, {
       ...syncTopLevel,
       elements: currentElements,
       slots: currentSlots
     });
     triggerAutosave();
-  }, [alignment, selectedKeys, getElementStyleByKey, activeTemplate.id, updateTemplateAlignment, triggerAutosave]);
+  }, [alignment, selectedKeys, getElementStyleByKey, activeTemplateId, updateTemplateAlignment, triggerAutosave, pushUndoSnapshot]);
 
   // Tactile Nudge Action
   const handleNudge = useCallback((dx: number, dy: number) => {
@@ -670,7 +796,11 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
 
   // Direct Canvas Drag Handler
   const handleDragElement = (_key: string, dx: number, dy: number) => {
-    updateSelectedElements({}, dx, dy);
+    if (!isDraggingRef.current) {
+      pushUndoSnapshot();
+      isDraggingRef.current = true;
+    }
+    updateSelectedElements({}, dx, dy, false);
   };
 
   // Start Long-Press Holding (smooth gliding continuous movement)
@@ -694,11 +824,15 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
   };
 
   useEffect(() => {
-    const handleGlobalMouseUp = () => stopHolding();
+    const handleGlobalMouseUp = () => {
+      stopHolding();
+      isDraggingRef.current = false;
+    };
     window.addEventListener('mouseup', handleGlobalMouseUp);
     return () => {
       window.removeEventListener('mouseup', handleGlobalMouseUp);
       stopHolding();
+      isDraggingRef.current = false;
     };
   }, []);
 
@@ -769,6 +903,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
 
   // 1. Smart Auto-Align Entire Column to standard table row grid
   const handleSmartAutoAlignColumn = (itemOverride?: string) => {
+    pushUndoSnapshot();
     const item = (itemOverride || smartAlignColumn || 'total') as 'total' | 'kills' | 'rank' | 'teamName' | 'logo' | 'place' | 'match' | 'booyah';
     const currentSlots = { ...(alignment.slots || {}) };
     const isSingleColumn = alignment.layoutMode === 'single-column';
@@ -836,9 +971,10 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       };
     }
 
-    updateTemplateAlignment(activeTemplate.id, {
+    updateTemplateAlignment(activeTemplateId, {
       slots: currentSlots
     });
+    triggerAutosave();
 
     showToast({
       type: 'success',
@@ -849,6 +985,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
 
   // 2. Distribute Column Vertically (Equal spacing between top and bottom slot)
   const handleDistributeColumnVertically = (itemOverride?: string) => {
+    pushUndoSnapshot();
     const item = (itemOverride || smartAlignColumn || 'total') as 'total' | 'kills' | 'rank' | 'teamName' | 'logo' | 'place' | 'match' | 'booyah';
     const currentSlots = { ...(alignment.slots || {}) };
     const isSingleColumn = alignment.layoutMode === 'single-column';
@@ -884,9 +1021,10 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       distributeRange(7, 12);
     }
 
-    updateTemplateAlignment(activeTemplate.id, {
+    updateTemplateAlignment(activeTemplateId, {
       slots: currentSlots
     });
+    triggerAutosave();
 
     showToast({
       type: 'success',
@@ -897,6 +1035,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
 
   // 3. Straighten Column (Align X)
   const handleStraightenColumnX = (itemOverride?: string) => {
+    pushUndoSnapshot();
     const item = (itemOverride || smartAlignColumn || 'total') as 'total' | 'kills' | 'rank' | 'teamName' | 'logo' | 'place' | 'match' | 'booyah';
     const currentSlots = { ...(alignment.slots || {}) };
     const isSingleColumn = alignment.layoutMode === 'single-column';
@@ -920,9 +1059,10 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       }
     }
 
-    updateTemplateAlignment(activeTemplate.id, {
+    updateTemplateAlignment(activeTemplateId, {
       slots: currentSlots
     });
+    triggerAutosave();
 
     showToast({
       type: 'success',
@@ -933,6 +1073,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
 
   // 4. Reset Column to Default Template Grid
   const handleResetColumnToGrid = (itemOverride?: string) => {
+    pushUndoSnapshot();
     const item = (itemOverride || smartAlignColumn || 'total') as 'total' | 'kills' | 'rank' | 'teamName' | 'logo' | 'place' | 'match' | 'booyah';
     const currentSlots = { ...(alignment.slots || {}) };
 
@@ -944,9 +1085,10 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       }
     }
 
-    updateTemplateAlignment(activeTemplate.id, {
+    updateTemplateAlignment(activeTemplateId, {
       slots: currentSlots
     });
+    triggerAutosave();
 
     showToast({
       type: 'info',
@@ -957,6 +1099,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
 
   // 5. Adjust Row Gap Live (Selection-Aware)
   const handleAdjustRowGap = (delta: number) => {
+    pushUndoSnapshot();
     const isSelectionMode = rowGapScope === 'selected' && selectedRowGroups.length >= 2;
 
     if (isSelectionMode) {
@@ -995,10 +1138,11 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
         });
       });
 
-      updateTemplateAlignment(activeTemplate.id, {
+      updateTemplateAlignment(activeTemplateId, {
         slots: currentSlots,
         elements: currentElements
       });
+      triggerAutosave();
 
       showToast({
         type: 'success',
@@ -1022,16 +1166,18 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
         }
       }
 
-      updateTemplateAlignment(activeTemplate.id, {
+      updateTemplateAlignment(activeTemplateId, {
         rowGap: newRowGap,
         slots: currentSlots
       });
+      triggerAutosave();
     }
   };
 
   // 6. Multi-Selection Alignment Bar (Figma-style)
   const handleAlignSelected = (direction: 'left' | 'centerX' | 'right' | 'top' | 'centerY' | 'bottom') => {
     if (selectedKeys.length < 2) return;
+    pushUndoSnapshot();
 
     const styles = selectedKeys.map((k) => ({ key: k, style: getElementStyleByKey(k) }));
     const xs = styles.map((s) => s.style.x);
@@ -1075,10 +1221,11 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       }
     });
 
-    updateTemplateAlignment(activeTemplate.id, {
+    updateTemplateAlignment(activeTemplateId, {
       elements: currentElements,
       slots: currentSlots
     });
+    triggerAutosave();
 
     showToast({
       type: 'success',
@@ -1090,6 +1237,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
   // 7. Multi-Selection Distribution Bar (Figma-style)
   const handleDistributeSelected = (axis: 'x' | 'y') => {
     if (selectedKeys.length < 3) return;
+    pushUndoSnapshot();
 
     const items = selectedKeys.map((k) => ({ key: k, style: getElementStyleByKey(k) }));
     items.sort((a, b) => (axis === 'x' ? a.style.x - b.style.x : a.style.y - b.style.y));
@@ -1128,10 +1276,11 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       }
     });
 
-    updateTemplateAlignment(activeTemplate.id, {
+    updateTemplateAlignment(activeTemplateId, {
       elements: currentElements,
       slots: currentSlots
     });
+    triggerAutosave();
 
     showToast({
       type: 'success',
@@ -1169,7 +1318,9 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       const result = analyzePsdTemplateBuffer(buffer);
 
       if (result.success) {
-        updateTemplateAlignment(activeTemplate.id, result.alignment);
+        pushUndoSnapshot();
+        updateTemplateAlignment(activeTemplateId, result.alignment);
+        triggerAutosave();
         if (result.cleanImageUrl && !result.cleanImageUrl.startsWith('data:image/svg+xml')) {
           replaceTemplateImage(activeTemplate.id, result.cleanImageUrl);
         }
@@ -1370,6 +1521,38 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                 Save Error
               </span>
             )}
+          </div>
+
+          {/* ↩️ UNDO / ↪️ REDO */}
+          <div className="flex items-center gap-1 bg-[var(--bg-surface-inset)] p-0.5 rounded-xl border border-[var(--border-subtle)] shadow-xs">
+            <button
+              type="button"
+              onClick={handleUndo}
+              disabled={!canUndo}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                canUndo
+                  ? 'text-[var(--text-primary)] hover:bg-[var(--bg-surface)] hover:shadow-xs'
+                  : 'text-[var(--text-tertiary)] opacity-35 cursor-not-allowed'
+              }`}
+              title="Undo change (Ctrl+Z)"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Undo</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleRedo}
+              disabled={!canRedo}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                canRedo
+                  ? 'text-[var(--text-primary)] hover:bg-[var(--bg-surface)] hover:shadow-xs'
+                  : 'text-[var(--text-tertiary)] opacity-35 cursor-not-allowed'
+              }`}
+              title="Redo change (Ctrl+Y or Ctrl+Shift+Z)"
+            >
+              <RotateCw className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Redo</span>
+            </button>
           </div>
 
           {/* 📋 COPY ALIGNMENT */}
@@ -1586,6 +1769,35 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                 className="px-2 py-0.5 rounded bg-[var(--bg-surface-inset)] text-[10px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
               >
                 Reset
+              </button>
+
+              <div className="h-3.5 w-px bg-[var(--border-subtle)] mx-0.5" />
+
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={!canUndo}
+                className={`p-1 rounded transition-all cursor-pointer ${
+                  canUndo
+                    ? 'bg-[var(--bg-surface-inset)] text-[var(--text-primary)] hover:text-[var(--accent-primary)]'
+                    : 'text-[var(--text-tertiary)] opacity-35 cursor-not-allowed'
+                }`}
+                title="Undo (Ctrl+Z)"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleRedo}
+                disabled={!canRedo}
+                className={`p-1 rounded transition-all cursor-pointer ${
+                  canRedo
+                    ? 'bg-[var(--bg-surface-inset)] text-[var(--text-primary)] hover:text-[var(--accent-primary)]'
+                    : 'text-[var(--text-tertiary)] opacity-35 cursor-not-allowed'
+                }`}
+                title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
+              >
+                <RotateCw className="h-3.5 w-3.5" />
               </button>
 
               <button
@@ -1806,7 +2018,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
               </div>
               <button
                 type="button"
-                onClick={() => updateSelectedElements({ visible: !primaryElement.visible })}
+                onClick={() => updateSelectedElements({ visible: primaryElement.visible === false ? true : false })}
                 className={`flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer ${
                   primaryElement.visible !== false
                     ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
@@ -1836,26 +2048,31 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                         ? renderData.tournamentTitle
                         : isOrganizer
                         ? renderData.organizerName
-                        : renderData.subtitle || 'OVERALL'
+                        : 'SUBTITLE / PHASE'
                     }
-                    className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] font-bold focus:outline-none focus:border-[var(--accent-primary)]"
+                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
                   />
                 </div>
 
-                {/* Scope Quick Presets for Subtitle / Badge */}
+                {/* Quick Scope Pills (Overall, Week 1, Finals, Day 1, Match 1) for Subtitle */}
                 {isSubtitle && (
-                  <div className="space-y-1.5 pt-1">
-                    <label className="block text-[10px] font-bold text-[var(--text-secondary)] font-mono">
-                      Scope Presets (Click to apply &amp; preview):
-                    </label>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-[11px] font-bold text-[var(--text-secondary)] font-mono">
+                        Quick Scope Presets:
+                      </label>
+                      <span className="text-[10px] font-mono text-[var(--accent-primary)] font-bold">
+                        1-Click Apply
+                      </span>
+                    </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {['OVERALL', 'MATCH 1', 'MATCH 2', 'MATCH 3', 'MATCH 4', 'DAY 1', 'DAY 2', 'FINALS', 'GRAND FINALS'].map((scope) => (
+                      {['OVERALL STANDINGS', 'DAY 1', 'DAY 2', 'DAY 3', 'WEEK 1', 'WEEK 2', 'FINALS', 'GRAND FINALS', 'MATCH 1', 'GROUP STAGE'].map((scope) => (
                         <button
                           key={scope}
                           type="button"
                           onClick={() => {
-                            setPreviewScope(scope);
                             updateSelectedElements({ customText: scope });
+                            setPreviewScope(scope);
                           }}
                           className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer ${
                             (primaryElement.customText || previewScope) === scope
@@ -1880,8 +2097,9 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                       <button
                         type="button"
                         onClick={() => {
+                          pushUndoSnapshot();
                           const nextVal = alignment.showSubtitleBanner === false ? true : false;
-                          updateTemplateAlignment(activeTemplate.id, { showSubtitleBanner: nextVal });
+                          updateTemplateAlignment(activeTemplateId, { showSubtitleBanner: nextVal });
                           triggerAutosave();
                         }}
                         className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer ${
@@ -1906,7 +2124,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                           step="10"
                           value={alignment.subtitleWidth || 300}
                           onChange={(e) => {
-                            updateTemplateAlignment(activeTemplate.id, { subtitleWidth: Number(e.target.value) });
+                            updateTemplateAlignment(activeTemplateId, { subtitleWidth: Number(e.target.value) });
                             triggerAutosave();
                           }}
                           className="w-full accent-[var(--accent-primary)] cursor-pointer"
@@ -1923,7 +2141,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                           step="2"
                           value={alignment.subtitleHeight || 50}
                           onChange={(e) => {
-                            updateTemplateAlignment(activeTemplate.id, { subtitleHeight: Number(e.target.value) });
+                            updateTemplateAlignment(activeTemplateId, { subtitleHeight: Number(e.target.value) });
                             triggerAutosave();
                           }}
                           className="w-full accent-[var(--accent-primary)] cursor-pointer"
@@ -1941,7 +2159,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                             type="color"
                             value={alignment.subtitleBgColor?.startsWith('#') ? alignment.subtitleBgColor : '#051d38'}
                             onChange={(e) => {
-                              updateTemplateAlignment(activeTemplate.id, { subtitleBgColor: e.target.value });
+                              updateTemplateAlignment(activeTemplateId, { subtitleBgColor: e.target.value });
                               triggerAutosave();
                             }}
                             className="h-7 w-8 rounded cursor-pointer border border-[var(--border-subtle)] bg-transparent"
@@ -1950,7 +2168,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                             type="text"
                             value={alignment.subtitleBgColor || 'rgba(5, 29, 56, 0.9)'}
                             onChange={(e) => {
-                              updateTemplateAlignment(activeTemplate.id, { subtitleBgColor: e.target.value });
+                              updateTemplateAlignment(activeTemplateId, { subtitleBgColor: e.target.value });
                               triggerAutosave();
                             }}
                             className="w-full p-1 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-primary)] font-bold"
@@ -1966,7 +2184,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                             type="color"
                             value={alignment.subtitleBorderColor?.startsWith('#') ? alignment.subtitleBorderColor : '#00f0ff'}
                             onChange={(e) => {
-                              updateTemplateAlignment(activeTemplate.id, { subtitleBorderColor: e.target.value });
+                              updateTemplateAlignment(activeTemplateId, { subtitleBorderColor: e.target.value });
                               triggerAutosave();
                             }}
                             className="h-7 w-8 rounded cursor-pointer border border-[var(--border-subtle)] bg-transparent"
@@ -1975,7 +2193,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                             type="text"
                             value={alignment.subtitleBorderColor || '#00f0ff'}
                             onChange={(e) => {
-                              updateTemplateAlignment(activeTemplate.id, { subtitleBorderColor: e.target.value });
+                              updateTemplateAlignment(activeTemplateId, { subtitleBorderColor: e.target.value });
                               triggerAutosave();
                             }}
                             className="w-full p-1 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-primary)] font-bold"
@@ -2853,6 +3071,32 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                   className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] font-bold text-white cursor-pointer"
                 >
                   Fit
+                </button>
+              </div>
+
+              {/* Undo / Redo */}
+              <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-xl border border-white/15 text-xs font-mono">
+                <button
+                  type="button"
+                  onClick={handleUndo}
+                  disabled={!canUndo}
+                  className={`p-1 rounded transition-all cursor-pointer ${
+                    canUndo ? 'hover:bg-white/15 text-white' : 'text-white/30 cursor-not-allowed'
+                  }`}
+                  title="Undo (Ctrl+Z)"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRedo}
+                  disabled={!canRedo}
+                  className={`p-1 rounded transition-all cursor-pointer ${
+                    canRedo ? 'hover:bg-white/15 text-white' : 'text-white/30 cursor-not-allowed'
+                  }`}
+                  title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
+                >
+                  <RotateCw className="h-3.5 w-3.5" />
                 </button>
               </div>
 
