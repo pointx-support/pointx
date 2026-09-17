@@ -414,6 +414,39 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
     }
   };
 
+  const teamsList = canonicalState?.teams ? Object.values(canonicalState.teams) : [];
+
+  const checkTeamWiped = useCallback((team: any): boolean => {
+    if (team.isEliminated === true) return true;
+    const rawPlayers = team.players ? Object.entries(team.players) : [];
+    if (rawPlayers.length > 0) {
+      return rawPlayers.every(([, p]: any) => p?.status === 'eliminated');
+    }
+    return false;
+  }, []);
+
+  const { aliveTeams, wipedTeams } = useMemo(() => {
+    const alive: any[] = [];
+    const wiped: any[] = [];
+    for (const team of teamsList) {
+      if (checkTeamWiped(team)) {
+        wiped.push(team);
+      } else {
+        alive.push(team);
+      }
+    }
+    alive.sort((a, b) => (a.slotNumber || 0) - (b.slotNumber || 0));
+    wiped.sort((a, b) => (a.slotNumber || 0) - (b.slotNumber || 0));
+    return { aliveTeams: alive, wipedTeams: wiped };
+  }, [teamsList, checkTeamWiped]);
+
+  const sortedTeams = useMemo(() => {
+    if (!sortAliveFirst) {
+      return [...teamsList].sort((a, b) => (a.slotNumber || 0) - (b.slotNumber || 0));
+    }
+    return [...aliveTeams, ...wipedTeams];
+  }, [sortAliveFirst, teamsList, aliveTeams, wipedTeams]);
+
   // Loading state
   if (loading) {
     return (
@@ -470,39 +503,6 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       </div>
     );
   }
-
-  const teamsList = canonicalState?.teams ? Object.values(canonicalState.teams) : [];
-
-  const checkTeamWiped = useCallback((team: any): boolean => {
-    if (team.isEliminated === true) return true;
-    const rawPlayers = team.players ? Object.entries(team.players) : [];
-    if (rawPlayers.length > 0) {
-      return rawPlayers.every(([, p]: any) => p?.status === 'eliminated');
-    }
-    return false;
-  }, []);
-
-  const { aliveTeams, wipedTeams } = useMemo(() => {
-    const alive: any[] = [];
-    const wiped: any[] = [];
-    for (const team of teamsList) {
-      if (checkTeamWiped(team)) {
-        wiped.push(team);
-      } else {
-        alive.push(team);
-      }
-    }
-    alive.sort((a, b) => (a.slotNumber || 0) - (b.slotNumber || 0));
-    wiped.sort((a, b) => (a.slotNumber || 0) - (b.slotNumber || 0));
-    return { aliveTeams: alive, wipedTeams: wiped };
-  }, [teamsList, checkTeamWiped]);
-
-  const sortedTeams = useMemo(() => {
-    if (!sortAliveFirst) {
-      return [...teamsList].sort((a, b) => (a.slotNumber || 0) - (b.slotNumber || 0));
-    }
-    return [...aliveTeams, ...wipedTeams];
-  }, [sortAliveFirst, teamsList, aliveTeams, wipedTeams]);
 
   const tableVisible = canonicalState?.tableVisible ?? true;
   const revision = canonicalState?.revision ?? 1;
