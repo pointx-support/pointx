@@ -280,9 +280,12 @@ function getActiveUserId(): string {
 }
 
 function getStoredActiveTournamentId(): string {
-  if (typeof window !== 'undefined' && window.localStorage) {
+  if (typeof window !== 'undefined') {
     try {
-      return window.localStorage.getItem('pointx_active_tournament_id') || '';
+      const searchParams = new URLSearchParams(window.location.search);
+      const urlTourId = searchParams.get('tournamentId') || searchParams.get('tournament') || searchParams.get('tourId');
+      if (urlTourId) return urlTourId;
+      return window.localStorage?.getItem('pointx_active_tournament_id') || '';
     } catch {}
   }
   return '';
@@ -303,7 +306,7 @@ function loadStoredTournaments(): { tournaments: Tournament[]; activeTournamentI
   if (!userId || userId === 'guest') {
     return {
       tournaments: [],
-      activeTournamentId: '',
+      activeTournamentId: storedActiveId || '',
       currentTournament: blank
     };
   }
@@ -322,12 +325,13 @@ function loadStoredTournaments(): { tournaments: Tournament[]; activeTournamentI
             !t.id.startsWith('tour-demo-')
         );
         if (nonDemo.length > 0) {
-          const matched = storedActiveId ? nonDemo.find((t) => t.id === storedActiveId) : null;
-          const activeTour = matched || nonDemo[0];
+          const matched = storedActiveId
+            ? nonDemo.find((t) => t.id === storedActiveId || (t as any).customId === storedActiveId || (t as any)._id === storedActiveId)
+            : null;
           return {
             tournaments: nonDemo,
-            activeTournamentId: activeTour.id || '',
-            currentTournament: activeTour
+            activeTournamentId: matched ? matched.id : (storedActiveId || nonDemo[0]?.id || ''),
+            currentTournament: matched || nonDemo[0]
           };
         }
       }
@@ -336,7 +340,7 @@ function loadStoredTournaments(): { tournaments: Tournament[]; activeTournamentI
 
   return {
     tournaments: [],
-    activeTournamentId: '',
+    activeTournamentId: storedActiveId || '',
     currentTournament: blank
   };
 }
@@ -420,8 +424,12 @@ export const useTournamentStore = create<AppState>((set, get) => ({
         const loadedTournaments = res.data;
 
         const storedActiveId = getStoredActiveTournamentId();
-        const currentActiveId = get().activeTournamentId || storedActiveId;
-        const matching = currentActiveId ? loadedTournaments.find((t) => t.id === currentActiveId) : null;
+        const targetActiveId = storedActiveId || get().activeTournamentId;
+        const matching = targetActiveId
+          ? loadedTournaments.find(
+              (t) => t.id === targetActiveId || (t as any).customId === targetActiveId || (t as any)._id === targetActiveId
+            )
+          : null;
         const active = matching || (loadedTournaments.length > 0 ? loadedTournaments[0] : createBlankTournament());
 
         if (active.id && typeof window !== 'undefined' && window.localStorage) {
@@ -459,19 +467,27 @@ export const useTournamentStore = create<AppState>((set, get) => ({
       if (res.success && res.data) {
         const freshTour = res.data;
         set((state) => {
-          const matchIdx = state.tournaments.findIndex((t) => t.id === freshTour.id);
+          const targetId = freshTour.id || (freshTour as any).customId || (freshTour as any)._id;
+          const matchIdx = state.tournaments.findIndex(
+            (t) => t.id === targetId || (t as any).customId === targetId || (t as any)._id === targetId
+          );
           let updatedTournaments: Tournament[];
           if (matchIdx >= 0) {
-            updatedTournaments = state.tournaments.map((t) => (t.id === freshTour.id ? { ...t, ...freshTour } : t));
+            updatedTournaments = state.tournaments.map((t, idx) => (idx === matchIdx ? { ...t, ...freshTour } : t));
           } else {
             updatedTournaments = [freshTour, ...state.tournaments];
           }
-          const isCurrent = state.currentTournament?.id === freshTour.id || state.activeTournamentId === freshTour.id;
+          const isCurrent =
+            state.currentTournament?.id === targetId ||
+            (state.currentTournament as any)?.customId === targetId ||
+            state.activeTournamentId === targetId ||
+            state.activeTournamentId === freshTour.id;
+
           persistTournaments(updatedTournaments);
           return {
             tournaments: updatedTournaments,
             currentTournament: isCurrent ? { ...state.currentTournament, ...freshTour } : state.currentTournament,
-            activeTournamentId: isCurrent ? freshTour.id : state.activeTournamentId,
+            activeTournamentId: isCurrent ? targetId : state.activeTournamentId,
           };
         });
         broadcastTournamentUpdate(freshTour);
@@ -1081,21 +1097,36 @@ if (typeof window !== 'undefined') {
   let currentSubscribedTourId = '';
   let unsubActiveTour: (() => void) | null = null;
 
-  const handleIncomingTourUpdate = (incomingTour: Tournament) => {
-    if (!incomingTour || !incomingTour.id) return;
+  const handleIncomingTourUpdate = (incomingTour: any) => {
+    if (!incomingTour) return;
+    const tourId = incomingTour.id || incomingTour.customId || incomingTour._id?.toString();
+    if (!tourId) return;
+
+    const normalizedTour: Tournament = {
+      ...incomingTour,
+      id: tourId,
+      customId: incomingTour.customId || tourId,
+    };
+
     useTournamentStore.setState((state) => {
-      const matchIdx = state.tournaments.findIndex((t) => t.id === incomingTour.id);
+      const matchIdx = state.tournaments.findIndex(
+        (t) => t.id === tourId || (t as any).customId === tourId || (t as any)._id === tourId
+      );
       let updatedTournaments: Tournament[];
       if (matchIdx >= 0) {
-        updatedTournaments = state.tournaments.map((t) => (t.id === incomingTour.id ? { ...t, ...incomingTour } : t));
+        updatedTournaments = state.tournaments.map((t, idx) => (idx === matchIdx ? { ...t, ...normalizedTour } : t));
       } else {
-        updatedTournaments = [incomingTour, ...state.tournaments];
+        updatedTournaments = [normalizedTour, ...state.tournaments];
       }
-      const isCurrent = state.currentTournament.id === incomingTour.id || state.activeTournamentId === incomingTour.id;
+      const isCurrent =
+        state.currentTournament.id === tourId ||
+        (state.currentTournament as any).customId === tourId ||
+        state.activeTournamentId === tourId;
+
       persistTournaments(updatedTournaments);
       return {
         tournaments: updatedTournaments,
-        currentTournament: isCurrent ? { ...state.currentTournament, ...incomingTour } : state.currentTournament
+        currentTournament: isCurrent ? { ...state.currentTournament, ...normalizedTour } : state.currentTournament
       };
     });
   };

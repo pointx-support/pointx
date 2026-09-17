@@ -381,20 +381,22 @@ export class LiveStateStore {
       return players.some((p) => p.status === 'alive' || p.status === 'knock');
     });
 
+    if (!diff.teams) diff.teams = {};
+
     if (aliveSquads.length === 1) {
       const booyahWinner = aliveSquads[0];
       booyahWinner.isBooyah = true;
       state.isMatchFinished = true;
       diff.isMatchFinished = true;
-      if (!diff.teams) diff.teams = {};
+
       diff.teams[booyahWinner.teamId] = {
         ...(diff.teams[booyahWinner.teamId] || {}),
         isBooyah: true,
       };
 
-      // Clear isBooyah on ALL other squads so multiple teams can NEVER hold Booyah simultaneously
+      // Clear isBooyah unconditionally on ALL other squads so multiple teams can NEVER hold Booyah simultaneously
       for (const t of allSquads) {
-        if (t.teamId !== booyahWinner.teamId && t.isBooyah) {
+        if (t.teamId !== booyahWinner.teamId) {
           t.isBooyah = false;
           diff.teams[t.teamId] = {
             ...(diff.teams[t.teamId] || {}),
@@ -408,15 +410,12 @@ export class LiveStateStore {
         state.isMatchFinished = false;
         diff.isMatchFinished = false;
       }
-      if (!diff.teams) diff.teams = {};
       for (const t of allSquads) {
-        if (t.isBooyah) {
-          t.isBooyah = false;
-          diff.teams[t.teamId] = {
-            ...(diff.teams[t.teamId] || {}),
-            isBooyah: false,
-          };
-        }
+        t.isBooyah = false;
+        diff.teams[t.teamId] = {
+          ...(diff.teams[t.teamId] || {}),
+          isBooyah: false,
+        };
       }
     }
   }

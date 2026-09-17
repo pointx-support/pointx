@@ -106,9 +106,9 @@ export class CanonicalLiveStore {
 
   public finalizedListeners = new Set<(report: any) => void>();
 
-  public setMatchContext(orgId: string, tourId: string, matchId: string): void {
+  public setMatchContext(orgId: string, tourId: string, matchId: string, force: boolean = false): void {
     const cleanMatchId = matchId || 'none';
-    if (this.activeMatchId !== cleanMatchId || this.activeTourId !== tourId) {
+    if (force || this.activeMatchId !== cleanMatchId || this.activeTourId !== tourId) {
       this.activeOrgId = orgId || 'org-default';
       this.activeTourId = tourId || 'default';
       this.activeMatchId = cleanMatchId;
@@ -190,8 +190,13 @@ export class CanonicalLiveStore {
   public applyAuthoritativeState(state: CanonicalLiveMatchState): void {
     if (!state || !state.matchId) return;
 
-    // Rule: Incoming revision <= current revision: IGNORE (HTTP or stale snapshot must never overwrite newer WebSocket state)
-    if (this.currentState && state.revision < this.lastAppliedRevision) {
+    // If switching to a different match context, reset lastAppliedRevision
+    if (this.activeMatchId && state.matchId !== this.activeMatchId) {
+      this.lastAppliedRevision = 0;
+    }
+
+    // Rule: Incoming revision < current revision for the SAME match: IGNORE
+    if (this.currentState && this.currentState.matchId === state.matchId && state.revision < this.lastAppliedRevision) {
       return;
     }
 
@@ -260,6 +265,16 @@ export class CanonicalLiveStore {
     }
 
     if (patch.teams) {
+      // If a team is assigned Booyah in this incoming patch, clear isBooyah on all other existing teams
+      const newBooyahTeamId = Object.entries(patch.teams).find(([, tp]) => tp.isBooyah === true)?.[0];
+      if (newBooyahTeamId) {
+        for (const [tid, team] of Object.entries(this.currentState.teams)) {
+          if (tid !== newBooyahTeamId) {
+            team.isBooyah = false;
+          }
+        }
+      }
+
       for (const [teamId, teamPatch] of Object.entries(patch.teams)) {
         if (!this.currentState.teams[teamId]) {
           this.currentState.teams[teamId] = {
@@ -504,6 +519,17 @@ export class CanonicalLiveStore {
         nextMatch: msg.nextMatch,
         initialState: msg.initialState,
       };
+      if (data.nextMatchId) {
+        this.activeMatchId = data.nextMatchId;
+        this.lastAppliedRevision = 0;
+        const client = RealtimeSyncClient.getInstance();
+        client.sendRawMessage({
+          type: 'JOIN_MATCH',
+          organizationId: this.activeOrgId,
+          tournamentId: this.activeTourId,
+          matchId: data.nextMatchId,
+        });
+      }
       if (data.initialState) {
         this.applyAuthoritativeState(data.initialState);
       }

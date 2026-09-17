@@ -456,12 +456,22 @@ export function App() {
   const handleSelectTournament = (tour: Tournament, targetTab: any = 'overview') => {
     setTournament(tour);
     setActiveTab(targetTab);
-    navigateTo('workspace');
+    const tourId = (tour as any).customId || tour.id;
+    const targetUrl = tourId
+      ? `/workspace?tournamentId=${encodeURIComponent(tourId)}&tab=${encodeURIComponent(targetTab)}`
+      : '/workspace';
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', targetUrl);
+    }
+    navigateTo('workspace', targetUrl);
   };
 
   const handleBackToDashboard = () => {
     clearActiveTournament();
-    navigateTo('command-center');
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', '/dashboard');
+    }
+    navigateTo('command-center', '/dashboard');
   };
 
   return (

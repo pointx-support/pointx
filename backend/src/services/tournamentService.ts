@@ -433,8 +433,29 @@ export async function getNextMatchForTournament(
 
   if (!Array.isArray(tour.matches)) tour.matches = [];
 
-  const currentMatch = tour.matches.find((m: any) => (m.id || m.customId) === currentMatchId);
-  const currentNum = currentMatch?.matchNumber || 1;
+  // Intelligently resolve the current match number from the matchId or completed matches
+  let currentNum = 1;
+  if (typeof currentMatchId === 'string' && currentMatchId.startsWith('live-match-')) {
+    const parsed = parseInt(currentMatchId.replace('live-match-', ''), 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      currentNum = parsed;
+    }
+  } else if (currentMatchId) {
+    const currentMatch = tour.matches.find(
+      (m: any) => (m.id || m.customId) === currentMatchId || m.matchNumber === Number(currentMatchId)
+    );
+    if (currentMatch?.matchNumber) {
+      currentNum = currentMatch.matchNumber;
+    } else {
+      const matchNumFromId = parseInt(String(currentMatchId).replace(/[^0-9]/g, ''), 10);
+      if (!isNaN(matchNumFromId) && matchNumFromId > 0) {
+        currentNum = matchNumFromId;
+      } else {
+        const maxCompleted = tour.matches.reduce((max: number, m: any) => Math.max(max, m.matchNumber || 0), 0);
+        if (maxCompleted > 0) currentNum = maxCompleted;
+      }
+    }
+  }
   const targetNextNum = currentNum + 1;
 
   // 1. Check if an existing match already has matchNumber === targetNextNum
@@ -448,8 +469,8 @@ export async function getNextMatchForTournament(
     };
   }
 
-  // 2. If tournament structure allows more matches (e.g. 6 matches planned), allow advancing seamlessly
-  const maxMatches = tour.structure?.matchCount || 1;
+  // 2. Allow advancing seamlessly up to at least 24 matches (standard tournament series) or tour structure
+  const maxMatches = Math.max(24, tour.structure?.matchCount || 0);
   if (targetNextNum <= maxMatches) {
     const nextMatchId = `live-match-${targetNextNum}`;
     return {
@@ -458,6 +479,7 @@ export async function getNextMatchForTournament(
       nextMatchNumber: targetNextNum,
       nextMatch: {
         id: nextMatchId,
+        customId: nextMatchId,
         matchNumber: targetNextNum,
         customLabel: `Match ${String(targetNextNum).padStart(2, '0')}`,
         mapName: 'Bermuda',
@@ -466,7 +488,7 @@ export async function getNextMatchForTournament(
     };
   }
 
-  // If no next match exists in database and maximum matches reached, return hasNext: false
+  // If maximum matches reached, return hasNext: false
   return {
     hasNext: false,
     message: `No next match found. Match ${currentNum} is the latest match.`,

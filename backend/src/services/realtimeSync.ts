@@ -890,8 +890,18 @@ export function setupRealtimeSyncServer(server: http.Server): WebSocketServer {
                 timestamp: Date.now(),
               };
 
+              // Update syncStore activeMatchNumber so all broadcast overlays immediately switch context
+              await updateAuthoritativeState(cmd.tournamentId, { activeMatchNumber: nextRes.nextMatch.matchNumber });
+              const displayUpdateMsg = {
+                type: 'BROADCAST_DISPLAY_UPDATED',
+                tournamentId: cmd.tournamentId,
+                activeMatchNumber: nextRes.nextMatch.matchNumber,
+                timestamp: Date.now(),
+              };
+
               const aliasRooms = getRoomAliases(cmd.tournamentId, tourState.tournament);
               broadcastToRooms(aliasRooms, nextMsg);
+              broadcastToRooms(aliasRooms, displayUpdateMsg);
               ws.send(JSON.stringify(nextMsg));
             } else {
               ws.send(JSON.stringify({

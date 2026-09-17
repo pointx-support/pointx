@@ -90,14 +90,14 @@ export async function generateAndSaveMatchReport(
     teamTag: team.tag || `T${team.slotNumber || idx + 1}`,
     slotNumber: team.slotNumber || idx + 1,
     logoUrl: team.logoUrl || '',
-    placement: team.placement,
+    placement: team.placement || idx + 1,
     kills: team.kills,
     placementPoints: team.placementPoints,
     killPoints: team.killPoints,
     bonusPoints: team.bonusPoints || 0,
     penaltyPoints: team.penaltyPoints || 0,
     totalPoints: team.totalPoints,
-    isBooyah: team.isBooyah,
+    isBooyah: idx === 0,
   }));
 
   // Build player stats
@@ -315,14 +315,14 @@ export async function generateMatchReportPreview(
     teamTag: team.tag || `T${team.slotNumber || idx + 1}`,
     slotNumber: team.slotNumber || idx + 1,
     logoUrl: team.logoUrl || '',
-    placement: team.placement,
+    placement: team.placement || idx + 1,
     kills: team.kills,
     placementPoints: team.placementPoints,
     killPoints: team.killPoints,
     bonusPoints: team.bonusPoints || 0,
     penaltyPoints: team.penaltyPoints || 0,
     totalPoints: team.totalPoints,
-    isBooyah: team.isBooyah,
+    isBooyah: idx === 0,
   }));
 
   const totalEliminations = standings.reduce((acc, t) => acc + t.kills, 0);
@@ -413,28 +413,33 @@ export async function publishMatchReport(
   let match = tour.matches.find((m: any) => (m.id || m.customId) === matchId);
   const matchNumber = liveState.matchNumber || (match?.matchNumber || tour.matches.length + 1);
 
+  let booyahAlreadySet = false;
   const results = (Array.isArray(customResults) && customResults.length > 0)
-    ? customResults.map((s) => ({
-        teamId: s.teamId,
-        placement: s.placement || 1,
-        kills: s.kills || 0,
-        placementPoints: s.placementPoints !== undefined ? s.placementPoints : 0,
-        killPoints: s.killPoints !== undefined ? s.killPoints : (s.kills || 0),
-        totalPoints: s.totalPoints !== undefined
-          ? s.totalPoints
-          : (s.placementPoints !== undefined ? s.placementPoints : 0) + (s.kills || 0) + (s.bonusPoints || 0) - (s.penaltyPoints || 0),
-        isBooyah: Boolean(s.isBooyah || s.placement === 1),
-        bonusPoints: s.bonusPoints || 0,
-        penaltyPoints: s.penaltyPoints || 0,
-      }))
-    : report.standings.map((s) => ({
+    ? customResults.map((s, idx) => {
+        const isBooyah = (s.isBooyah === true || s.placement === 1) && !booyahAlreadySet;
+        if (isBooyah) booyahAlreadySet = true;
+        return {
+          teamId: s.teamId,
+          placement: s.placement || idx + 1,
+          kills: s.kills || 0,
+          placementPoints: s.placementPoints !== undefined ? s.placementPoints : 0,
+          killPoints: s.killPoints !== undefined ? s.killPoints : (s.kills || 0),
+          totalPoints: s.totalPoints !== undefined
+            ? s.totalPoints
+            : (s.placementPoints !== undefined ? s.placementPoints : 0) + (s.kills || 0) + (s.bonusPoints || 0) - (s.penaltyPoints || 0),
+          isBooyah,
+          bonusPoints: s.bonusPoints || 0,
+          penaltyPoints: s.penaltyPoints || 0,
+        };
+      })
+    : report.standings.map((s, idx) => ({
         teamId: s.teamId,
         placement: s.placement,
         kills: s.kills,
         placementPoints: s.placementPoints,
         killPoints: s.killPoints,
         totalPoints: s.placementPoints + s.killPoints + (s.bonusPoints || 0) - (s.penaltyPoints || 0),
-        isBooyah: s.isBooyah,
+        isBooyah: idx === 0,
         bonusPoints: s.bonusPoints,
         penaltyPoints: s.penaltyPoints,
       }));
@@ -467,21 +472,24 @@ export async function publishMatchReport(
   tour.status = 'Live';
   await Tournament.updateOne({ $or: idQueries }, { $set: { matches: tour.matches, status: 'Live' } });
 
-  // Broadcast update to all rooms
+  // Broadcast update to all rooms with properly formatted JSON
   try {
-    const { getRoomAliases, broadcastToRooms, getOrCreateTournamentSyncState } = require('./realtimeSync');
-    const syncState = getOrCreateTournamentSyncState(tournamentId);
-    if (syncState) {
-      syncState.tournament = {
-        ...(tour.toObject ? tour.toObject() : tour),
-        matches: tour.matches,
-      };
+    const { getRoomAliases, broadcastToRooms, updateAuthoritativeState } = require('./realtimeSync');
+    const tourJson: any = tour.toJSON ? tour.toJSON() : {
+      ...(tour.toObject ? tour.toObject() : tour),
+      id: tour.customId || (tour._id ? tour._id.toString() : tournamentId),
+      matches: tour.matches,
+    };
+    if (!tourJson.id) {
+      tourJson.id = tour.customId || (tour._id ? tour._id.toString() : tournamentId);
     }
+    await updateAuthoritativeState(tournamentId, { tournament: tourJson });
     const aliasRooms = getRoomAliases(tournamentId, tour);
     broadcastToRooms(aliasRooms, {
       type: 'TOURNAMENT_UPDATED',
       tournamentId,
-      tournament: tour,
+      tournament: tourJson,
+      data: tourJson,
       timestamp: Date.now(),
     });
   } catch {}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, Flame, Wifi, Activity } from 'lucide-react';
 import type { PlayerState } from '../../types/broadcastSession';
 import { CanonicalLiveStore, type CanonicalLiveMatchState } from '../../services/canonicalLiveStore';
-import { RealtimeSyncClient, type ConnectionState } from '../../services/broadcastSync';
+import { RealtimeSyncClient, type ConnectionState, subscribeToBroadcastDisplayUpdates } from '../../services/broadcastSync';
 import { getStoredToken } from '../../services/api';
 
 export interface ObsLiveOverlayProps {
@@ -99,16 +99,35 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
         }
 
         setHasNoMatches(false);
-        const resolvedMatch = effectiveMatchId
-          ? matches.find((m: any) => (m.id || m.customId) === effectiveMatchId) || matches[0]
-          : matches[0];
+        let targetMatchId = '';
+        if (effectiveMatchId) {
+          const found = matches.find(
+            (m: any) => (m.id || m.customId) === effectiveMatchId || m.matchNumber === Number(effectiveMatchId)
+          );
+          if (found) {
+            targetMatchId = found.id || found.customId;
+          } else if (effectiveMatchId.startsWith('live-match-')) {
+            targetMatchId = effectiveMatchId;
+          } else if (!isNaN(Number(effectiveMatchId))) {
+            targetMatchId = `live-match-${Number(effectiveMatchId)}`;
+          } else {
+            targetMatchId = effectiveMatchId;
+          }
+        } else {
+          // If no matchId specified in URL, dynamically resolve to the latest live match
+          const completedNumbers = matches
+            .filter((m: any) => m.status === 'Completed')
+            .map((m: any) => m.matchNumber || 0);
+          const maxCompleted = completedNumbers.length > 0 ? Math.max(...completedNumbers) : 0;
+          const nextLiveNum = maxCompleted + 1;
+          targetMatchId = `live-match-${nextLiveNum}`;
+        }
 
-        const targetMatchId = resolvedMatch.id || resolvedMatch.customId;
-        liveStore.setMatchContext(orgId, effectiveTournamentId, targetMatchId);
+        liveStore.setMatchContext(orgId, effectiveTournamentId, targetMatchId, true);
       } catch {
         if (!isCancelled) {
           // Fallback if fetch failed
-          liveStore.setMatchContext('org-default', effectiveTournamentId, effectiveMatchId || 'none');
+          liveStore.setMatchContext('org-default', effectiveTournamentId, effectiveMatchId || 'live-match-1', true);
           setLoading(false);
         }
       }
@@ -131,7 +150,17 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
     const unsubNext = liveStore.subscribeNextMatch((nextData) => {
       if (!isCancelled && nextData && nextData.nextMatchId) {
         const org = canonicalState?.organizationId || 'org-default';
-        liveStore.setMatchContext(org, effectiveTournamentId, nextData.nextMatchId);
+        liveStore.setMatchContext(org, effectiveTournamentId, nextData.nextMatchId, true);
+        setLastSyncTime(Date.now());
+      }
+    });
+
+    // Subscribe to real-time display & match changes broadcast from Remote
+    const unsubDisplay = subscribeToBroadcastDisplayUpdates(effectiveTournamentId, (disp) => {
+      if (!isCancelled && disp.activeMatchNumber !== undefined) {
+        const targetId = `live-match-${disp.activeMatchNumber}`;
+        const org = canonicalState?.organizationId || 'org-default';
+        liveStore.setMatchContext(org, effectiveTournamentId, targetId, true);
         setLastSyncTime(Date.now());
       }
     });
@@ -148,6 +177,7 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
       isCancelled = true;
       unsubLive();
       unsubNext();
+      unsubDisplay();
       unsubConn();
     };
   }, [effectiveTournamentId, effectiveMatchId]);

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import type { PlayerState } from '../../types/broadcastSession';
 import { CanonicalLiveStore, type CanonicalLiveMatchState } from '../../services/canonicalLiveStore';
-import { RealtimeSyncClient, type ConnectionState } from '../../services/broadcastSync';
+import { RealtimeSyncClient, type ConnectionState, broadcastDisplayUpdate } from '../../services/broadcastSync';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useToast } from '../ui/Toast';
 import { Modal } from '../ui/Modal';
@@ -196,8 +196,8 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       setIsSwitchingMatch(false);
       if (!isCancelled && nextData && nextData.nextMatchId) {
         setActiveMatchId(nextData.nextMatchId);
-        const org = canonicalState?.organizationId || 'org-default';
-        liveStore.setMatchContext(org, effectiveTournamentId, nextData.nextMatchId);
+        const org = canonicalState?.organizationId || tournamentInfo?.organizationId || 'org-default';
+        liveStore.setMatchContext(org, effectiveTournamentId, nextData.nextMatchId, true);
         showToast({
           type: 'success',
           title: 'Switched to Next Match',
@@ -303,7 +303,15 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
     if (targetId === activeMatchId) return;
     setActiveMatchId(targetId);
     const org = canonicalState?.organizationId || tournamentInfo?.organizationId || 'org-default';
-    CanonicalLiveStore.getInstance().setMatchContext(org, effectiveTournamentId, targetId);
+    CanonicalLiveStore.getInstance().setMatchContext(org, effectiveTournamentId, targetId, true);
+
+    // Broadcast the match change so all OBS browser sources switch in real-time
+    const matchOption = matchOptions.find((m) => m.id === targetId);
+    const matchNum = matchOption?.number || parseInt(targetId.replace(/[^0-9]/g, ''), 10) || 1;
+    broadcastDisplayUpdate({
+      tournamentId: effectiveTournamentId,
+      activeMatchNumber: matchNum,
+    });
   };
 
   const handleNextMatch = () => {
@@ -380,6 +388,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       if (data.success) {
         setIsReportPublished(true);
         const matchNum = data.data?.match?.matchNumber || data.data?.matchNumber || 1;
+        const nextNum = matchNum + 1;
 
         // Immediately update frontend tournament store with the newly published match
         useTournamentStore.getState().refreshCurrentTournament(effectiveTournamentId);
@@ -387,15 +396,21 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         showToast({
           type: 'success',
           title: 'Report Published',
-          message: `Match ${matchNum} report pushed to tournament on website! Transferring Remote to Match ${matchNum + 1}...`,
+          message: `Match ${matchNum} report pushed to tournament on website! Transferring Remote to Match ${nextNum}...`,
         });
 
-        // Automatically transfer Remote to the second/next match
+        // Broadcast match switch to OBS display
+        broadcastDisplayUpdate({
+          tournamentId: effectiveTournamentId,
+          activeMatchNumber: nextNum,
+        });
+
+        // Automatically transfer Remote to the next match
         setTimeout(() => {
           setIsReportModalOpen(false);
           setIsPublishingReport(false);
           executeCommand('NEXT_MATCH', {});
-        }, 1200);
+        }, 300);
       } else {
         showToast({
           type: 'error',
