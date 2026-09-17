@@ -1,6 +1,8 @@
 import { MatchReport, IMatchReport, ITeamStandingReport, IPlayerStatReport } from '../models/MatchReport';
 import { Tournament } from '../models/Tournament';
-import { LiveStateStore, CanonicalLiveMatchState } from './liveStateStore';
+import { LiveStateStore, CanonicalLiveMatchState, computeAuthoritativePlacements } from './liveStateStore';
+
+export { computeAuthoritativePlacements };
 
 export async function generateAndSaveMatchReport(
   liveState: CanonicalLiveMatchState,
@@ -27,33 +29,7 @@ export async function generateAndSaveMatchReport(
   const booyahBonus = tournament?.scoringPreset?.booyahBonus ?? 0;
   const killRate = tournament?.scoringPreset?.killPoints ?? 1;
 
-  const eliminatedIds = [...(liveState.eliminationOrder || [])];
-  const survivingTeams = Object.values(liveState.teams).filter((t) => !eliminatedIds.includes(t.teamId));
-  survivingTeams.sort((a, b) => b.kills - a.kills);
-
-  const placementMap = new Map<string, { placement: number; placementPoints: number; isBooyah: boolean }>();
-
-  survivingTeams.forEach((team, idx) => {
-    const placement = idx + 1;
-    const isBooyah = placement === 1;
-    const pts = (typeof scoringPlacements.get === 'function' ? scoringPlacements.get(String(placement)) : scoringPlacements[placement]) ?? 0;
-    placementMap.set(team.teamId, {
-      placement,
-      placementPoints: pts + (isBooyah ? booyahBonus : 0),
-      isBooyah,
-    });
-  });
-
-  const reversedEliminated = [...eliminatedIds].reverse();
-  reversedEliminated.forEach((teamId, idx) => {
-    const placement = survivingTeams.length + 1 + idx;
-    const pts = (typeof scoringPlacements.get === 'function' ? scoringPlacements.get(String(placement)) : scoringPlacements[placement]) ?? 0;
-    placementMap.set(teamId, {
-      placement,
-      placementPoints: pts,
-      isBooyah: false,
-    });
-  });
+  const placementMap = computeAuthoritativePlacements(liveState, scoringPlacements, booyahBonus);
 
   // Build sorted standings
   const teamList = Object.values(liveState.teams);
@@ -253,33 +229,7 @@ export async function generateMatchReportPreview(
   const booyahBonus = tour?.scoringPreset?.booyahBonus ?? 0;
   const killRate = tour?.scoringPreset?.killPoints ?? 1;
 
-  const eliminatedIds = [...(liveState.eliminationOrder || [])];
-  const survivingTeams = Object.values(liveState.teams).filter((t) => !eliminatedIds.includes(t.teamId));
-  survivingTeams.sort((a, b) => b.kills - a.kills);
-
-  const placementMap = new Map<string, { placement: number; placementPoints: number; isBooyah: boolean }>();
-
-  survivingTeams.forEach((team, idx) => {
-    const placement = idx + 1;
-    const isBooyah = placement === 1;
-    const pts = (typeof scoringPlacements?.get === 'function' ? scoringPlacements.get(String(placement)) : scoringPlacements[placement]) ?? 0;
-    placementMap.set(team.teamId, {
-      placement,
-      placementPoints: pts + (isBooyah ? booyahBonus : 0),
-      isBooyah,
-    });
-  });
-
-  const reversedEliminated = [...eliminatedIds].reverse();
-  reversedEliminated.forEach((teamId, idx) => {
-    const placement = survivingTeams.length + 1 + idx;
-    const pts = (typeof scoringPlacements?.get === 'function' ? scoringPlacements.get(String(placement)) : scoringPlacements[placement]) ?? 0;
-    placementMap.set(teamId, {
-      placement,
-      placementPoints: pts,
-      isBooyah: false,
-    });
-  });
+  const placementMap = computeAuthoritativePlacements(liveState, scoringPlacements, booyahBonus);
 
   const teamList = Object.values(liveState.teams);
   const preparedTeams = teamList.map((team) => {
@@ -390,7 +340,8 @@ export async function publishMatchReport(
   tournamentId: string,
   matchId: string,
   user?: { _id?: any; name?: string; email?: string },
-  customResults?: any[]
+  customResults?: any[],
+  customMapName?: string
 ): Promise<{ success: boolean; match: any; report: any; message?: string }> {
   const idQueries: any[] = [{ customId: tournamentId }];
   if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -407,6 +358,10 @@ export async function publishMatchReport(
 
   // Generate and save official immutable MatchReport record
   const report = await generateAndSaveMatchReport(liveState, tour, user);
+  if (customMapName) {
+    report.mapName = customMapName;
+    await (report as any).save?.().catch(() => {});
+  }
 
   if (!Array.isArray(tour.matches)) tour.matches = [];
 
@@ -447,6 +402,9 @@ export async function publishMatchReport(
   if (match) {
     match.status = 'Completed';
     match.results = results;
+    if (customMapName) {
+      match.mapName = customMapName;
+    }
     match.updatedAt = new Date().toISOString();
   } else {
     const generatedId = matchId.startsWith('live-match-')
@@ -458,7 +416,7 @@ export async function publishMatchReport(
       tournamentId: tour.customId || tournamentId,
       matchNumber,
       customLabel: report.matchTitle || `Match ${String(matchNumber).padStart(2, '0')}`,
-      mapName: report.mapName || 'Bermuda',
+      mapName: customMapName || report.mapName || 'Bermuda',
       status: 'Completed',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { Tournament, type ITournament } from '../models/Tournament';
+import { MatchReport } from '../models/MatchReport';
 import { AuditActivity } from '../models/AuditActivity';
 import { registerServerDeletedMatch, updateAuthoritativeState } from './realtimeSync';
 import { ensureUserOrganization } from './tenantMigrationService';
@@ -251,6 +252,9 @@ export async function deleteMatchFromTournament(
 
   if (updated) {
     registerServerDeletedMatch(matchId);
+    MatchReport.deleteMany({
+      $or: [{ tournamentId, matchId }, { matchId }],
+    }).catch(() => {});
 
     updateAuthoritativeState(
       tournamentId,

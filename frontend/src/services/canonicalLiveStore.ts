@@ -184,19 +184,34 @@ export class CanonicalLiveStore {
     }
   }
 
+  public matchesContext(incomingMatchId: string): boolean {
+    if (!this.activeMatchId || !incomingMatchId) return false;
+    if (this.activeMatchId === incomingMatchId) return true;
+
+    // Check match number equivalence (e.g., 'live-match-3' and 'match-abc-3-xyz' or 'm3')
+    const activeNumMatch = this.activeMatchId.match(/match.*?(\d+)/i) || this.activeMatchId.match(/^m(\d+)$/i);
+    const incomingNumMatch = incomingMatchId.match(/match.*?(\d+)/i) || incomingMatchId.match(/^m(\d+)$/i);
+
+    if (activeNumMatch && incomingNumMatch && activeNumMatch[1] === incomingNumMatch[1]) {
+      return true;
+    }
+
+    return false;
+  }
+
   /**
    * Apply full authoritative state atomically (Latest State Wins)
    */
   public applyAuthoritativeState(state: CanonicalLiveMatchState): void {
     if (!state || !state.matchId) return;
 
-    // If switching to a different match context, reset lastAppliedRevision
-    if (this.activeMatchId && state.matchId !== this.activeMatchId) {
+    // If switching to a completely different match context, reset lastAppliedRevision
+    if (this.activeMatchId && !this.matchesContext(state.matchId)) {
       this.lastAppliedRevision = 0;
     }
 
     // Rule: Incoming revision < current revision for the SAME match: IGNORE
-    if (this.currentState && this.currentState.matchId === state.matchId && state.revision < this.lastAppliedRevision) {
+    if (this.currentState && this.matchesContext(state.matchId) && state.revision < this.lastAppliedRevision) {
       return;
     }
 
@@ -213,7 +228,10 @@ export class CanonicalLiveStore {
    */
   public applyAuthoritativePatch(patch: MatchDeltaPatch): void {
     if (!patch || !patch.matchId) return;
-    if (this.activeMatchId && patch.matchId !== this.activeMatchId) return;
+    if (this.activeMatchId && !this.matchesContext(patch.matchId)) return;
+    if (this.activeMatchId && patch.matchId !== this.activeMatchId && this.matchesContext(patch.matchId)) {
+      this.activeMatchId = patch.matchId;
+    }
 
     // Rule: Incoming revision <= current revision: IGNORE
     if (patch.revision <= this.lastAppliedRevision) {

@@ -45,12 +45,21 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
 
   const effectiveTournamentId =
     propTournamentId || urlParams?.get('tournamentId') || urlParams?.get('tournament') || storeTournament?.id || '';
-  const effectiveMatchId = propMatchId || urlParams?.get('matchId') || urlParams?.get('match') || undefined;
+  const storedMatchId = typeof window !== 'undefined'
+    ? localStorage.getItem(`remote_match_${effectiveTournamentId}`)
+    : null;
+  const effectiveMatchId = propMatchId || urlParams?.get('matchId') || urlParams?.get('match') || storedMatchId || undefined;
   const isDebugUrl = urlParams?.get('debug') === 'true';
 
   const [canonicalState, setCanonicalState] = useState<CanonicalLiveMatchState | null>(null);
   const [activeMatchId, setActiveMatchId] = useState<string>(effectiveMatchId || 'none');
-  const [pointRushThresholdInput, setPointRushThresholdInput] = useState<number>(50);
+  const [pointRushThresholdInput, setPointRushThresholdInput] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(`remote_point_rush_${effectiveTournamentId}`);
+      if (stored && !isNaN(Number(stored))) return Number(stored);
+    }
+    return 50;
+  });
   const [isSwitchingMatch, setIsSwitchingMatch] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<'LIVE' | 'CONNECTING' | 'DISCONNECTED'>('CONNECTING');
   const [loading, setLoading] = useState<boolean>(true);
@@ -72,7 +81,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   const [lastCommandId, setLastCommandId] = useState<string>('None');
 
   const totalMatchCount = Math.max(
-    tournamentInfo?.matchCount || 6,
+    tournamentInfo?.matchCount || tournamentInfo?.structure?.matchCount || 6,
     availableMatches.length,
     6
   );
@@ -156,17 +165,40 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         if (matches.length === 0) {
           // Zero-match state: connect to virtual 'live-match-1' session so Remote deck works seamlessly
           setActiveMatchId('live-match-1');
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(`remote_match_${effectiveTournamentId}`, 'live-match-1');
+          }
           liveStore.setMatchContext(orgId, effectiveTournamentId, 'live-match-1');
           setLoading(false);
           return;
         }
 
-        const currentTargetMatch = effectiveMatchId
-          ? matches.find((m: any) => (m.id || m.customId) === effectiveMatchId) || matches[0]
-          : matches[0];
+        let targetId = 'live-match-1';
+        if (effectiveMatchId) {
+          const matchNum = effectiveMatchId.match(/match.*?(\d+)/i) || effectiveMatchId.match(/^(\d+)$/);
+          const found = matches.find(
+            (m: any) =>
+              (m.id || m.customId) === effectiveMatchId ||
+              (matchNum && m.matchNumber === Number(matchNum[1]))
+          );
+          if (found) {
+            targetId = found.id || found.customId;
+          } else {
+            targetId = effectiveMatchId;
+          }
+        } else if (matches.length > 0) {
+          targetId = matches[0].id || matches[0].customId;
+        }
 
-        const targetId = currentTargetMatch.id || currentTargetMatch.customId;
         setActiveMatchId(targetId);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`remote_match_${effectiveTournamentId}`, targetId);
+          if (window.history.replaceState) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('match', targetId);
+            window.history.replaceState({}, '', url.toString());
+          }
+        }
         liveStore.setMatchContext(orgId, effectiveTournamentId, targetId);
       } catch (err: any) {
         if (!isCancelled) {
@@ -186,7 +218,12 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         setError(null);
         setSyncStatus('LIVE');
         if (cState.pointRushThreshold) {
-          setPointRushThresholdInput(cState.pointRushThreshold);
+          const stored = typeof window !== 'undefined'
+            ? localStorage.getItem(`remote_point_rush_${effectiveTournamentId}`)
+            : null;
+          if (!stored) {
+            setPointRushThresholdInput(cState.pointRushThreshold);
+          }
         }
       }
     });
@@ -196,6 +233,14 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       setIsSwitchingMatch(false);
       if (!isCancelled && nextData && nextData.nextMatchId) {
         setActiveMatchId(nextData.nextMatchId);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`remote_match_${effectiveTournamentId}`, nextData.nextMatchId);
+          if (window.history.replaceState) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('match', nextData.nextMatchId);
+            window.history.replaceState({}, '', url.toString());
+          }
+        }
         const org = canonicalState?.organizationId || tournamentInfo?.organizationId || 'org-default';
         liveStore.setMatchContext(org, effectiveTournamentId, nextData.nextMatchId, true);
         showToast({
@@ -302,6 +347,14 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
   const handleMatchSelect = (targetId: string) => {
     if (targetId === activeMatchId) return;
     setActiveMatchId(targetId);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`remote_match_${effectiveTournamentId}`, targetId);
+      if (window.history.replaceState) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('match', targetId);
+        window.history.replaceState({}, '', url.toString());
+      }
+    }
     const org = canonicalState?.organizationId || tournamentInfo?.organizationId || 'org-default';
     CanonicalLiveStore.getInstance().setMatchContext(org, effectiveTournamentId, targetId, true);
 
@@ -310,6 +363,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
     const matchNum = matchOption?.number || parseInt(targetId.replace(/[^0-9]/g, ''), 10) || 1;
     broadcastDisplayUpdate({
       tournamentId: effectiveTournamentId,
+      activeMatchId: targetId,
       activeMatchNumber: matchNum,
     });
   };
@@ -334,6 +388,9 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
 
   const handleSavePointRushThreshold = () => {
     executeCommand('SET_POINT_RUSH_THRESHOLD', { threshold: pointRushThresholdInput });
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`remote_point_rush_${effectiveTournamentId}`, String(pointRushThresholdInput));
+    }
     showToast({
       type: 'success',
       title: 'Point Rush Updated',
@@ -347,7 +404,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
     try {
       setIsLoadingReport(true);
       setIsReportPublished(false);
-      const res = await fetch(`/api/reports/${encodeURIComponent(effectiveTournamentId)}/${encodeURIComponent(activeMatchId)}`);
+      const res = await fetch(`/api/reports/${encodeURIComponent(effectiveTournamentId)}/${encodeURIComponent(activeMatchId)}?live=true`);
       const data = await res.json();
       if (data.success && data.data) {
         setFinalizedReport(data.data);
@@ -370,7 +427,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
     }
   };
 
-  const handlePublishReport = async (editedResults?: any[]) => {
+  const handlePublishReport = async (editedResults?: any[], mapName?: string) => {
     if (!activeMatchId || activeMatchId === 'none') return;
     try {
       setIsPublishingReport(true);
@@ -382,13 +439,14 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       const res = await fetch(`/api/reports/${encodeURIComponent(effectiveTournamentId)}/${encodeURIComponent(activeMatchId)}/publish`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ results: editedResults })
+        body: JSON.stringify({ results: editedResults, mapName })
       });
       const data = await res.json();
       if (data.success) {
         setIsReportPublished(true);
         const matchNum = data.data?.match?.matchNumber || data.data?.matchNumber || 1;
         const nextNum = matchNum + 1;
+        const nextMatchId = `live-match-${nextNum}`;
 
         // Immediately update frontend tournament store with the newly published match
         useTournamentStore.getState().refreshCurrentTournament(effectiveTournamentId);
@@ -402,8 +460,19 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         // Broadcast match switch to OBS display
         broadcastDisplayUpdate({
           tournamentId: effectiveTournamentId,
+          activeMatchId: nextMatchId,
           activeMatchNumber: nextNum,
         });
+
+        // Persist next match in localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`remote_match_${effectiveTournamentId}`, nextMatchId);
+          if (window.history.replaceState) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('match', nextMatchId);
+            window.history.replaceState({}, '', url.toString());
+          }
+        }
 
         // Automatically transfer Remote to the next match
         setTimeout(() => {

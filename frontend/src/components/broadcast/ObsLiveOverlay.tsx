@@ -157,11 +157,13 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
 
     // Subscribe to real-time display & match changes broadcast from Remote
     const unsubDisplay = subscribeToBroadcastDisplayUpdates(effectiveTournamentId, (disp) => {
-      if (!isCancelled && disp.activeMatchNumber !== undefined) {
-        const targetId = `live-match-${disp.activeMatchNumber}`;
-        const org = canonicalState?.organizationId || 'org-default';
-        liveStore.setMatchContext(org, effectiveTournamentId, targetId, true);
-        setLastSyncTime(Date.now());
+      if (!isCancelled) {
+        const targetId = disp.activeMatchId || (disp.activeMatchNumber !== undefined ? `live-match-${disp.activeMatchNumber}` : '');
+        if (targetId) {
+          const org = canonicalState?.organizationId || 'org-default';
+          liveStore.setMatchContext(org, effectiveTournamentId, targetId, false);
+          setLastSyncTime(Date.now());
+        }
       }
     });
 

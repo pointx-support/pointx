@@ -44,6 +44,7 @@ export interface BroadcastDisplayState {
   activeLayout?: string;
   activeTemplateId?: string;
   activeTemplate?: any;
+  activeMatchId?: string;
   activeMatchNumber?: number;
   activeScope?: string | number;
   customEventTitle?: string;

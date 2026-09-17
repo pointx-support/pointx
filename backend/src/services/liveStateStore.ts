@@ -102,6 +102,109 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
+/**
+ * Authoritative placement calculation:
+ * - Strictly enforces Booyah precedence: team with isBooyah is ALWAYS 1st place (12 pts)
+ * - Surviving teams ranked next by kills
+ * - Eliminated teams ranked in exact reverse elimination order (11th eliminated = 2nd place / 9 pts ... 1st eliminated = 12th place / 0 pts)
+ */
+export function computeAuthoritativePlacements(
+  liveState: CanonicalLiveMatchState,
+  scoringPlacements: any,
+  booyahBonus: number = 0
+): Map<string, { placement: number; placementPoints: number; isBooyah: boolean }> {
+  const defaultPlacementPts: Record<number, number> = {
+    1: 12, 2: 9, 3: 8, 4: 7, 5: 6, 6: 5, 7: 4, 8: 3, 9: 2, 10: 1, 11: 0, 12: 0,
+  };
+  const getPoints = (place: number) => {
+    if (typeof scoringPlacements?.get === 'function') {
+      const val = scoringPlacements.get(String(place));
+      if (val !== undefined) return Number(val);
+    }
+    if (scoringPlacements && scoringPlacements[place] !== undefined) {
+      return Number(scoringPlacements[place]);
+    }
+    return defaultPlacementPts[place] ?? 0;
+  };
+
+  const allTeams = Object.values(liveState.teams);
+  const eliminatedIds = [...(liveState.eliminationOrder || [])];
+
+  // 1. Identify Booyah winner:
+  let booyahWinner = allTeams.find((t) => t.isBooyah === true);
+
+  const survivingTeams = allTeams.filter((t) => !eliminatedIds.includes(t.teamId));
+  if (!booyahWinner) {
+    if (survivingTeams.length === 1) {
+      booyahWinner = survivingTeams[0];
+    } else if (survivingTeams.length > 1) {
+      const sortedSurviving = [...survivingTeams].sort((a, b) => b.kills - a.kills);
+      booyahWinner = sortedSurviving[0];
+    } else if (eliminatedIds.length > 0) {
+      const lastEliminatedId = eliminatedIds[eliminatedIds.length - 1];
+      booyahWinner = allTeams.find((t) => t.teamId === lastEliminatedId) || allTeams[0];
+    } else {
+      booyahWinner = allTeams[0];
+    }
+  }
+
+  const placementMap = new Map<string, { placement: number; placementPoints: number; isBooyah: boolean }>();
+
+  // Booyah Winner is strictly 1st place (12 points)
+  if (booyahWinner) {
+    placementMap.set(booyahWinner.teamId, {
+      placement: 1,
+      placementPoints: getPoints(1) + booyahBonus,
+      isBooyah: true,
+    });
+  }
+
+  // Other surviving teams (excluding Booyah winner), sorted by kills descending
+  const otherSurviving = survivingTeams
+    .filter((t) => booyahWinner && t.teamId !== booyahWinner.teamId)
+    .sort((a, b) => b.kills - a.kills);
+
+  let nextPlacement = 2;
+  for (const team of otherSurviving) {
+    placementMap.set(team.teamId, {
+      placement: nextPlacement,
+      placementPoints: getPoints(nextPlacement),
+      isBooyah: false,
+    });
+    nextPlacement++;
+  }
+
+  // Eliminated teams in reverse order of elimination (excluding Booyah winner if present)
+  const filteredEliminated = [...eliminatedIds]
+    .filter((id) => (booyahWinner ? id !== booyahWinner.teamId : true))
+    .reverse();
+
+  for (const teamId of filteredEliminated) {
+    if (!placementMap.has(teamId)) {
+      placementMap.set(teamId, {
+        placement: nextPlacement,
+        placementPoints: getPoints(nextPlacement),
+        isBooyah: false,
+      });
+      nextPlacement++;
+    }
+  }
+
+  // Any remaining teams not in surviving or eliminated: assign remaining placements
+  for (const team of allTeams) {
+    if (!placementMap.has(team.teamId)) {
+      placementMap.set(team.teamId, {
+        placement: nextPlacement,
+        placementPoints: getPoints(nextPlacement),
+        isBooyah: false,
+      });
+      nextPlacement++;
+    }
+  }
+
+  return placementMap;
+}
+
 export class LiveStateStore {
   private static instance: LiveStateStore | null = null;
   private redis: Redis | null = null;
@@ -232,7 +335,11 @@ export class LiveStateStore {
 
     // Sum up totalPoints for each team from prior COMPLETED matches
     const priorCompletedMatches = Array.isArray(tour?.matches)
-      ? tour.matches.filter((m: any) => m.status === 'Completed' && (m.id || m.customId) !== effectiveMatchId)
+      ? tour.matches.filter((m: any) =>
+          m.status === 'Completed' &&
+          (m.id || m.customId) !== effectiveMatchId &&
+          (m.matchNumber !== undefined && matchNumber ? m.matchNumber < matchNumber : true)
+        )
       : [];
 
     const teamsMap: Record<string, TeamLiveStatus> = {};
@@ -265,7 +372,12 @@ export class LiveStateStore {
         let priorTotalPoints = 0;
         for (const pm of priorCompletedMatches) {
           if (Array.isArray(pm.results)) {
-            const priorRes = pm.results.find((r: any) => r.teamId === t.id);
+            const priorRes = pm.results.find((r: any) =>
+              (t.id && r.teamId === t.id) ||
+              (t.customId && r.teamId === t.customId) ||
+              (t._id && r.teamId === String(t._id)) ||
+              (t.slotNumber !== undefined && r.slotNumber !== undefined && r.slotNumber === t.slotNumber)
+            );
             if (priorRes && priorRes.totalPoints !== undefined) {
               priorTotalPoints += Number(priorRes.totalPoints) || 0;
             }
@@ -674,31 +786,29 @@ export class LiveStateStore {
         state.isMatchFinished = true;
         diff.isMatchFinished = true;
 
-        const defaultPlacementPts: Record<number, number> = {
-          1: 12, 2: 9, 3: 8, 4: 7, 5: 6, 6: 5, 7: 4, 8: 3, 9: 2, 10: 1, 11: 0, 12: 0,
-        };
-        const scoringPlacements = scoringPreset?.placementPoints || defaultPlacementPts;
         const booyahBonus = scoringPreset?.booyahBonus ?? 0;
         const killRate = scoringPreset?.killPoints ?? 1;
 
-        const eliminatedIds = [...state.eliminationOrder];
-        const survivingTeams = Object.values(state.teams).filter((t) => !eliminatedIds.includes(t.teamId));
-
-        survivingTeams.sort((a, b) => b.kills - a.kills);
+        const authoritativePlacements = computeAuthoritativePlacements(
+          state,
+          scoringPreset?.placementPoints,
+          booyahBonus
+        );
 
         const updatedTeams: Record<string, Partial<TeamLiveStatus>> = {};
 
-        survivingTeams.forEach((team, idx) => {
-          const placement = idx + 1;
-          const isBooyah = placement === 1;
-          const placePts = (typeof scoringPlacements.get === 'function' ? scoringPlacements.get(String(placement)) : scoringPlacements[placement]) ?? 0;
-          team.placement = placement;
-          team.isBooyah = isBooyah;
-          team.placementPoints = placePts + (isBooyah ? booyahBonus : 0);
+        for (const [teamId, team] of Object.entries(state.teams)) {
+          const placementInfo = authoritativePlacements.get(teamId);
+          if (placementInfo) {
+            team.placement = placementInfo.placement;
+            team.isBooyah = placementInfo.isBooyah;
+            team.placementPoints = placementInfo.placementPoints;
+          }
           team.killPoints = team.kills * killRate;
           team.points = (team.priorTotalPoints || 0) + team.placementPoints + team.killPoints + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
           team.pointRushEnabled = team.points >= state.pointRushThreshold;
-          updatedTeams[team.teamId] = {
+
+          updatedTeams[teamId] = {
             placement: team.placement,
             isBooyah: team.isBooyah,
             placementPoints: team.placementPoints,
@@ -706,30 +816,7 @@ export class LiveStateStore {
             points: team.points,
             pointRushEnabled: team.pointRushEnabled,
           };
-        });
-
-        const reversedEliminated = [...eliminatedIds].reverse();
-        reversedEliminated.forEach((teamId, idx) => {
-          const team = state.teams[teamId];
-          if (team) {
-            const placement = survivingTeams.length + 1 + idx;
-            const placePts = (typeof scoringPlacements.get === 'function' ? scoringPlacements.get(String(placement)) : scoringPlacements[placement]) ?? 0;
-            team.placement = placement;
-            team.isBooyah = false;
-            team.placementPoints = placePts;
-            team.killPoints = team.kills * killRate;
-            team.points = (team.priorTotalPoints || 0) + team.placementPoints + team.killPoints + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
-            team.pointRushEnabled = team.points >= state.pointRushThreshold;
-            updatedTeams[teamId] = {
-              placement: team.placement,
-              isBooyah: team.isBooyah,
-              placementPoints: team.placementPoints,
-              killPoints: team.killPoints,
-              points: team.points,
-              pointRushEnabled: team.pointRushEnabled,
-            };
-          }
-        });
+        }
 
         diff.teams = updatedTeams;
         break;

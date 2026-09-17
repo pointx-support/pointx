@@ -16,10 +16,18 @@ router.get('/:tournamentId/:matchId', async (req: Request, res: Response) => {
     const matchId = req.params.matchId as string;
     const version = req.query.version ? Number(req.query.version) : undefined;
 
-    let report = await getMatchReport(tournamentId, matchId, version);
+    const isLiveRequested = req.query.live === 'true' || matchId.startsWith('live-match-');
+
+    let report = null;
+    if (!isLiveRequested) {
+      report = await getMatchReport(tournamentId, matchId, version);
+    }
     if (!report) {
       // If not yet finalized, dynamically generate live preview report directly from live state
       report = await generateMatchReportPreview(tournamentId, matchId);
+    }
+    if (!report && isLiveRequested) {
+      report = await getMatchReport(tournamentId, matchId, version);
     }
 
     if (!report) {
@@ -48,9 +56,9 @@ router.post('/:tournamentId/:matchId/publish', async (req: Request, res: Respons
     const tournamentId = req.params.tournamentId as string;
     const matchId = req.params.matchId as string;
     const user = (req as any).user;
-    const { results } = req.body || {};
+    const { results, mapName } = req.body || {};
 
-    const result = await publishMatchReport(tournamentId, matchId, user, results);
+    const result = await publishMatchReport(tournamentId, matchId, user, results, mapName);
     return res.status(200).json({
       success: true,
       data: result,

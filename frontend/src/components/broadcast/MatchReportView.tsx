@@ -65,7 +65,7 @@ export interface MatchReportData {
 export interface MatchReportViewProps {
   report: MatchReportData;
   onClose?: () => void;
-  onPublish?: (editedResults?: any[]) => Promise<void> | void;
+  onPublish?: (editedResults?: any[], mapName?: string) => Promise<void> | void;
   isPublishing?: boolean;
   isPublished?: boolean;
 }
@@ -78,6 +78,7 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
   isPublished = false,
 }) => {
   const [standings, setStandings] = useState(report.standings);
+  const [selectedMap, setSelectedMap] = useState<string>(report.mapName || 'Bermuda');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
 
   useEffect(() => {
@@ -88,7 +89,10 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
 
   useEffect(() => {
     setStandings(report.standings);
-  }, [report.standings]);
+    if (report.mapName) {
+      setSelectedMap(report.mapName);
+    }
+  }, [report.standings, report.mapName]);
 
   const handleUpdateKills = (teamId: string, newKills: number) => {
     const safeKills = Math.max(0, isNaN(newKills) ? 0 : newKills);
@@ -137,19 +141,40 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
   };
 
   const handleToggleBooyah = (teamId: string) => {
-    setStandings((prev) =>
-      prev.map((t) => {
-        const isCurrent = t.teamId === teamId;
-        const willBeBooyah = isCurrent ? !t.isBooyah : false;
-        return {
-          ...t,
-          isBooyah: willBeBooyah,
-          placement: willBeBooyah ? 1 : (t.placement === 1 ? 2 : t.placement),
-          placementPoints: willBeBooyah ? 12 : t.placementPoints,
-          totalPoints: (willBeBooyah ? 12 : t.placementPoints) + (t.kills || 0),
-        };
-      })
-    );
+    setStandings((prev) => {
+      const prevBooyahTeam = prev.find((t) => t.isBooyah || t.placement === 1);
+      const isCurrentAlreadyBooyah = prevBooyahTeam?.teamId === teamId;
+
+      return prev.map((t) => {
+        if (t.teamId === teamId) {
+          const willBeBooyah = !isCurrentAlreadyBooyah;
+          const placement = willBeBooyah ? 1 : 2;
+          const placementPoints = willBeBooyah ? 12 : 9;
+          const totalPoints = placementPoints + (t.kills || 0) + (t.bonusPoints || 0) - (t.penaltyPoints || 0);
+          return {
+            ...t,
+            isBooyah: willBeBooyah,
+            placement,
+            placementPoints,
+            totalPoints,
+          };
+        }
+        if (prevBooyahTeam && t.teamId === prevBooyahTeam.teamId && !isCurrentAlreadyBooyah) {
+          // Displace previous Booyah team to 2nd place (9 points)
+          const placement = 2;
+          const placementPoints = 9;
+          const totalPoints = placementPoints + (t.kills || 0) + (t.bonusPoints || 0) - (t.penaltyPoints || 0);
+          return {
+            ...t,
+            isBooyah: false,
+            placement,
+            placementPoints,
+            totalPoints,
+          };
+        }
+        return t;
+      });
+    });
   };
 
   const dynamicSummary = useMemo(() => {
@@ -178,7 +203,7 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
 
   const handlePublishClick = () => {
     if (onPublish) {
-      onPublish(standings);
+      onPublish(standings, selectedMap);
     }
   };
 
@@ -224,10 +249,26 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
                 FINALIZED
               </span>
             </div>
-            <p className="text-[11px] sm:text-xs text-slate-400 font-mono mt-0.5 print:text-neutral-600">
-              Map: <span className="text-slate-200 font-semibold print:text-black">{report.mapName}</span> •{' '}
+            <div className="text-[11px] sm:text-xs text-slate-400 font-mono mt-1 print:text-neutral-600 flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400">Map:</span>
+                <select
+                  value={selectedMap}
+                  onChange={(e) => setSelectedMap(e.target.value)}
+                  className="bg-[#29174d] hover:bg-[#341e61] border border-purple-600/50 text-amber-300 font-semibold rounded px-2 py-0.5 text-xs focus:outline-none focus:border-amber-400 cursor-pointer print:hidden"
+                  title="Change map for this match report"
+                >
+                  {['Bermuda', 'Purgatory', 'Kalahari', 'Alpine', 'Nexterra'].map((m) => (
+                    <option key={m} value={m} className="bg-[#1e1538] text-white">
+                      {m}
+                    </option>
+                  ))}
+                </select>
+                <span className="hidden print:inline font-semibold text-black">{selectedMap}</span>
+              </div>
+              <span className="hidden sm:inline text-slate-600">•</span>
               <span className="hidden sm:inline">Finalized: {formattedDate}</span>
-            </p>
+            </div>
           </div>
         </div>
 
