@@ -84,6 +84,38 @@ export const MasterGraphicRenderer: React.FC<MasterGraphicRendererProps> = ({
     );
   }
 
+  // When in Interactive Studio Mode, or when calibrated custom slot coordinates exist,
+  // render via PointsTableRenderer (DynamicCustomTemplate) so all templates
+  // (Warheads, Leaders, Top MVP, Roster, Slot List, Victory Certificate) share the exact
+  // same precision editing preview, slot dragging, target element inspection, and coordinates.
+  const hasCalibratedSlots = Boolean(
+    (template?.alignment?.slots && Object.keys(template.alignment.slots).length > 0) ||
+    (template?.alignment?.elements && Object.keys(template.alignment.elements).length > 0)
+  );
+
+  if (isInteractive || hasCalibratedSlots) {
+    const data =
+      options?.standingsData ||
+      getPointsTableData(tournament, {
+        customTitle: options?.customTitle,
+        organizerName: options?.organizerName
+      });
+    return (
+      <PointsTableRenderer
+        template={template}
+        data={data}
+        svgRef={svgRef}
+        selectedElementKey={selectedElementKey}
+        selectedElementKeys={selectedElementKeys}
+        onSelectElement={onSelectElement}
+        onSelectMultipleElements={onSelectMultipleElements}
+        onDragElement={onDragElement}
+        isInteractive={isInteractive}
+        hueRotate={hueRotate}
+      />
+    );
+  }
+
   switch (templateType) {
     case 'KILL_LEADER': {
       const data = getKillLeaderData(tournament, {

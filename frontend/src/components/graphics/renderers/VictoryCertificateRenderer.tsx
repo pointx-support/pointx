@@ -67,22 +67,26 @@ export const VictoryCertificateRenderer: React.FC<VictoryCertificateRendererProp
         </>
       )}
 
-      {/* Ornate Gold Border Double Frame */}
-      <rect x="40" y="40" width={width - 80} height={height - 80} rx="30" fill="none" stroke="url(#vcGoldGrad)" strokeWidth="6" />
-      <rect x="56" y="56" width={width - 112} height={height - 112} rx="22" fill="#0C0F1A" fillOpacity="0.85" stroke="#ffffff" strokeOpacity="0.12" strokeWidth="1.5" />
+      {/* 2. Ornate Gold Border Double Frame & Default Header Banner (Rendered only on fallback gradient background, NOT on custom uploaded artwork) */}
+      {!artworkUrl && (
+        <>
+          <rect x="40" y="40" width={width - 80} height={height - 80} rx="30" fill="none" stroke="url(#vcGoldGrad)" strokeWidth="6" />
+          <rect x="56" y="56" width={width - 112} height={height - 112} rx="22" fill="#0C0F1A" fillOpacity="0.85" stroke="#ffffff" strokeOpacity="0.12" strokeWidth="1.5" />
 
-      {/* Certificate Header Banner */}
-      <g transform={`translate(${width / 2}, 160)`}>
-        <text x="0" y="0" textAnchor="middle" fill="url(#vcGoldGrad)" fontFamily="sans-serif" fontWeight="900" fontSize="24" letterSpacing="6">
-          POINTX ESPORTS PLATFORM
-        </text>
-        <text x="0" y="70" textAnchor="middle" fill="#FFFFFF" fontFamily="sans-serif" fontWeight="900" fontSize="68" letterSpacing="4" filter="url(#vcGlow)">
-          CERTIFICATE OF VICTORY
-        </text>
-        <text x="0" y="115" textAnchor="middle" fill="#A0AEC0" fontFamily="sans-serif" fontWeight="700" fontSize="18" letterSpacing="5">
-          OFFICIAL GRAND CHAMPIONSHIP ACCREDITATION
-        </text>
-      </g>
+          {/* Certificate Header Banner */}
+          <g transform={`translate(${width / 2}, 160)`}>
+            <text x="0" y="0" textAnchor="middle" fill="url(#vcGoldGrad)" fontFamily="sans-serif" fontWeight="900" fontSize="24" letterSpacing="6">
+              POINTX ESPORTS PLATFORM
+            </text>
+            <text x="0" y="70" textAnchor="middle" fill="#FFFFFF" fontFamily="sans-serif" fontWeight="900" fontSize="68" letterSpacing="4" filter="url(#vcGlow)">
+              CERTIFICATE OF VICTORY
+            </text>
+            <text x="0" y="115" textAnchor="middle" fill="#A0AEC0" fontFamily="sans-serif" fontWeight="700" fontSize="18" letterSpacing="5">
+              OFFICIAL GRAND CHAMPIONSHIP ACCREDITATION
+            </text>
+          </g>
+        </>
+      )}
 
       {/* Presentation Body */}
       <g transform={`translate(${width / 2}, 370)`}>

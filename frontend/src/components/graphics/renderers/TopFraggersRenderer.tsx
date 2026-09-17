@@ -83,51 +83,55 @@ export const TopFraggersRenderer: React.FC<TopFraggersRendererProps> = ({
         </>
       )}
 
-      {/* Cyber Grid Lines */}
-      <g stroke="#ffffff" strokeOpacity="0.04" strokeWidth="1">
-        {Array.from({ length: 14 }).map((_, i) => (
-          <line key={`h-${i}`} x1="0" y1={i * 100} x2={width} y2={i * 100} />
-        ))}
-        {Array.from({ length: 12 }).map((_, i) => (
-          <line key={`v-${i}`} x1={i * 100} y1="0" x2={i * 100} y2={height} />
-        ))}
-      </g>
+      {/* Cyber Grid Lines & Header Banner (Rendered only on fallback gradient background, NOT on custom uploaded artwork) */}
+      {!artworkUrl && (
+        <>
+          <g stroke="#ffffff" strokeOpacity="0.04" strokeWidth="1">
+            {Array.from({ length: 14 }).map((_, i) => (
+              <line key={`h-${i}`} x1="0" y1={i * 100} x2={width} y2={i * 100} />
+            ))}
+            {Array.from({ length: 12 }).map((_, i) => (
+              <line key={`v-${i}`} x1={i * 100} y1="0" x2={i * 100} y2={height} />
+            ))}
+          </g>
 
-      {/* Top Header Branding Banner */}
-      <g transform={`translate(${isLandscape ? 120 : 60}, 50)`}>
-        <rect
-          width={width - (isLandscape ? 240 : 120)}
-          height="90"
-          rx="16"
-          fill="#151928"
-          fillOpacity="0.85"
-          stroke="#ffffff"
-          strokeOpacity="0.12"
-        />
-        <text x="30" y="42" fill="#FFFFFF" fontFamily="sans-serif" fontWeight="900" fontSize="24" letterSpacing="1">
-          {tournamentTitle.toUpperCase()}
-        </text>
-        <text x="30" y="68" fill="#FFD200" fontFamily="monospace" fontWeight="700" fontSize="13" letterSpacing="2">
-          ORGANIZED BY: {organizerName.toUpperCase()}
-        </text>
+          {/* Top Header Branding Banner */}
+          <g transform={`translate(${isLandscape ? 120 : 60}, 50)`}>
+            <rect
+              width={width - (isLandscape ? 240 : 120)}
+              height="90"
+              rx="16"
+              fill="#151928"
+              fillOpacity="0.85"
+              stroke="#ffffff"
+              strokeOpacity="0.12"
+            />
+            <text x="30" y="42" fill="#FFFFFF" fontFamily="sans-serif" fontWeight="900" fontSize="24" letterSpacing="1">
+              {tournamentTitle.toUpperCase()}
+            </text>
+            <text x="30" y="68" fill="#FFD200" fontFamily="monospace" fontWeight="700" fontSize="13" letterSpacing="2">
+              ORGANIZED BY: {organizerName.toUpperCase()}
+            </text>
 
-        <g transform={`translate(${width - (isLandscape ? 470 : 350)}, 24)`}>
-          <rect width="140" height="42" rx="10" fill="#FFD200" fillOpacity="0.15" stroke="#FFD200" strokeWidth="1.5" />
-          <text x="70" y="27" textAnchor="middle" fill="#FFD200" fontFamily="sans-serif" fontWeight="900" fontSize="13" letterSpacing="1.5">
-            TOP FRAGGERS
-          </text>
-        </g>
-      </g>
+            <g transform={`translate(${width - (isLandscape ? 470 : 350)}, 24)`}>
+              <rect width="140" height="42" rx="10" fill="#FFD200" fillOpacity="0.15" stroke="#FFD200" strokeWidth="1.5" />
+              <text x="70" y="27" textAnchor="middle" fill="#FFD200" fontFamily="sans-serif" fontWeight="900" fontSize="13" letterSpacing="1.5">
+                TOP FRAGGERS
+              </text>
+            </g>
+          </g>
 
-      {/* Main Title Badge */}
-      <g transform={`translate(${width / 2}, 190)`}>
-        <text x="0" y="0" textAnchor="middle" fill="url(#tfGoldGrad)" fontFamily="sans-serif" fontWeight="900" fontSize="48" letterSpacing="3" filter="url(#tfGlow)">
-          🏆 TOP 3 FRAGGERS LEADERBOARD
-        </text>
-        <text x="0" y="32" textAnchor="middle" fill="#A0AEC0" fontFamily="monospace" fontWeight="700" fontSize="14" letterSpacing="4">
-          TOURNAMENT MOST VALUABLE PLAYERS (MVP)
-        </text>
-      </g>
+          {/* Main Title Badge */}
+          <g transform={`translate(${width / 2}, 190)`}>
+            <text x="0" y="0" textAnchor="middle" fill="url(#tfGoldGrad)" fontFamily="sans-serif" fontWeight="900" fontSize="48" letterSpacing="3" filter="url(#tfGlow)">
+              🏆 TOP 3 FRAGGERS LEADERBOARD
+            </text>
+            <text x="0" y="32" textAnchor="middle" fill="#A0AEC0" fontFamily="monospace" fontWeight="700" fontSize="14" letterSpacing="4">
+              TOURNAMENT MOST VALUABLE PLAYERS (MVP)
+            </text>
+          </g>
+        </>
+      )}
 
       {/* 2. PODIUM LAYOUT (1st Center Stage, 2nd Left, 3rd Right) */}
       {layoutMode === 'podium' ? (

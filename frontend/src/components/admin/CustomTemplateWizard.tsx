@@ -34,10 +34,8 @@ import {
   Eye,
   CheckCircle2,
   Building,
-  Layers,
-  Upload,
+  Layers
 } from 'lucide-react';
-import { analyzePsdTemplateBuffer, type PsdAnalysisResult } from '../../engine/psdTemplateAnalyzer';
 
 export interface CustomTemplateWizardProps {
   isOpen: boolean;
@@ -380,11 +378,8 @@ export const CustomTemplateWizard: React.FC<CustomTemplateWizardProps> = ({
   const [organizations, setOrganizations] = useState<Array<{ id: string; name: string; email: string; logoUrl?: string }>>([]);
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
 
-  // PSD / Photopea Auto-Import state
+  // Custom Alignment state (calibrated in Template Studio)
   const [customAlignment, setCustomAlignment] = useState<TemplateAlignmentConfig | null>(null);
-  const [isAnalyzingPsd, setIsAnalyzingPsd] = useState(false);
-  const [psdAnalysisSummary, setPsdAnalysisSummary] = useState<PsdAnalysisResult['detectedSummary'] | null>(null);
-  const psdFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Initialize or Reset
   useEffect(() => {
@@ -401,7 +396,6 @@ export const CustomTemplateWizard: React.FC<CustomTemplateWizardProps> = ({
       setVisibility(initialTemplate.visibility || 'GLOBAL');
       setAllowedOrganizationIds(initialTemplate.allowedOrganizationIds || []);
       setCustomAlignment(initialTemplate.alignment || null);
-      setPsdAnalysisSummary(null);
       setCurrentStep(1);
     } else {
       setName('');
@@ -415,7 +409,6 @@ export const CustomTemplateWizard: React.FC<CustomTemplateWizardProps> = ({
       setVisibility('GLOBAL');
       setAllowedOrganizationIds([]);
       setCustomAlignment(null);
-      setPsdAnalysisSummary(null);
       setCurrentStep(1);
     }
   }, [initialTemplate, isOpen]);
@@ -516,13 +509,22 @@ export const CustomTemplateWizard: React.FC<CustomTemplateWizardProps> = ({
       subtitleTextColor: '#ffffff',
     };
 
+    const resolvedAlignment: TemplateAlignmentConfig = customAlignment
+      ? {
+          ...customAlignment,
+          aspectRatio,
+          width: customAlignment.aspectRatio === aspectRatio && customAlignment.width ? customAlignment.width : width,
+          height: customAlignment.aspectRatio === aspectRatio && customAlignment.height ? customAlignment.height : height,
+        }
+      : baseAlignment;
+
     return {
       id: initialTemplate?.id || 'preview-wizard-template',
       name: name.trim() || 'Custom Template Preview',
       description: description.trim() || 'Esports Tournament Template',
       imageUrl: imageUrl.trim() || '',
       aspectRatio,
-      alignment: customAlignment || baseAlignment,
+      alignment: resolvedAlignment,
       templateType: section,
       category,
       defaultLayout,
@@ -536,51 +538,6 @@ export const CustomTemplateWizard: React.FC<CustomTemplateWizardProps> = ({
       updatedAt: new Date().toISOString(),
     };
   }, [name, description, imageUrl, aspectRatio, section, category, defaultLayout, elements, fontFamily, visibility, allowedOrganizationIds, initialTemplate, customAlignment]);
-
-  // PSD / Photopea Auto-Import Upload Handler
-  const handlePsdUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setIsAnalyzingPsd(true);
-      const buffer = await file.arrayBuffer();
-      const result = analyzePsdTemplateBuffer(buffer);
-
-      if (result.success) {
-        setCustomAlignment(result.alignment);
-        setPsdAnalysisSummary(result.detectedSummary);
-        setImageUrl(result.cleanImageUrl);
-        setAspectRatio(result.aspectRatio);
-        setSection('POINTS_TABLE');
-        setCategory('standings');
-        setDefaultLayout(result.layoutMode);
-
-        const cleanName = file.name.replace(/\.psd$/i, '').replace(/[_-]+/g, ' ').trim();
-        if (!name.trim()) {
-          setName(cleanName || 'Custom Tournament Template');
-        }
-
-        showToast({
-          type: 'success',
-          title: 'PSD Auto-Analyzed ⚡',
-          message: `Detected ${result.detectedSummary.teamsCount} team slots, ${result.detectedSummary.ranksCount} serial ranks, and background artwork.`,
-        });
-
-        // Jump straight to Live Section Preview (Step 6)
-        setCurrentStep(6);
-      }
-    } catch (err: any) {
-      showToast({
-        type: 'error',
-        title: 'PSD Analysis Failed',
-        message: err?.message || 'Could not parse PSD file. Please ensure it is a valid Photoshop / Photopea .psd file.',
-      });
-    } finally {
-      setIsAnalyzingPsd(false);
-      if (e.target) e.target.value = '';
-    }
-  };
 
   // Step Validation Checkers
   const canProceedStep1 = Boolean(name.trim() && imageUrl.trim());
@@ -632,6 +589,13 @@ export const CustomTemplateWizard: React.FC<CustomTemplateWizardProps> = ({
 
     setIsSubmitting(true);
     try {
+      const finalAlignment = {
+        ...(previewTemplate.alignment || {}),
+        aspectRatio,
+        width: aspectRatio === '4:5' ? 1080 : 1920,
+        height: aspectRatio === '4:5' ? 1350 : 1080,
+      };
+
       const payload: any = {
         name: name.trim(),
         description: description.trim() || 'Custom esports template calibrated by Admin.',
@@ -645,7 +609,7 @@ export const CustomTemplateWizard: React.FC<CustomTemplateWizardProps> = ({
         visibility,
         allowedOrganizationIds: visibility === 'ORGANIZATION_RESTRICTED' ? allowedOrganizationIds : [],
         isPublished: true,
-        alignment: previewTemplate.alignment,
+        alignment: finalAlignment,
       };
 
       let savedId: string;
@@ -751,44 +715,6 @@ export const CustomTemplateWizard: React.FC<CustomTemplateWizardProps> = ({
               </p>
             </div>
 
-            {/* Quick Action: Auto-Import from Photopea / Photoshop (.PSD) */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0 border border-amber-500/40">
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="text-xs font-black uppercase font-display text-[var(--text-primary)] flex items-center gap-1.5">
-                    <span>Auto-Import from Photopea / Photoshop (.PSD)</span>
-                    <span className="px-1.5 py-0.5 rounded bg-amber-500 text-black font-mono text-[9px] font-bold">100% AUTOMATIC</span>
-                  </div>
-                  <p className="text-[11px] text-[var(--text-secondary)]">
-                    Upload your .psd file with "Team 1".."Team 12", serial numbers, and logos. PointX auto-aligns every element instantly without Admin Studio!
-                  </p>
-                </div>
-              </div>
-              <div className="shrink-0 flex items-center gap-2 w-full sm:w-auto">
-                <input
-                  ref={psdFileInputRef}
-                  type="file"
-                  accept=".psd"
-                  className="hidden"
-                  onChange={handlePsdUpload}
-                />
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  disabled={isAnalyzingPsd}
-                  onClick={() => psdFileInputRef.current?.click()}
-                  leftIcon={isAnalyzingPsd ? <span className="animate-spin">⏳</span> : <Upload className="h-3.5 w-3.5" />}
-                  className="w-full sm:w-auto bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-bold text-xs shadow-md"
-                >
-                  {isAnalyzingPsd ? 'Analyzing Layers...' : 'Upload .PSD Template'}
-                </Button>
-              </div>
-            </div>
-
             <Input
               label="Template Name *"
               value={name}
@@ -811,7 +737,10 @@ export const CustomTemplateWizard: React.FC<CustomTemplateWizardProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setAspectRatio('16:9')}
+                  onClick={() => {
+                    setAspectRatio('16:9');
+                    setCustomAlignment((prev) => (prev ? { ...prev, aspectRatio: '16:9', width: 1920, height: 1080 } : null));
+                  }}
                   className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-3 ${
                     aspectRatio === '16:9'
                       ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/10 text-[var(--text-primary)]'
@@ -829,7 +758,10 @@ export const CustomTemplateWizard: React.FC<CustomTemplateWizardProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setAspectRatio('4:5')}
+                  onClick={() => {
+                    setAspectRatio('4:5');
+                    setCustomAlignment((prev) => (prev ? { ...prev, aspectRatio: '4:5', width: 1080, height: 1350 } : null));
+                  }}
                   className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-3 ${
                     aspectRatio === '4:5'
                       ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/10 text-[var(--text-primary)]'
@@ -1165,25 +1097,6 @@ export const CustomTemplateWizard: React.FC<CustomTemplateWizardProps> = ({
                 {aspectRatio === '4:5' ? '1080 × 1350' : '1920 × 1080'}
               </span>
             </div>
-
-            {psdAnalysisSummary && (
-              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-1.5 animate-fade-in">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold font-mono">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>PSD Auto-Alignment Complete ({psdAnalysisSummary.teamsCount} Team Slots Locked)</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-emerald-300/80">0 Admin Studio Tweaks Needed</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5 text-[10px] font-mono text-[var(--text-secondary)]">
-                  {psdAnalysisSummary.details.map((d, i) => (
-                    <span key={i} className="px-2 py-0.5 rounded bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)]">
-                      {d}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div className="flex justify-center p-2 rounded-2xl bg-black/60 border border-[var(--border-subtle)]">
               <div className={`relative w-full ${aspectRatio === '4:5' ? 'max-w-xs aspect-[4/5]' : 'max-w-xl aspect-video'} rounded-xl overflow-hidden shadow-2xl bg-black border border-white/10 flex items-center justify-center`}>

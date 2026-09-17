@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import type { KillLeaderRenderData } from '../../../types/customTemplate';
 
 export interface KillLeaderRendererProps {
@@ -76,52 +76,56 @@ export const KillLeaderRenderer: React.FC<KillLeaderRendererProps> = ({
         </>
       )}
 
-      {/* Cyber Grid Lines Overlay */}
-      <g stroke="#ffffff" strokeOpacity="0.04" strokeWidth="1">
-        {Array.from({ length: 14 }).map((_, i) => (
-          <line key={`h-${i}`} x1="0" y1={i * 100} x2={width} y2={i * 100} />
-        ))}
-        {Array.from({ length: 12 }).map((_, i) => (
-          <line key={`v-${i}`} x1={i * 100} y1="0" x2={i * 100} y2={height} />
-        ))}
-      </g>
+      {/* Cyber Grid Lines Overlay & Top Branding Banner (Rendered only on fallback gradient background, NOT on custom uploaded artwork) */}
+      {!artworkUrl && (
+        <>
+          <g stroke="#ffffff" strokeOpacity="0.04" strokeWidth="1">
+            {Array.from({ length: 14 }).map((_, i) => (
+              <line key={`h-${i}`} x1="0" y1={i * 100} x2={width} y2={i * 100} />
+            ))}
+            {Array.from({ length: 12 }).map((_, i) => (
+              <line key={`v-${i}`} x1={i * 100} y1="0" x2={i * 100} y2={height} />
+            ))}
+          </g>
 
-      {/* Top Header Branding Banner */}
-      <g transform={`translate(${isLandscape ? 120 : 60}, 50)`}>
-        <rect
-          width={width - (isLandscape ? 240 : 120)}
-          height="90"
-          rx="16"
-          fill="#151928"
-          fillOpacity="0.85"
-          stroke="#ffffff"
-          strokeOpacity="0.12"
-        />
-        <text x="30" y="42" fill="#FFFFFF" fontFamily="sans-serif" fontWeight="900" fontSize="24" letterSpacing="1">
-          {tournamentTitle.toUpperCase()}
-        </text>
-        <text x="30" y="68" fill="#FFD200" fontFamily="monospace" fontWeight="700" fontSize="13" letterSpacing="2">
-          ORGANIZED BY: {organizerName.toUpperCase()}
-        </text>
+          {/* Top Header Branding Banner */}
+          <g transform={`translate(${isLandscape ? 120 : 60}, 50)`}>
+            <rect
+              width={width - (isLandscape ? 240 : 120)}
+              height="90"
+              rx="16"
+              fill="#151928"
+              fillOpacity="0.85"
+              stroke="#ffffff"
+              strokeOpacity="0.12"
+            />
+            <text x="30" y="42" fill="#FFFFFF" fontFamily="sans-serif" fontWeight="900" fontSize="24" letterSpacing="1">
+              {tournamentTitle.toUpperCase()}
+            </text>
+            <text x="30" y="68" fill="#FFD200" fontFamily="monospace" fontWeight="700" fontSize="13" letterSpacing="2">
+              ORGANIZED BY: {organizerName.toUpperCase()}
+            </text>
 
-        {/* Free Fire Badge */}
-        <g transform={`translate(${width - (isLandscape ? 470 : 350)}, 24)`}>
-          <rect width="140" height="42" rx="10" fill="#FF416C" fillOpacity="0.18" stroke="#FF416C" strokeWidth="1.5" />
-          <text x="70" y="27" textAnchor="middle" fill="#FF4B2B" fontFamily="sans-serif" fontWeight="900" fontSize="13" letterSpacing="1.5">
-            KILL LEADER
-          </text>
-        </g>
-      </g>
+            {/* Free Fire Badge */}
+            <g transform={`translate(${width - (isLandscape ? 470 : 350)}, 24)`}>
+              <rect width="140" height="42" rx="10" fill="#FF416C" fillOpacity="0.18" stroke="#FF416C" strokeWidth="1.5" />
+              <text x="70" y="27" textAnchor="middle" fill="#FF4B2B" fontFamily="sans-serif" fontWeight="900" fontSize="13" letterSpacing="1.5">
+                KILL LEADER
+              </text>
+            </g>
+          </g>
 
-      {/* Main Title Badge */}
-      <g transform={`translate(${width / 2}, 190)`}>
-        <text x="0" y="0" textAnchor="middle" fill="url(#klCrimsonGrad)" fontFamily="sans-serif" fontWeight="900" fontSize="48" letterSpacing="3" filter="url(#klGlow)">
-          ⚔️ WARHEAD KILL LEADER
-        </text>
-        <text x="0" y="32" textAnchor="middle" fill="#A0AEC0" fontFamily="monospace" fontWeight="700" fontSize="14" letterSpacing="4">
-          TOURNAMENT MOST VALUABLE ELIMINATOR
-        </text>
-      </g>
+          {/* Main Title Badge */}
+          <g transform={`translate(${width / 2}, 190)`}>
+            <text x="0" y="0" textAnchor="middle" fill="url(#klCrimsonGrad)" fontFamily="sans-serif" fontWeight="900" fontSize="48" letterSpacing="3" filter="url(#klGlow)">
+              ⚔️ WARHEAD KILL LEADER
+            </text>
+            <text x="0" y="32" textAnchor="middle" fill="#A0AEC0" fontFamily="monospace" fontWeight="700" fontSize="14" letterSpacing="4">
+              TOURNAMENT MOST VALUABLE ELIMINATOR
+            </text>
+          </g>
+        </>
+      )}
 
       {/* Central Spotlight Card */}
       <g transform={`translate(${(width - 760) / 2}, 260)`}>

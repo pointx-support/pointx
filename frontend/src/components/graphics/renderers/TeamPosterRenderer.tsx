@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import type { TeamPosterRenderData } from '../../../types/customTemplate';
 
 export interface TeamPosterRendererProps {
@@ -71,41 +71,45 @@ export const TeamPosterRenderer: React.FC<TeamPosterRendererProps> = ({
         </>
       )}
 
-      {/* Cyber Grid Lines */}
-      <g stroke="#ffffff" strokeOpacity="0.04" strokeWidth="1">
-        {Array.from({ length: 14 }).map((_, i) => (
-          <line key={`h-${i}`} x1="0" y1={i * 100} x2={width} y2={i * 100} />
-        ))}
-        {Array.from({ length: 12 }).map((_, i) => (
-          <line key={`v-${i}`} x1={i * 100} y1="0" x2={i * 100} y2={height} />
-        ))}
-      </g>
+      {/* Cyber Grid Lines & Top Branding Banner (Rendered only on fallback gradient background, NOT on custom uploaded artwork) */}
+      {!artworkUrl && (
+        <>
+          <g stroke="#ffffff" strokeOpacity="0.04" strokeWidth="1">
+            {Array.from({ length: 14 }).map((_, i) => (
+              <line key={`h-${i}`} x1="0" y1={i * 100} x2={width} y2={i * 100} />
+            ))}
+            {Array.from({ length: 12 }).map((_, i) => (
+              <line key={`v-${i}`} x1={i * 100} y1="0" x2={i * 100} y2={height} />
+            ))}
+          </g>
 
-      {/* Top Header Branding Banner */}
-      <g transform={`translate(${isLandscape ? 120 : 60}, 50)`}>
-        <rect
-          width={width - (isLandscape ? 240 : 120)}
-          height="90"
-          rx="16"
-          fill="#151928"
-          fillOpacity="0.85"
-          stroke="#ffffff"
-          strokeOpacity="0.12"
-        />
-        <text x="30" y="42" fill="#FFFFFF" fontFamily="sans-serif" fontWeight="900" fontSize="24" letterSpacing="1">
-          {tournamentTitle.toUpperCase()}
-        </text>
-        <text x="30" y="68" fill="#FFD200" fontFamily="monospace" fontWeight="700" fontSize="13" letterSpacing="2">
-          ORGANIZED BY: {organizerName.toUpperCase()}
-        </text>
+          {/* Top Header Branding Banner */}
+          <g transform={`translate(${isLandscape ? 120 : 60}, 50)`}>
+            <rect
+              width={width - (isLandscape ? 240 : 120)}
+              height="90"
+              rx="16"
+              fill="#151928"
+              fillOpacity="0.85"
+              stroke="#ffffff"
+              strokeOpacity="0.12"
+            />
+            <text x="30" y="42" fill="#FFFFFF" fontFamily="sans-serif" fontWeight="900" fontSize="24" letterSpacing="1">
+              {tournamentTitle.toUpperCase()}
+            </text>
+            <text x="30" y="68" fill="#FFD200" fontFamily="monospace" fontWeight="700" fontSize="13" letterSpacing="2">
+              ORGANIZED BY: {organizerName.toUpperCase()}
+            </text>
 
-        <g transform={`translate(${width - (isLandscape ? 470 : 350)}, 24)`}>
-          <rect width="140" height="42" rx="10" fill="#00F0FF" fillOpacity="0.15" stroke="#00F0FF" strokeWidth="1.5" />
-          <text x="70" y="27" textAnchor="middle" fill="#00F0FF" fontFamily="sans-serif" fontWeight="900" fontSize="13" letterSpacing="1.5">
-            TEAM ROSTER
-          </text>
-        </g>
-      </g>
+            <g transform={`translate(${width - (isLandscape ? 470 : 350)}, 24)`}>
+              <rect width="140" height="42" rx="10" fill="#00F0FF" fillOpacity="0.15" stroke="#00F0FF" strokeWidth="1.5" />
+              <text x="70" y="27" textAnchor="middle" fill="#00F0FF" fontFamily="sans-serif" fontWeight="900" fontSize="13" letterSpacing="1.5">
+                TEAM ROSTER
+              </text>
+            </g>
+          </g>
+        </>
+      )}
 
       {/* Team Profile Banner */}
       <g transform={`translate(${(width - 860) / 2}, 180)`}>

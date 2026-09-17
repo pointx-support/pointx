@@ -11,7 +11,6 @@ import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { useToast } from '../ui/Toast';
 import { CustomTemplateWizard } from '../admin/CustomTemplateWizard';
-import { analyzePsdTemplateBuffer } from '../../engine/psdTemplateAnalyzer';
 import { templatesApi } from '../../services/api';
 import {
   CheckCircle2,
@@ -92,8 +91,6 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
 
   const replaceArtworkInputRef = useRef<HTMLInputElement | null>(null);
   const customFontInputRef = useRef<HTMLInputElement | null>(null);
-  const psdImportInputRef = useRef<HTMLInputElement | null>(null);
-  const [isImportingPsd, setIsImportingPsd] = useState(false);
 
   // Multi-element selection state
   const [selectedKeys, setSelectedKeys] = useState<string[]>(['slot_1_teamName']);
@@ -164,11 +161,16 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
   }, [isFullScreenStudio]);
 
   const activeTemplate = getActiveTemplate();
-  const alignment = activeTemplate.alignment;
-
-  const width = alignment.width || (alignment.aspectRatio === '4:5' ? 1080 : 1920);
-  const height = alignment.height || (alignment.aspectRatio === '4:5' ? 1350 : 1080);
-  const isPortrait = alignment.aspectRatio === '4:5';
+  const effectiveAspectRatio: '16:9' | '4:5' | '1:1' | '9:16' = activeTemplate.aspectRatio === '4:5' || activeTemplate.alignment?.aspectRatio === '4:5' ? '4:5' : '16:9';
+  const isPortrait = effectiveAspectRatio === '4:5';
+  const width = isPortrait ? 1080 : 1920;
+  const height = isPortrait ? 1350 : 1080;
+  const alignment: TemplateAlignmentConfig = activeTemplate.alignment ? {
+    ...activeTemplate.alignment,
+    aspectRatio: effectiveAspectRatio,
+    width,
+    height,
+  } : activeTemplate.alignment;
 
   // Live Scope Preview Selection ('OVERALL', 'MATCH 1', 'MATCH 2', etc.)
   const [previewScope, setPreviewScope] = useState<string>('OVERALL');
@@ -217,14 +219,22 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
     const currentTemplate = storeState.templates.find((t) => t.id === activeTemplateId) || storeState.getActiveTemplate();
     if (!currentTemplate) return;
 
+    const finalAspectRatio: '16:9' | '4:5' | '1:1' | '9:16' = (currentTemplate.aspectRatio === '4:5' || currentTemplate.alignment?.aspectRatio === '4:5') ? '4:5' : '16:9';
+    const finalAlignment: TemplateAlignmentConfig = {
+      ...currentTemplate.alignment,
+      aspectRatio: finalAspectRatio,
+      width: finalAspectRatio === '4:5' ? 1080 : 1920,
+      height: finalAspectRatio === '4:5' ? 1350 : 1080,
+    };
+
     setSaveStatus('saving');
     try {
       try {
         await templatesApi.update(currentTemplate.id, {
-          alignment: currentTemplate.alignment,
+          alignment: finalAlignment,
           name: currentTemplate.name,
           category: currentTemplate.category,
-          aspectRatio: currentTemplate.aspectRatio
+          aspectRatio: finalAspectRatio
         });
       } catch (apiErr) {
         console.warn('API save note (preset or local template):', apiErr);
@@ -1307,41 +1317,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
     reader.readAsDataURL(file);
   };
 
-  // Import PSD Layout & Alignment Handler
-  const handleImportPsdStudio = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
 
-    try {
-      setIsImportingPsd(true);
-      const buffer = await file.arrayBuffer();
-      const result = analyzePsdTemplateBuffer(buffer);
-
-      if (result.success) {
-        pushUndoSnapshot();
-        updateTemplateAlignment(activeTemplateId, result.alignment);
-        triggerAutosave();
-        if (result.cleanImageUrl && !result.cleanImageUrl.startsWith('data:image/svg+xml')) {
-          replaceTemplateImage(activeTemplate.id, result.cleanImageUrl);
-        }
-
-        showToast({
-          type: 'success',
-          title: 'PSD Layout Imported ⚡',
-          message: `Auto-aligned ${result.detectedSummary.teamsCount} team slots, ${result.detectedSummary.ranksCount} serial ranks from "${file.name}".`,
-        });
-      }
-    } catch (err: any) {
-      showToast({
-        type: 'error',
-        title: 'PSD Import Failed',
-        message: err?.message || 'Could not parse PSD file.',
-      });
-    } finally {
-      setIsImportingPsd(false);
-      if (e.target) e.target.value = '';
-    }
-  };
 
   // Custom Font Upload Handler
   const handleCustomFontSubmit = async (e: React.FormEvent) => {
@@ -1617,25 +1593,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
             className="hidden"
           />
 
-          {/* ⚡ AUTO-IMPORT PSD */}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={isImportingPsd}
-            onClick={() => psdImportInputRef.current?.click()}
-            leftIcon={<Upload className="h-4 w-4 text-amber-500" />}
-            className="border-amber-500/40 hover:bg-amber-500/10 text-[var(--text-primary)] font-bold text-xs"
-            title="Import exact 12-team alignment & artwork from Photopea / Photoshop (.PSD)"
-          >
-            {isImportingPsd ? 'Importing...' : 'Import .PSD'}
-          </Button>
-          <input
-            ref={psdImportInputRef}
-            type="file"
-            accept=".psd"
-            onChange={handleImportPsdStudio}
-            className="hidden"
-          />
+
 
           {/* ✏️ EDIT METADATA */}
           <Button
@@ -1837,7 +1795,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                 options={{
                   customTitle: renderData.tournamentTitle,
                   organizerName: renderData.organizerName,
-                  standingsData: isPointsTable ? renderData : undefined
+                  standingsData: renderData
                 }}
                 selectedElementKeys={selectedKeys}
                 onSelectElement={handleSelectElement}
@@ -1873,84 +1831,78 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
             {/* Quick 1-Click Multi-Select Pills */}
             <div className="space-y-1.5">
               <div className="text-[11px] font-mono font-bold uppercase text-[var(--text-secondary)]">
-                {isPointsTable ? 'Batch Quick-Select:' : 'Quick Variables:'}
+                Batch Quick-Select:
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {isPointsTable ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => selectPreset('🛡️ All Team Names', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_teamName`))}
-                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                    >
-                      🛡️ Team Names
-                    </button>
+                <button
+                  type="button"
+                  onClick={() => selectPreset('🛡️ All Team Names', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_teamName`))}
+                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                >
+                  🛡️ Team Names
+                </button>
 
-                    <button
-                      type="button"
-                      onClick={() => selectPreset('🎯 Total Points', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_total`))}
-                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                    >
-                      🎯 Total Points
-                    </button>
+                <button
+                  type="button"
+                  onClick={() => selectPreset('🎯 Total Points', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_total`))}
+                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                >
+                  🎯 Total Points
+                </button>
 
-                    <button
-                      type="button"
-                      onClick={() => selectPreset('💥 All Kills', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_kills`))}
-                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                    >
-                      💥 All Kills
-                    </button>
+                <button
+                  type="button"
+                  onClick={() => selectPreset('💥 All Kills', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_kills`))}
+                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                >
+                  💥 All Kills
+                </button>
 
-                    <button
-                      type="button"
-                      onClick={() => selectPreset('🔢 All Ranks', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_rank`))}
-                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                    >
-                      🔢 All Ranks
-                    </button>
+                <button
+                  type="button"
+                  onClick={() => selectPreset('🔢 All Ranks', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_rank`))}
+                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                >
+                  🔢 All Ranks
+                </button>
 
-                    <button
-                      type="button"
-                      onClick={() => selectPreset('🖼️ Team Logos', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_logo`))}
-                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                    >
-                      🖼️ Team Logos
-                    </button>
+                <button
+                  type="button"
+                  onClick={() => selectPreset('🖼️ Team Logos', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_logo`))}
+                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                >
+                  🖼️ Team Logos
+                </button>
 
-                    <button
-                      type="button"
-                      onClick={() => selectPreset('👑 All Headers', ['organizer', 'organizerLogo', 'tournamentTitle', 'tournamentLogo', 'subtitle'])}
-                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                    >
-                      👑 All Headers
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {sectionVariables.slice(0, 6).map((v) => (
-                      <button
-                        key={v.key}
-                        type="button"
-                        onClick={() => selectPreset(v.label, [v.key])}
-                        className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-xs ${
-                          selectedKeys.includes(v.key)
-                            ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] border-[var(--accent-primary)]'
-                            : 'bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)]/20 text-[var(--text-primary)] border-[var(--border-subtle)]'
-                        }`}
-                      >
-                        {v.label}
-                      </button>
-                    ))}
-                  </>
-                )}
+                <button
+                  type="button"
+                  onClick={() => selectPreset('👑 All Headers', ['organizer', 'organizerLogo', 'tournamentTitle', 'tournamentLogo', 'subtitle'])}
+                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                >
+                  👑 All Headers
+                </button>
+
+                {sectionVariables.map((v) => (
+                  <button
+                    key={v.key}
+                    type="button"
+                    onClick={() => selectPreset(v.label, [v.key])}
+                    className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-xs ${
+                      selectedKeys.includes(v.key)
+                        ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] border-[var(--accent-primary)]'
+                        : 'bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)]/20 text-[var(--text-primary)] border-[var(--border-subtle)]'
+                    }`}
+                  >
+                    {v.label}
+                  </button>
+                ))}
               </div>
             </div>
 
             {/* Granular Individual Selector Dropdown */}
             <div className="pt-1">
               <label className="block text-[11px] font-mono text-[var(--text-secondary)] mb-1">
-                {isPointsTable ? 'Or select specific element directly:' : 'Select section variable:'}
+                Select specific element directly:
               </label>
               <select
                 value={selectedKeys.length === 1 ? selectedKeys[0] : ''}
@@ -1964,37 +1916,52 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                 className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] cursor-pointer"
               >
                 <option value="" disabled>-- Choose Granular Element --</option>
-                {isPointsTable ? (
-                  <>
-                    <optgroup label="Header Elements">
-                      <option value="tournamentTitle">Tournament Title Text</option>
-                      <option value="tournamentLogo">Tournament Logo</option>
-                      <option value="organizer">Organizer Name Text</option>
-                      <option value="organizerLogo">Organizer Logo</option>
-                      <option value="subtitle">Subtitle / Scope Badge</option>
-                    </optgroup>
-                    <optgroup label="Squad Slot 1 (Top Seed)">
-                      <option value="slot_1_teamName">Slot 1: Team Name</option>
-                      <option value="slot_1_logo">Slot 1: Team Logo</option>
-                      <option value="slot_1_rank">Slot 1: Rank #01</option>
-                      <option value="slot_1_total">Slot 1: Total Points</option>
-                      <option value="slot_1_kills">Slot 1: Kill Points</option>
-                      <option value="slot_1_place">Slot 1: Place Points</option>
-                      <option value="slot_1_match">Slot 1: Match Played</option>
-                      <option value="slot_1_booyah">Slot 1: Booyah Count</option>
-                    </optgroup>
-                    <optgroup label="Squad Slot 2">
-                      <option value="slot_2_teamName">Slot 2: Team Name</option>
-                      <option value="slot_2_total">Slot 2: Total Points</option>
-                      <option value="slot_2_kills">Slot 2: Kill Points</option>
-                    </optgroup>
-                    <optgroup label="Squad Slot 7 (Right Col Top)">
-                      <option value="slot_7_teamName">Slot 7: Team Name</option>
-                      <option value="slot_7_total">Slot 7: Total Points</option>
-                      <option value="slot_7_kills">Slot 7: Kill Points</option>
-                    </optgroup>
-                  </>
-                ) : (
+                <optgroup label="Header Elements">
+                  <option value="tournamentTitle">Tournament Title Text</option>
+                  <option value="tournamentLogo">Tournament Logo</option>
+                  <option value="organizer">Organizer Name Text</option>
+                  <option value="organizerLogo">Organizer Logo</option>
+                  <option value="subtitle">Subtitle / Scope Badge</option>
+                </optgroup>
+                <optgroup label="Squad Slot 1 (Top Seed)">
+                  <option value="slot_1_teamName">Slot 1: Team Name</option>
+                  <option value="slot_1_logo">Slot 1: Team Logo</option>
+                  <option value="slot_1_rank">Slot 1: Rank #01</option>
+                  <option value="slot_1_total">Slot 1: Total Points</option>
+                  <option value="slot_1_kills">Slot 1: Kill Points</option>
+                  <option value="slot_1_place">Slot 1: Place Points</option>
+                  <option value="slot_1_match">Slot 1: Match Played</option>
+                  <option value="slot_1_booyah">Slot 1: Booyah Count</option>
+                </optgroup>
+                <optgroup label="Squad Slot 2">
+                  <option value="slot_2_teamName">Slot 2: Team Name</option>
+                  <option value="slot_2_logo">Slot 2: Team Logo</option>
+                  <option value="slot_2_rank">Slot 2: Rank #02</option>
+                  <option value="slot_2_total">Slot 2: Total Points</option>
+                  <option value="slot_2_kills">Slot 2: Kill Points</option>
+                </optgroup>
+                <optgroup label="Squad Slot 3">
+                  <option value="slot_3_teamName">Slot 3: Team Name</option>
+                  <option value="slot_3_logo">Slot 3: Team Logo</option>
+                  <option value="slot_3_rank">Slot 3: Rank #03</option>
+                  <option value="slot_3_total">Slot 3: Total Points</option>
+                  <option value="slot_3_kills">Slot 3: Kill Points</option>
+                </optgroup>
+                <optgroup label="Squad Slot 4">
+                  <option value="slot_4_teamName">Slot 4: Team Name</option>
+                  <option value="slot_4_logo">Slot 4: Team Logo</option>
+                  <option value="slot_4_rank">Slot 4: Rank #04</option>
+                  <option value="slot_4_total">Slot 4: Total Points</option>
+                  <option value="slot_4_kills">Slot 4: Kill Points</option>
+                </optgroup>
+                <optgroup label="Squad Slot 7 (Right Col Top)">
+                  <option value="slot_7_teamName">Slot 7: Team Name</option>
+                  <option value="slot_7_logo">Slot 7: Team Logo</option>
+                  <option value="slot_7_rank">Slot 7: Rank #07</option>
+                  <option value="slot_7_total">Slot 7: Total Points</option>
+                  <option value="slot_7_kills">Slot 7: Kill Points</option>
+                </optgroup>
+                {sectionVariables.length > 0 && (
                   <optgroup label={`${templateType.replace(/_/g, ' ')} Variables`}>
                     {sectionVariables.map((v) => (
                       <option key={v.key} value={v.key}>
@@ -3140,7 +3107,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                 options={{
                   customTitle: renderData.tournamentTitle,
                   organizerName: renderData.organizerName,
-                  standingsData: isPointsTable ? renderData : undefined
+                  standingsData: renderData
                 }}
                 selectedElementKeys={selectedKeys}
                 onSelectElement={handleSelectElement}
@@ -3156,60 +3123,60 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
             {/* Quick Batch Pills */}
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[10px] font-mono uppercase font-bold text-white/50">
-                {isPointsTable ? 'Batch:' : 'Variables:'}
+                Batch:
               </span>
-              {isPointsTable ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => selectPreset('🛡️ All Team Names', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_teamName`))}
-                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-                  >
-                    🛡️ Teams
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectPreset('🎯 Total Points', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_total`))}
-                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-                  >
-                    🎯 Totals
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectPreset('💥 All Kills', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_kills`))}
-                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-                  >
-                    💥 Kills
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectPreset('🔢 All Ranks', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_rank`))}
-                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-                  >
-                    🔢 Ranks
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectPreset('👑 All Headers', ['organizer', 'organizerLogo', 'tournamentTitle', 'tournamentLogo', 'subtitle'])}
-                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-                  >
-                    👑 Headers
-                  </button>
-                </>
-              ) : (
-                <>
-                  {sectionVariables.slice(0, 6).map((v) => (
-                    <button
-                      key={v.key}
-                      type="button"
-                      onClick={() => selectPreset(v.label, [v.key])}
-                      className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-                    >
-                      {v.label}
-                    </button>
-                  ))}
-                </>
-              )}
+              <button
+                type="button"
+                onClick={() => selectPreset('🛡️ All Team Names', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_teamName`))}
+                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+              >
+                🛡️ Teams
+              </button>
+              <button
+                type="button"
+                onClick={() => selectPreset('🎯 Total Points', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_total`))}
+                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+              >
+                🎯 Totals
+              </button>
+              <button
+                type="button"
+                onClick={() => selectPreset('💥 All Kills', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_kills`))}
+                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+              >
+                💥 Kills
+              </button>
+              <button
+                type="button"
+                onClick={() => selectPreset('🔢 All Ranks', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_rank`))}
+                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+              >
+                🔢 Ranks
+              </button>
+              <button
+                type="button"
+                onClick={() => selectPreset('🖼️ Team Logos', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_logo`))}
+                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+              >
+                🖼️ Logos
+              </button>
+              <button
+                type="button"
+                onClick={() => selectPreset('👑 All Headers', ['organizer', 'organizerLogo', 'tournamentTitle', 'tournamentLogo', 'subtitle'])}
+                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+              >
+                👑 Headers
+              </button>
+              {sectionVariables.map((v) => (
+                <button
+                  key={v.key}
+                  type="button"
+                  onClick={() => selectPreset(v.label, [v.key])}
+                  className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                >
+                  {v.label}
+                </button>
+              ))}
             </div>
 
             {/* Tactile Mini Nudge Buttons */}
@@ -3251,43 +3218,41 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
               </div>
 
               {/* Quick Smart Align in HUD */}
-              {isPointsTable && (
-                <div className="flex items-center gap-1 border-l border-white/15 pl-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleSmartAutoAlignColumn()}
-                    className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-black border border-emerald-500/30 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
-                    title={`Auto-align all 12 ${smartAlignColumn.toUpperCase()} elements to standard row grid`}
-                  >
-                    <Sparkles className="h-3 w-3" />
-                    <span>⚡ Auto-Align {smartAlignColumn.toUpperCase()}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDistributeColumnVertically()}
-                    className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
-                    title="Distribute Vertically"
-                  >
-                    <ArrowUpDown className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleStraightenColumnX()}
-                    className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
-                    title="Straighten Column X"
-                  >
-                    <MoveHorizontal className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleResetColumnToGrid()}
-                    className="p-1 rounded-lg bg-white/10 hover:bg-rose-500/30 text-rose-300 cursor-pointer"
-                    title="Reset to Template Grid"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center gap-1 border-l border-white/15 pl-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleSmartAutoAlignColumn()}
+                  className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-black border border-emerald-500/30 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                  title={`Auto-align all 12 ${smartAlignColumn.toUpperCase()} elements to standard row grid`}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  <span>⚡ Auto-Align {smartAlignColumn.toUpperCase()}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDistributeColumnVertically()}
+                  className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                  title="Distribute Vertically"
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleStraightenColumnX()}
+                  className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                  title="Straighten Column X"
+                >
+                  <MoveHorizontal className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleResetColumnToGrid()}
+                  className="p-1 rounded-lg bg-white/10 hover:bg-rose-500/30 text-rose-300 cursor-pointer"
+                  title="Reset to Template Grid"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </button>
+              </div>
 
               {/* Coordinates read out */}
               <div className="text-[11px] font-mono text-[var(--accent-primary)] font-bold px-2 py-0.5 rounded bg-white/5 border border-white/10">

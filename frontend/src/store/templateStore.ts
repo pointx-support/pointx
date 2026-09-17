@@ -887,7 +887,14 @@ export const useTemplateStore = create<TemplateStoreState>()(
             const id = (t as any)._id || (t as any).customId || t.id;
             if (!deletedIds.has(id)) {
               const safeType = t.templateType || normalizeTemplateType(t.category);
-              incomingMap.set(id, { ...t, id, templateType: safeType });
+              const effectiveAspect: '16:9' | '4:5' | '1:1' | '9:16' = (t.aspectRatio === '4:5' || t.alignment?.aspectRatio === '4:5') ? '4:5' : ((t.aspectRatio as any) || '16:9');
+              const safeAlignment: TemplateAlignmentConfig = t.alignment ? {
+                ...t.alignment,
+                aspectRatio: effectiveAspect,
+                width: effectiveAspect === '4:5' ? 1080 : 1920,
+                height: effectiveAspect === '4:5' ? 1350 : 1080,
+              } : { ...DEFAULT_LEGIT_ALIGNMENT, aspectRatio: effectiveAspect };
+              incomingMap.set(id, { ...t, id, templateType: safeType, aspectRatio: effectiveAspect, alignment: safeAlignment });
             }
           });
 
@@ -1008,18 +1015,28 @@ export const useTemplateStore = create<TemplateStoreState>()(
 
       updateTemplateMetadata: (id, metadata) => {
         set((state) => ({
-          templates: state.templates.map((t) =>
-            t.id === id
+          templates: state.templates.map((t) => {
+            if (t.id !== id) return t;
+            const newAspectRatio = metadata.aspectRatio || t.aspectRatio;
+            const updatedAlignment = metadata.aspectRatio
               ? {
-                  ...t,
-                  ...metadata,
-                  templateType: metadata.category
-                    ? normalizeTemplateType(metadata.category)
-                    : t.templateType || normalizeTemplateType(t.category),
-                  updatedAt: new Date().toISOString()
+                  ...t.alignment,
+                  aspectRatio: metadata.aspectRatio,
+                  width: metadata.aspectRatio === '4:5' ? 1080 : 1920,
+                  height: metadata.aspectRatio === '4:5' ? 1350 : 1080,
                 }
-              : t
-          )
+              : t.alignment;
+            return {
+              ...t,
+              ...metadata,
+              aspectRatio: newAspectRatio,
+              alignment: updatedAlignment,
+              templateType: metadata.category
+                ? normalizeTemplateType(metadata.category)
+                : t.templateType || normalizeTemplateType(t.category),
+              updatedAt: new Date().toISOString(),
+            };
+          }),
         }));
       },
 
@@ -1115,8 +1132,17 @@ export const useTemplateStore = create<TemplateStoreState>()(
           state.templates = state.templates.map((t) => {
             const rawType = t.templateType;
             const valid = rawType && rawType !== 'NEEDS_REVIEW' && (VALID_TEMPLATE_TYPES as string[]).includes(rawType);
+            const effectiveAspect: '16:9' | '4:5' | '1:1' | '9:16' = (t.aspectRatio === '4:5' || t.alignment?.aspectRatio === '4:5') ? '4:5' : ((t.aspectRatio as any) || '16:9');
+            const safeAlignment: TemplateAlignmentConfig = t.alignment ? {
+              ...t.alignment,
+              aspectRatio: effectiveAspect,
+              width: effectiveAspect === '4:5' ? 1080 : 1920,
+              height: effectiveAspect === '4:5' ? 1350 : 1080,
+            } : { ...DEFAULT_LEGIT_ALIGNMENT, aspectRatio: effectiveAspect };
             return {
               ...t,
+              aspectRatio: effectiveAspect,
+              alignment: safeAlignment,
               templateType: valid ? rawType : (t.category ? normalizeTemplateType(t.category) : 'NEEDS_REVIEW')
             };
           });
