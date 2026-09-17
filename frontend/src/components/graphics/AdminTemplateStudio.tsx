@@ -12,6 +12,7 @@ import { Input } from '../ui/Input';
 import { useToast } from '../ui/Toast';
 import { CustomTemplateWizard } from '../admin/CustomTemplateWizard';
 import { analyzePsdTemplateBuffer } from '../../engine/psdTemplateAnalyzer';
+import { templatesApi } from '../../services/api';
 import {
   CheckCircle2,
   Trash2,
@@ -46,7 +47,13 @@ import {
   ArrowUpDown,
   MoveVertical,
   MoveHorizontal,
-  Grid
+  Grid,
+  Save,
+  Clock,
+  Check,
+  Loader2,
+  ClipboardCopy,
+  ClipboardCheck
 } from 'lucide-react';
 import type { GraphicsRenderData } from '../../types/graphics';
 import { normalizeTemplateType, type TemplateAlignmentConfig, type TextElementStyle, type GraphicTemplateCategory } from '../../types/customTemplate';
@@ -162,6 +169,139 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
   const height = alignment.height || (alignment.aspectRatio === '4:5' ? 1350 : 1080);
   const isPortrait = alignment.aspectRatio === '4:5';
 
+  // Live Scope Preview Selection ('OVERALL', 'MATCH 1', 'MATCH 2', etc.)
+  const [previewScope, setPreviewScope] = useState<string>('OVERALL');
+
+  // Alignment Save & Autosave status
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'unsaved' | 'error'>('saved');
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const autosaveTimerRef = useRef<number | null>(null);
+
+  // Copy & Paste Alignment State
+  const STORAGE_COPIED_ALIGNMENT_KEY = 'pointx_studio_copied_alignment';
+  const [hasCopiedAlignment, setHasCopiedAlignment] = useState<boolean>(() => {
+    try {
+      return !!localStorage.getItem(STORAGE_COPIED_ALIGNMENT_KEY);
+    } catch {
+      return false;
+    }
+  });
+
+  const handleSaveAlignment = useCallback(async (isAutosave = false) => {
+    if (!activeTemplate) return;
+    setSaveStatus('saving');
+    try {
+      try {
+        await templatesApi.update(activeTemplate.id, {
+          alignment: activeTemplate.alignment,
+          name: activeTemplate.name,
+          category: activeTemplate.category,
+          aspectRatio: activeTemplate.aspectRatio
+        });
+      } catch (apiErr) {
+        console.warn('API save note (preset or local template):', apiErr);
+      }
+
+      updateTemplateAlignment(activeTemplate.id, activeTemplate.alignment);
+
+      setSaveStatus('saved');
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setLastSavedTime(timeStr);
+
+      if (!isAutosave) {
+        showToast({
+          type: 'success',
+          title: 'Alignment Saved',
+          message: `All coordinates and styling for "${activeTemplate.name}" saved successfully!`
+        });
+      }
+    } catch (err) {
+      console.error('Failed to save alignment:', err);
+      setSaveStatus('error');
+      if (!isAutosave) {
+        showToast({
+          type: 'error',
+          title: 'Save Failed',
+          message: 'Could not save template changes. Please try again.'
+        });
+      }
+    }
+  }, [activeTemplate, updateTemplateAlignment, showToast]);
+
+  const triggerAutosave = useCallback(() => {
+    setSaveStatus('unsaved');
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+    autosaveTimerRef.current = window.setTimeout(() => {
+      handleSaveAlignment(true);
+    }, 1500);
+  }, [handleSaveAlignment]);
+
+  useEffect(() => {
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopyAlignment = () => {
+    if (!activeTemplate?.alignment) return;
+    try {
+      const configToCopy = JSON.stringify(activeTemplate.alignment);
+      localStorage.setItem(STORAGE_COPIED_ALIGNMENT_KEY, configToCopy);
+      setHasCopiedAlignment(true);
+      showToast({
+        type: 'success',
+        title: 'Alignment Copied!',
+        message: `Copied alignment settings from "${activeTemplate.name}". Open another poster and click "Paste Alignment".`
+      });
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Copy Failed',
+        message: 'Failed to copy alignment to clipboard.'
+      });
+    }
+  };
+
+  const handlePasteAlignment = () => {
+    const raw = localStorage.getItem(STORAGE_COPIED_ALIGNMENT_KEY);
+    if (!raw) {
+      showToast({
+        type: 'info',
+        title: 'No Alignment Copied',
+        message: 'Please click "Copy Alignment" on a template first.'
+      });
+      return;
+    }
+    try {
+      const sourceConfig: TemplateAlignmentConfig = JSON.parse(raw);
+      const mergedAlignment: TemplateAlignmentConfig = {
+        ...sourceConfig,
+        aspectRatio: activeTemplate.alignment.aspectRatio || sourceConfig.aspectRatio,
+        width: activeTemplate.alignment.width || sourceConfig.width,
+        height: activeTemplate.alignment.height || sourceConfig.height,
+      };
+
+      updateTemplateAlignment(activeTemplate.id, mergedAlignment);
+      triggerAutosave();
+      showToast({
+        type: 'success',
+        title: 'Alignment Pasted!',
+        message: `Applied copied alignment settings to "${activeTemplate.name}".`
+      });
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Paste Failed',
+        message: 'Invalid alignment data in storage.'
+      });
+    }
+  };
+
   const standings = getStandings();
   const renderData: GraphicsRenderData = {
     tournamentTitle: currentTournament?.title || user?.defaultTournamentTitle || 'TOURNAMENT CHAMPIONSHIP',
@@ -172,7 +312,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
     page: 1,
     totalPages: 1,
     totalMatchesCount: currentTournament?.matches?.length || 6,
-    subtitle: 'OVERALL'
+    subtitle: previewScope || 'OVERALL'
   };
 
   const templateType = activeTemplate?.templateType || normalizeTemplateType(activeTemplate?.category);
@@ -520,7 +660,8 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       elements: currentElements,
       slots: currentSlots
     });
-  }, [alignment, selectedKeys, getElementStyleByKey, activeTemplate.id, updateTemplateAlignment]);
+    triggerAutosave();
+  }, [alignment, selectedKeys, getElementStyleByKey, activeTemplate.id, updateTemplateAlignment, triggerAutosave]);
 
   // Tactile Nudge Action
   const handleNudge = useCallback((dx: number, dy: number) => {
@@ -1134,7 +1275,12 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
     }
   };
 
-  const handleDeleteConfirmed = () => {
+  const handleDeleteConfirmed = async () => {
+    try {
+      await templatesApi.delete(activeTemplate.id);
+    } catch (err) {
+      console.warn('Backend delete (local or preset template fallback):', err);
+    }
     deleteTemplate(activeTemplate.id);
     setIsDeleteModalOpen(false);
     showToast({ type: 'info', title: 'Template Deleted', message: `Deleted "${activeTemplate.name}".` });
@@ -1190,14 +1336,73 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
             ))}
           </select>
 
-          {/* ➕ ADD NEW TEMPLATE */}
+          {/* 💾 SAVE CHANGES */}
           <Button
             variant="primary"
+            size="sm"
+            onClick={() => handleSaveAlignment(false)}
+            disabled={saveStatus === 'saving'}
+            leftIcon={saveStatus === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            title="Save all alignment, slots, coordinates, and styling"
+          >
+            Save Changes
+          </Button>
+
+          {/* ⚡ AUTOSAVE STATUS PILL */}
+          <div className="flex items-center">
+            {saveStatus === 'saving' && (
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-mono font-bold">
+                <Loader2 className="h-3 w-3 animate-spin" /> Autosaving...
+              </span>
+            )}
+            {saveStatus === 'unsaved' && (
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs font-mono font-bold">
+                <Clock className="h-3 w-3" /> Unsaved
+              </span>
+            )}
+            {saveStatus === 'saved' && (
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-mono font-bold">
+                <Check className="h-3 w-3" /> {lastSavedTime ? `Saved ${lastSavedTime}` : 'Autosaved'}
+              </span>
+            )}
+            {saveStatus === 'error' && (
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-rose-500/15 text-rose-400 border border-rose-500/30 text-xs font-mono font-bold">
+                Save Error
+              </span>
+            )}
+          </div>
+
+          {/* 📋 COPY ALIGNMENT */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCopyAlignment}
+            leftIcon={<ClipboardCopy className="h-4 w-4 text-[var(--accent-primary)]" />}
+            title="Copy all alignment, coordinates, styles & badge settings from this poster"
+          >
+            Copy Alignment
+          </Button>
+
+          {/* 📥 PASTE ALIGNMENT */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePasteAlignment}
+            disabled={!hasCopiedAlignment}
+            leftIcon={<ClipboardCheck className="h-4 w-4 text-emerald-400" />}
+            title={hasCopiedAlignment ? 'Paste copied alignment into this template' : 'Copy an alignment from another poster first'}
+          >
+            Paste Alignment
+          </Button>
+
+          {/* ➕ ADD NEW TEMPLATE */}
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => setIsCreateModalOpen(true)}
             leftIcon={<Plus className="h-4 w-4" />}
           >
-            New Template
+            New
           </Button>
 
           {/* 🔤 UPLOAD CUSTOM FONT */}
@@ -1208,7 +1413,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
             leftIcon={<Type className="h-4 w-4 text-[var(--accent-primary)]" />}
             title="Upload custom OTF/TTF/WOFF font"
           >
-            Upload Font
+            Font
           </Button>
 
           {/* 🖼️ REPLACE ARTWORK */}
@@ -1239,7 +1444,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
             className="border-amber-500/40 hover:bg-amber-500/10 text-[var(--text-primary)] font-bold text-xs"
             title="Import exact 12-team alignment & artwork from Photopea / Photoshop (.PSD)"
           >
-            {isImportingPsd ? 'Importing PSD...' : 'Import .PSD Layout'}
+            {isImportingPsd ? 'Importing...' : 'Import .PSD'}
           </Button>
           <input
             ref={psdImportInputRef}
@@ -1315,7 +1520,46 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Scope Selector */}
+              <div className="flex items-center gap-1.5 bg-[var(--bg-surface-inset)] px-2.5 py-1 rounded-xl border border-[var(--border-subtle)] text-xs font-mono">
+                <span className="text-[var(--text-muted)] font-bold">Scope:</span>
+                <select
+                  value={previewScope}
+                  onChange={(e) => setPreviewScope(e.target.value)}
+                  className="bg-transparent text-[var(--accent-primary)] font-bold focus:outline-none cursor-pointer"
+                  title="Switch preview scope to see how the scope badge renders"
+                >
+                  <option value="OVERALL">Overall Standings</option>
+                  <option value="MATCH 1">Match 1</option>
+                  <option value="MATCH 2">Match 2</option>
+                  <option value="MATCH 3">Match 3</option>
+                  <option value="MATCH 4">Match 4</option>
+                  <option value="DAY 1">Day 1</option>
+                  <option value="DAY 2">Day 2</option>
+                  <option value="FINALS">Grand Finals</option>
+                </select>
+              </div>
+
+              {/* Quick Select Scope Badge */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedKeys(['subtitle']);
+                  setSelectedPresetLabel('Subtitle / Scope Badge');
+                }}
+                className={`px-2.5 py-1 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  selectedKeys.includes('subtitle')
+                    ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] border-[var(--accent-primary)] shadow-xs'
+                    : 'bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border-[var(--accent-primary)]/30'
+                }`}
+                title="Select Scope Badge element on canvas to move or style"
+              >
+                <span>🎯 Scope Badge</span>
+              </button>
+
+              <span className="text-[var(--border-subtle)]">|</span>
+
               <span className="text-[var(--text-muted)]">Zoom:</span>
               <button
                 type="button"
@@ -1576,25 +1820,171 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
 
             {/* A. TEXT OVERRIDE (For Text / Titles) */}
             {(isTeamName || isTournamentTitle || isOrganizer || isSubtitle) && !isMulti && (
-              <div>
-                <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1 font-mono">
-                  Custom Text Content:
-                </label>
-                <input
-                  type="text"
-                  value={primaryElement.customText || ''}
-                  onChange={(e) => updateSelectedElements({ customText: e.target.value })}
-                  placeholder={
-                    isTeamName
-                      ? 'Team Name'
-                      : isTournamentTitle
-                      ? renderData.tournamentTitle
-                      : isOrganizer
-                      ? renderData.organizerName
-                      : renderData.subtitle || 'OVERALL'
-                  }
-                  className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] font-bold focus:outline-none focus:border-[var(--accent-primary)]"
-                />
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1 font-mono">
+                    Custom Text Content:
+                  </label>
+                  <input
+                    type="text"
+                    value={primaryElement.customText || ''}
+                    onChange={(e) => updateSelectedElements({ customText: e.target.value })}
+                    placeholder={
+                      isTeamName
+                        ? 'Team Name'
+                        : isTournamentTitle
+                        ? renderData.tournamentTitle
+                        : isOrganizer
+                        ? renderData.organizerName
+                        : renderData.subtitle || 'OVERALL'
+                    }
+                    className="w-full p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] font-bold focus:outline-none focus:border-[var(--accent-primary)]"
+                  />
+                </div>
+
+                {/* Scope Quick Presets for Subtitle / Badge */}
+                {isSubtitle && (
+                  <div className="space-y-1.5 pt-1">
+                    <label className="block text-[10px] font-bold text-[var(--text-secondary)] font-mono">
+                      Scope Presets (Click to apply &amp; preview):
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {['OVERALL', 'MATCH 1', 'MATCH 2', 'MATCH 3', 'MATCH 4', 'DAY 1', 'DAY 2', 'FINALS', 'GRAND FINALS'].map((scope) => (
+                        <button
+                          key={scope}
+                          type="button"
+                          onClick={() => {
+                            setPreviewScope(scope);
+                            updateSelectedElements({ customText: scope });
+                          }}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer ${
+                            (primaryElement.customText || previewScope) === scope
+                              ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] shadow-xs'
+                              : 'bg-[var(--bg-surface-inset)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
+                          }`}
+                        >
+                          {scope}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Scope Badge Banner Styling (Frame, Dimensions, Colors) */}
+                {isSubtitle && (
+                  <div className="p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] space-y-2.5 mt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[var(--text-primary)] font-mono">
+                        Scope Badge Frame
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = alignment.showSubtitleBanner === false ? true : false;
+                          updateTemplateAlignment(activeTemplate.id, { showSubtitleBanner: nextVal });
+                          triggerAutosave();
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer ${
+                          alignment.showSubtitleBanner !== false
+                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                            : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                        }`}
+                      >
+                        {alignment.showSubtitleBanner !== false ? 'Badge Visible' : 'Badge Hidden'}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-mono font-bold text-[var(--text-secondary)] mb-1">
+                          Width: {alignment.subtitleWidth || 300}px
+                        </label>
+                        <input
+                          type="range"
+                          min="120"
+                          max="700"
+                          step="10"
+                          value={alignment.subtitleWidth || 300}
+                          onChange={(e) => {
+                            updateTemplateAlignment(activeTemplate.id, { subtitleWidth: Number(e.target.value) });
+                            triggerAutosave();
+                          }}
+                          className="w-full accent-[var(--accent-primary)] cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-mono font-bold text-[var(--text-secondary)] mb-1">
+                          Height: {alignment.subtitleHeight || 50}px
+                        </label>
+                        <input
+                          type="range"
+                          min="24"
+                          max="120"
+                          step="2"
+                          value={alignment.subtitleHeight || 50}
+                          onChange={(e) => {
+                            updateTemplateAlignment(activeTemplate.id, { subtitleHeight: Number(e.target.value) });
+                            triggerAutosave();
+                          }}
+                          className="w-full accent-[var(--accent-primary)] cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <div>
+                        <label className="block text-[10px] font-mono font-bold text-[var(--text-secondary)] mb-1">
+                          Background Color:
+                        </label>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="color"
+                            value={alignment.subtitleBgColor?.startsWith('#') ? alignment.subtitleBgColor : '#051d38'}
+                            onChange={(e) => {
+                              updateTemplateAlignment(activeTemplate.id, { subtitleBgColor: e.target.value });
+                              triggerAutosave();
+                            }}
+                            className="h-7 w-8 rounded cursor-pointer border border-[var(--border-subtle)] bg-transparent"
+                          />
+                          <input
+                            type="text"
+                            value={alignment.subtitleBgColor || 'rgba(5, 29, 56, 0.9)'}
+                            onChange={(e) => {
+                              updateTemplateAlignment(activeTemplate.id, { subtitleBgColor: e.target.value });
+                              triggerAutosave();
+                            }}
+                            className="w-full p-1 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-primary)] font-bold"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-mono font-bold text-[var(--text-secondary)] mb-1">
+                          Border Color:
+                        </label>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="color"
+                            value={alignment.subtitleBorderColor?.startsWith('#') ? alignment.subtitleBorderColor : '#00f0ff'}
+                            onChange={(e) => {
+                              updateTemplateAlignment(activeTemplate.id, { subtitleBorderColor: e.target.value });
+                              triggerAutosave();
+                            }}
+                            className="h-7 w-8 rounded cursor-pointer border border-[var(--border-subtle)] bg-transparent"
+                          />
+                          <input
+                            type="text"
+                            value={alignment.subtitleBorderColor || '#00f0ff'}
+                            onChange={(e) => {
+                              updateTemplateAlignment(activeTemplate.id, { subtitleBorderColor: e.target.value });
+                              triggerAutosave();
+                            }}
+                            className="w-full p-1 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-primary)] font-bold"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

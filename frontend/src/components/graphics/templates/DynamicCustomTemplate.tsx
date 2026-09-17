@@ -73,7 +73,7 @@ export const DynamicCustomTemplate: React.FC<DynamicCustomTemplateProps> = ({
   const height = alignment.height || (alignment.aspectRatio === '4:5' ? 1350 : 1080);
 
   const isSingleColumn = alignment.layoutMode === 'single-column';
-  const isCustomSubtitle = subtitle && subtitle !== 'OVERALL';
+  const isCustomSubtitle = Boolean(subtitle);
 
   // SVG coordinate transformation helper
   const getSvgCoordinates = useCallback(
@@ -262,17 +262,22 @@ export const DynamicCustomTemplate: React.FC<DynamicCustomTemplateProps> = ({
   });
 
   // 3. Subtitle / Scope Style
+  const subDefaultWidth = alignment.subtitleWidth || 300;
   const subStyle = getStyle('subtitle', {
-    x: alignment.subtitleX,
-    y: alignment.subtitleY,
+    x: alignment.subtitleX ?? Math.round(width / 2 - subDefaultWidth / 2),
+    y: alignment.subtitleY ?? 240,
     fontSize: alignment.subtitleFontSize || 28,
     fontFamily: alignment.fontFamily,
     fontWeight: '900',
     fill: alignment.subtitleTextColor || '#ffffff',
     letterSpacing: 6,
     textAnchor: 'middle',
-    visible: alignment.showSubtitleBanner ?? false
+    visible: alignment.showSubtitleBanner !== false
   });
+
+  const shouldRenderSubtitle = isInteractive
+    ? (alignment.elements?.subtitle?.visible !== false)
+    : alignment.showSubtitleBanner !== false && isCustomSubtitle;
 
   // Column Styles Fallback (Left / Primary)
   const baseRankStyle = getStyle('rank', {
@@ -505,7 +510,7 @@ export const DynamicCustomTemplate: React.FC<DynamicCustomTemplateProps> = ({
     }
 
     // 3. Subtitle
-    if (isCustomSubtitle && subStyle.visible !== false) {
+    if (shouldRenderSubtitle) {
       addBoxBounds('subtitle', subStyle.x, subStyle.y, alignment.subtitleWidth || 300, alignment.subtitleHeight || 50);
     }
 
@@ -1042,7 +1047,7 @@ export const DynamicCustomTemplate: React.FC<DynamicCustomTemplateProps> = ({
       )}
 
       {/* 4. DYNAMIC SUBTITLE / SCOPE BANNER */}
-      {isCustomSubtitle && subStyle.visible !== false && (
+      {shouldRenderSubtitle && (
         <g
           transform={`translate(${subStyle.x}, ${subStyle.y})`}
           onPointerDown={(e) => handlePointerDown('subtitle', e)}
@@ -1054,8 +1059,16 @@ export const DynamicCustomTemplate: React.FC<DynamicCustomTemplateProps> = ({
             width={alignment.subtitleWidth || 300}
             height={alignment.subtitleHeight || 50}
             rx={12}
-            fill={alignment.subtitleBgColor || '#051d38'}
-            stroke={alignment.subtitleBorderColor || '#00f0ff'}
+            fill={
+              alignment.subtitleBgColor && alignment.subtitleBgColor !== 'transparent'
+                ? alignment.subtitleBgColor
+                : 'rgba(5, 29, 56, 0.9)'
+            }
+            stroke={
+              alignment.subtitleBorderColor && alignment.subtitleBorderColor !== 'transparent'
+                ? alignment.subtitleBorderColor
+                : '#00f0ff'
+            }
             strokeWidth={3}
           />
           <text

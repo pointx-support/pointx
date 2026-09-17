@@ -3,6 +3,7 @@ import { useTemplateStore } from '../../../store/templateStore';
 import { templatesApi } from '../../../services/api';
 import { CustomTemplateWizard } from '../CustomTemplateWizard';
 import { Button } from '../../ui/Button';
+import { Modal } from '../../ui/Modal';
 import { useToast } from '../../ui/Toast';
 import {
   Palette,
@@ -22,7 +23,9 @@ import {
   Shield,
   Trash2,
   Edit3,
-  Building
+  Building,
+  AlertTriangle,
+  RotateCcw
 } from 'lucide-react';
 import type { GraphicTemplateCategory, CustomGraphicsTemplate } from '../../../types/customTemplate';
 import { normalizeTemplateType } from '../../../types/customTemplate';
@@ -48,6 +51,8 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
     unpublishTemplate,
     setActiveTemplateId,
     deleteTemplate,
+    deleteAllTemplates,
+    restoreBuiltInTemplates,
     syncTemplates
   } = useTemplateStore();
   const { showToast } = useToast();
@@ -55,6 +60,8 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<'all' | GraphicTemplateCategory>('all');
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<CustomGraphicsTemplate | null>(null);
+  const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
 
   // Sync server templates on mount
   useEffect(() => {
@@ -107,6 +114,33 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
     }
   };
 
+  const handleDeleteAll = async () => {
+    setIsDeletingAll(true);
+    try {
+      const idsToDelete = filteredTemplates.map((t) => t.id);
+      for (const id of idsToDelete) {
+        try {
+          await templatesApi.delete(id);
+        } catch {}
+      }
+      deleteAllTemplates(idsToDelete);
+      showToast({
+        type: 'success',
+        title: 'Templates Deleted',
+        message: `Permanently removed ${idsToDelete.length} template(s).`,
+      });
+      setIsDeleteAllModalOpen(false);
+    } catch (err: any) {
+      showToast({
+        type: 'error',
+        title: 'Delete Failed',
+        message: err?.message || 'Could not delete templates.',
+      });
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
   const filteredTemplates = templates.filter((t) => {
     if (activeCategoryFilter === 'all') return true;
     const type = t.templateType || normalizeTemplateType(t.category);
@@ -127,7 +161,7 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <Button
             variant="primary"
             size="sm"
@@ -148,6 +182,30 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
           >
             Precision Studio
           </Button>
+
+          {filteredTemplates.length > 0 ? (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => setIsDeleteAllModalOpen(true)}
+              leftIcon={<Trash2 className="h-4 w-4" />}
+              title="Delete all visible templates"
+            >
+              Delete All ({filteredTemplates.length})
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                restoreBuiltInTemplates();
+                showToast({ type: 'success', title: 'Presets Restored', message: 'Restored all original template presets.' });
+              }}
+              leftIcon={<RotateCcw className="h-4 w-4" />}
+            >
+              Restore Presets
+            </Button>
+          )}
         </div>
       </div>
 
@@ -238,6 +296,20 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
                     Official System
                   </span>
                 )}
+
+                {/* Scope Badge */}
+                <span className="absolute bottom-2.5 right-2.5 px-2 py-0.5 rounded-md bg-purple-950/90 text-purple-200 border border-purple-500/50 text-[9px] font-mono font-bold flex items-center gap-1 shadow-md backdrop-blur-md">
+                  <Sliders className="h-2.5 w-2.5 text-purple-400" />
+                  <span>
+                    {type === 'POINTS_TABLE'
+                      ? 'Scope: Overall & Match'
+                      : type === 'KILL_LEADER' || type === 'TOP_FRAGGERS'
+                      ? 'Scope: Match / Stage'
+                      : type === 'TEAM_POSTER'
+                      ? 'Scope: Squad Roster'
+                      : 'Scope: Tournament'}
+                  </span>
+                </span>
               </div>
 
               {/* Template Info & Action Bar */}
@@ -294,16 +366,14 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
                     Calibrate
                   </Button>
 
-                  {!t.isBuiltIn && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteTemplate(t.id, t.name)}
-                      className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                      title="Delete Template"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteTemplate(t.id, t.name)}
+                    className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                    title="Delete Template"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -325,6 +395,44 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
           }}
         />
       )}
+
+      {/* DELETE ALL CONFIRMATION MODAL */}
+      <Modal
+        isOpen={isDeleteAllModalOpen}
+        onClose={() => !isDeletingAll && setIsDeleteAllModalOpen(false)}
+        maxWidth="md"
+      >
+        <div className="p-6 bg-[#160d29] text-white rounded-2xl border border-rose-800/40 font-sans">
+          <div className="flex items-center gap-3 text-rose-400 mb-4">
+            <AlertTriangle className="h-6 w-6 shrink-0" />
+            <h3 className="text-lg font-bold font-display">Delete All Templates?</h3>
+          </div>
+          <p className="text-sm text-slate-300 leading-relaxed mb-6">
+            Are you sure you want to permanently delete all <strong className="text-rose-400">{filteredTemplates.length}</strong> template(s) in this view?
+            This will wipe them from both the database and workspace. You can restore built-in presets later if needed.
+          </p>
+          <div className="flex items-center justify-end gap-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={isDeletingAll}
+              onClick={() => setIsDeleteAllModalOpen(false)}
+              className="bg-neutral-800 hover:bg-neutral-700 text-slate-300"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={isDeletingAll}
+              onClick={handleDeleteAll}
+              className="bg-rose-600 hover:bg-rose-500 text-white font-bold"
+            >
+              {isDeletingAll ? 'Deleting All...' : `Yes, Delete All (${filteredTemplates.length})`}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

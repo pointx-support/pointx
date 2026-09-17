@@ -157,14 +157,14 @@ export const DEFAULT_NEON_PURPLE_ALIGNMENT: TemplateAlignmentConfig = {
   totalColor: '#d946ef',
   totalGlowColor: '#c026d3',
 
-  showSubtitleBanner: false,
-  subtitleX: 655,
+  showSubtitleBanner: true,
+  subtitleX: 390,
   subtitleY: 450,
   subtitleWidth: 300,
   subtitleHeight: 50,
   subtitleFontSize: 28,
-  subtitleBgColor: 'transparent',
-  subtitleBorderColor: 'transparent',
+  subtitleBgColor: 'rgba(25, 10, 45, 0.85)',
+  subtitleBorderColor: '#d946ef',
   subtitleTextColor: '#ffffff'
 };
 
@@ -219,14 +219,14 @@ export const DEFAULT_DARK_MINT_ALIGNMENT: TemplateAlignmentConfig = {
   totalColor: '#10b981',
   totalGlowColor: '#059669',
 
-  showSubtitleBanner: false,
-  subtitleX: 540,
+  showSubtitleBanner: true,
+  subtitleX: 390,
   subtitleY: 280,
   subtitleWidth: 300,
   subtitleHeight: 45,
   subtitleFontSize: 24,
-  subtitleBgColor: 'transparent',
-  subtitleBorderColor: 'transparent',
+  subtitleBgColor: 'rgba(6, 44, 34, 0.85)',
+  subtitleBorderColor: '#10b981',
   subtitleTextColor: '#10b981'
 };
 
@@ -280,14 +280,14 @@ export const DEFAULT_GLACIER_FROST_ALIGNMENT: TemplateAlignmentConfig = {
   statColor: '#0f172a',
   totalColor: '#0284c7',
 
-  showSubtitleBanner: false,
-  subtitleX: 540,
+  showSubtitleBanner: true,
+  subtitleX: 390,
   subtitleY: 260,
   subtitleWidth: 300,
   subtitleHeight: 40,
   subtitleFontSize: 22,
-  subtitleBgColor: 'transparent',
-  subtitleBorderColor: 'transparent',
+  subtitleBgColor: 'rgba(2, 132, 199, 0.15)',
+  subtitleBorderColor: '#0284c7',
   subtitleTextColor: '#0284c7'
 };
 
@@ -341,8 +341,8 @@ export const DEFAULT_RED_SAMURAI_ALIGNMENT: TemplateAlignmentConfig = {
   statColor: '#ffffff',
   totalColor: '#fbbf24',
 
-  showSubtitleBanner: false,
-  subtitleX: 540,
+  showSubtitleBanner: true,
+  subtitleX: 410,
   subtitleY: 415,
   subtitleWidth: 260,
   subtitleHeight: 45,
@@ -402,8 +402,8 @@ export const DEFAULT_RED_THUNDER_ALIGNMENT: TemplateAlignmentConfig = {
   statColor: '#1c0700',
   totalColor: '#ffffff',
 
-  showSubtitleBanner: false,
-  subtitleX: 540,
+  showSubtitleBanner: true,
+  subtitleX: 380,
   subtitleY: 260,
   subtitleWidth: 320,
   subtitleHeight: 45,
@@ -464,14 +464,14 @@ export const DEFAULT_EMERALD_CRYSTAL_ALIGNMENT: TemplateAlignmentConfig = {
   totalColor: '#00ff88',
   totalGlowColor: '#00ff88',
 
-  showSubtitleBanner: false,
-  subtitleX: 540,
+  showSubtitleBanner: true,
+  subtitleX: 390,
   subtitleY: 340,
   subtitleWidth: 300,
   subtitleHeight: 40,
   subtitleFontSize: 22,
-  subtitleBgColor: 'transparent',
-  subtitleBorderColor: 'transparent',
+  subtitleBgColor: 'rgba(4, 40, 28, 0.85)',
+  subtitleBorderColor: '#00ff88',
   subtitleTextColor: '#00ff88'
 };
 
@@ -526,14 +526,14 @@ export const DEFAULT_ROYAL_PURPLE_ALIGNMENT: TemplateAlignmentConfig = {
   totalColor: '#fbbf24',
   totalGlowColor: '#f59e0b',
 
-  showSubtitleBanner: false,
-  subtitleX: 540,
+  showSubtitleBanner: true,
+  subtitleX: 370,
   subtitleY: 345,
   subtitleWidth: 340,
   subtitleHeight: 40,
   subtitleFontSize: 24,
-  subtitleBgColor: 'transparent',
-  subtitleBorderColor: 'transparent',
+  subtitleBgColor: 'rgba(30, 10, 60, 0.85)',
+  subtitleBorderColor: '#fbbf24',
   subtitleTextColor: '#ffffff'
 };
 
@@ -820,6 +820,7 @@ const BUILTIN_TEMPLATES: CustomGraphicsTemplate[] = [
 export interface TemplateStoreState {
   templates: CustomGraphicsTemplate[];
   activeTemplateId: string;
+  deletedTemplateIds?: string[];
 
   // Actions
   setActiveTemplateId: (id: string) => void;
@@ -840,6 +841,8 @@ export interface TemplateStoreState {
   publishTemplate: (id: string) => void;
   unpublishTemplate: (id: string) => void;
   deleteTemplate: (id: string) => void;
+  deleteAllTemplates: (ids?: string[]) => void;
+  restoreBuiltInTemplates: () => void;
   cloneTemplate: (id: string) => string;
   replaceTemplateImage: (id: string, imageUrl: string) => void;
   resetTemplateToDefault: (id: string) => void;
@@ -852,6 +855,7 @@ export const useTemplateStore = create<TemplateStoreState>()(
     (set, get) => ({
       templates: BUILTIN_TEMPLATES,
       activeTemplateId: 'emerald-crystal-poster',
+      deletedTemplateIds: [],
 
       setActiveTemplateId: (id: string) => set({ activeTemplateId: id }),
 
@@ -877,16 +881,19 @@ export const useTemplateStore = create<TemplateStoreState>()(
       syncTemplates: (incoming: CustomGraphicsTemplate[]) => {
         if (!Array.isArray(incoming)) return;
         set((state) => {
+          const deletedIds = new Set(state.deletedTemplateIds || []);
           const incomingMap = new Map<string, CustomGraphicsTemplate>();
           incoming.forEach((t) => {
             const id = (t as any)._id || (t as any).customId || t.id;
-            const safeType = t.templateType || normalizeTemplateType(t.category);
-            incomingMap.set(id, { ...t, id, templateType: safeType });
+            if (!deletedIds.has(id)) {
+              const safeType = t.templateType || normalizeTemplateType(t.category);
+              incomingMap.set(id, { ...t, id, templateType: safeType });
+            }
           });
 
-          // Builtin templates baseline
+          // Builtin templates baseline (excluding deleted ones)
           const builtInIds = new Set(BUILTIN_TEMPLATES.map((b) => b.id));
-          const builtIns = BUILTIN_TEMPLATES.map((b) => {
+          const builtIns = BUILTIN_TEMPLATES.filter((b) => !deletedIds.has(b.id)).map((b) => {
             if (incomingMap.has(b.id)) {
               const serverVersion = incomingMap.get(b.id)!;
               incomingMap.delete(b.id);
@@ -898,7 +905,7 @@ export const useTemplateStore = create<TemplateStoreState>()(
 
           // All remaining server templates are authorized custom templates
           const authorizedCustom = Array.from(incomingMap.values()).filter(
-            (t) => !builtInIds.has(t.id)
+            (t) => !builtInIds.has(t.id) && !deletedIds.has(t.id)
           );
 
           const combined = [...builtIns, ...authorizedCustom];
@@ -906,7 +913,7 @@ export const useTemplateStore = create<TemplateStoreState>()(
 
           return {
             templates: combined,
-            activeTemplateId: activeStillExists ? state.activeTemplateId : combined[0]?.id || BUILTIN_TEMPLATES[0].id,
+            activeTemplateId: activeStillExists ? state.activeTemplateId : combined[0]?.id || (BUILTIN_TEMPLATES[0]?.id || ''),
           };
         });
       },
@@ -1034,12 +1041,37 @@ export const useTemplateStore = create<TemplateStoreState>()(
 
       deleteTemplate: (id: string) => {
         set((state) => {
+          const deletedTemplateIds = Array.from(new Set([...(state.deletedTemplateIds || []), id]));
           const remaining = state.templates.filter((t) => t.id !== id);
-          const fallback = remaining.length > 0 ? remaining[0].id : BUILTIN_TEMPLATES[0].id;
+          const fallback = remaining.length > 0 ? remaining[0].id : (BUILTIN_TEMPLATES[0]?.id || '');
           return {
-            templates: remaining.length > 0 ? remaining : BUILTIN_TEMPLATES,
+            deletedTemplateIds,
+            templates: remaining,
             activeTemplateId: state.activeTemplateId === id ? fallback : state.activeTemplateId
           };
+        });
+      },
+
+      deleteAllTemplates: (ids?: string[]) => {
+        set((state) => {
+          const targetIds = ids && ids.length > 0 ? ids : state.templates.map((t) => t.id);
+          const targetSet = new Set(targetIds);
+          const deletedTemplateIds = Array.from(new Set([...(state.deletedTemplateIds || []), ...targetIds]));
+          const remaining = state.templates.filter((t) => !targetSet.has(t.id));
+          const fallback = remaining.length > 0 ? remaining[0].id : (BUILTIN_TEMPLATES[0]?.id || '');
+          return {
+            deletedTemplateIds,
+            templates: remaining,
+            activeTemplateId: targetSet.has(state.activeTemplateId) ? fallback : state.activeTemplateId
+          };
+        });
+      },
+
+      restoreBuiltInTemplates: () => {
+        set({
+          deletedTemplateIds: [],
+          templates: BUILTIN_TEMPLATES,
+          activeTemplateId: BUILTIN_TEMPLATES[0].id
         });
       },
 
