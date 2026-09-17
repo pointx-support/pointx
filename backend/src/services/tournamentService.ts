@@ -469,8 +469,10 @@ export async function getNextMatchForTournament(
     };
   }
 
-  // 2. Allow advancing seamlessly up to at least 24 matches (standard tournament series) or tour structure
-  const maxMatches = Math.max(24, tour.structure?.matchCount || 0);
+  // 2. Allow advancing up to explicit structure.matchCount (or default 24 matches for live broadcast series)
+  const maxMatches = tour.structure?.matchCount && tour.structure.matchCount > 0
+    ? tour.structure.matchCount
+    : 24;
   if (targetNextNum <= maxMatches) {
     const nextMatchId = `live-match-${targetNextNum}`;
     return {

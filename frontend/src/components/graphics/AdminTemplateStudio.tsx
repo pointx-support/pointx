@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTemplateStore } from '../../store/templateStore';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useAuthStore } from '../../store/authStore';
@@ -93,6 +93,8 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
   const [stepSize, setStepSize] = useState<number>(5);
   const [zoomScale, setZoomScale] = useState<number>(1);
   const [userSelectedColumn, setUserSelectedColumn] = useState<'total' | 'kills' | 'rank' | 'teamName' | 'logo' | 'place' | 'match' | 'booyah' | null>(null);
+  // Row Gap scope: 'selected' moves only selected rows, 'all' updates entire 12-row table
+  const [rowGapScope, setRowGapScope] = useState<'selected' | 'all'>('selected');
 
   const detectedColumn = (() => {
     for (const k of selectedKeys) {
@@ -388,6 +390,35 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
 
   // Primary active element style
   const primaryElement = getElementStyleByKey(primaryKey);
+
+  // Group selected elements into distinct visual rows sorted from top to bottom
+  const selectedRowGroups = useMemo(() => {
+    if (selectedKeys.length < 2) return [];
+    const items = selectedKeys.map((k) => ({ key: k, style: getElementStyleByKey(k) }));
+    const sorted = [...items].sort((a, b) => a.style.y - b.style.y);
+    const groups: { y: number; elements: typeof items }[] = [];
+    const Y_THRESHOLD = 18;
+
+    for (const item of sorted) {
+      const existing = groups.find((g) => Math.abs(g.y - item.style.y) <= Y_THRESHOLD);
+      if (existing) {
+        existing.elements.push(item);
+        existing.y = Math.round(
+          existing.elements.reduce((sum, el) => sum + el.style.y, 0) / existing.elements.length
+        );
+      } else {
+        groups.push({ y: item.style.y, elements: [item] });
+      }
+    }
+    return groups.sort((a, b) => a.y - b.y);
+  }, [selectedKeys, getElementStyleByKey]);
+
+  const currentSelectedGap = useMemo(() => {
+    if (selectedRowGroups.length < 2) return alignment.rowGap || 68;
+    const topY = selectedRowGroups[0].y;
+    const bottomY = selectedRowGroups[selectedRowGroups.length - 1].y;
+    return Math.max(5, Math.round((bottomY - topY) / (selectedRowGroups.length - 1)));
+  }, [selectedRowGroups, alignment.rowGap]);
 
   // Element Type Detection
   const isMulti = selectedKeys.length > 1;
@@ -783,27 +814,78 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
     });
   };
 
-  // 5. Adjust Row Gap Live
+  // 5. Adjust Row Gap Live (Selection-Aware)
   const handleAdjustRowGap = (delta: number) => {
-    const newRowGap = Math.max(10, Math.min(250, (alignment.rowGap || 68) + delta));
-    const currentSlots = { ...(alignment.slots || {}) };
-    const isSingleColumn = alignment.layoutMode === 'single-column';
+    const isSelectionMode = rowGapScope === 'selected' && selectedRowGroups.length >= 2;
 
-    for (let slotNum = 1; slotNum <= 12; slotNum++) {
-      const isRight = !isSingleColumn && slotNum > 6;
-      const rowIndex = isRight ? slotNum - 7 : slotNum - 1;
-      const curSlot = currentSlots[slotNum];
-      if (curSlot && (curSlot as any)[smartAlignColumn]?.y !== undefined) {
-        const baseSlot = isRight ? 7 : 1;
-        const baseY = getElementStyleByKey(`slot_${baseSlot}_${smartAlignColumn}`).y;
-        (curSlot as any)[smartAlignColumn].y = Math.round(baseY + rowIndex * newRowGap);
+    if (isSelectionMode) {
+      // ONLY adjust spacing between the selected elements. Unselected elements DO NOT MOVE.
+      const currentSlots = { ...(alignment.slots || {}) };
+      const currentElements = { ...(alignment.elements || {}) };
+
+      selectedRowGroups.forEach((group, r) => {
+        const shift = Math.round(r * delta);
+        group.elements.forEach((item) => {
+          const key = item.key;
+          const targetY = item.style.y + shift;
+
+          const isSlotKey = key.startsWith('slot_');
+          const slotParts = isSlotKey ? key.split('_') : [];
+          const slotNum = isSlotKey ? Number(slotParts[1]) : null;
+          const slotItem = isSlotKey ? slotParts[2] : null;
+
+          if (isSlotKey && slotNum && slotItem) {
+            const curSlot = currentSlots[slotNum] || {};
+            const curItem = (curSlot as any)[slotItem] || {};
+            currentSlots[slotNum] = {
+              ...curSlot,
+              [slotItem]: {
+                ...curItem,
+                y: targetY
+              }
+            };
+          } else {
+            const curEl = (currentElements as any)[key] || {};
+            (currentElements as any)[key] = {
+              ...curEl,
+              y: targetY
+            };
+          }
+        });
+      });
+
+      updateTemplateAlignment(activeTemplate.id, {
+        slots: currentSlots,
+        elements: currentElements
+      });
+
+      showToast({
+        type: 'success',
+        title: 'Row Spacing Adjusted',
+        message: `Adjusted spacing across ${selectedRowGroups.length} selected rows (${delta > 0 ? `+${delta}` : delta}px). Unselected elements remained in place.`
+      });
+    } else {
+      // Global Table Row Gap: applies to all 12 slots of the active table column
+      const newRowGap = Math.max(10, Math.min(250, (alignment.rowGap || 68) + delta));
+      const currentSlots = { ...(alignment.slots || {}) };
+      const isSingleColumn = alignment.layoutMode === 'single-column';
+
+      for (let slotNum = 1; slotNum <= 12; slotNum++) {
+        const isRight = !isSingleColumn && slotNum > 6;
+        const rowIndex = isRight ? slotNum - 7 : slotNum - 1;
+        const curSlot = currentSlots[slotNum];
+        if (curSlot && (curSlot as any)[smartAlignColumn]?.y !== undefined) {
+          const baseSlot = isRight ? 7 : 1;
+          const baseY = getElementStyleByKey(`slot_${baseSlot}_${smartAlignColumn}`).y;
+          (curSlot as any)[smartAlignColumn].y = Math.round(baseY + rowIndex * newRowGap);
+        }
       }
-    }
 
-    updateTemplateAlignment(activeTemplate.id, {
-      rowGap: newRowGap,
-      slots: currentSlots
-    });
+      updateTemplateAlignment(activeTemplate.id, {
+        rowGap: newRowGap,
+        slots: currentSlots
+      });
+    }
   };
 
   // 6. Multi-Selection Alignment Bar (Figma-style)
@@ -1816,15 +1898,64 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
 
             {/* Table Row Spacing Adjuster */}
             <div className="pt-2 border-t border-[var(--border-subtle)] space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-[var(--text-secondary)] flex items-center gap-1">
-                  <Grid className="h-3 w-3 text-[var(--accent-primary)]" />
-                  Row Gap Spacing:
-                </span>
-                <span className="font-bold text-[var(--accent-primary)] font-numbers">
-                  {alignment.rowGap || 68}px
-                </span>
-              </div>
+              {/* Dynamic Scope Toggle & Header */}
+              {selectedRowGroups.length >= 2 ? (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="text-[var(--text-secondary)] flex items-center gap-1">
+                      <Grid className="h-3 w-3 text-emerald-400" />
+                      <span className="font-bold text-emerald-400">
+                        {rowGapScope === 'selected' ? `Selected Gap (${selectedRowGroups.length} Rows):` : 'Global Table Row Gap:'}
+                      </span>
+                    </span>
+                    <span className="font-bold text-emerald-400 font-numbers">
+                      {rowGapScope === 'selected' ? `${currentSelectedGap}px` : `${alignment.rowGap || 68}px`}
+                    </span>
+                  </div>
+
+                  {/* Scope Selector Pills */}
+                  <div className="flex items-center gap-1 bg-[var(--bg-surface-inset)] p-1 rounded-xl border border-[var(--border-subtle)]">
+                    <button
+                      type="button"
+                      onClick={() => setRowGapScope('selected')}
+                      className={`flex-1 py-1 px-2 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                        rowGapScope === 'selected'
+                          ? 'bg-emerald-500 text-black font-extrabold shadow-xs'
+                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      <span>🎯 Selected Only ({selectedRowGroups.length} Rows)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRowGapScope('all')}
+                      className={`flex-1 py-1 px-2 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                        rowGapScope === 'all'
+                          ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] font-extrabold shadow-xs'
+                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      <span>🌐 All 12 Rows</span>
+                    </button>
+                  </div>
+                  {rowGapScope === 'selected' && (
+                    <div className="text-[10px] text-emerald-400/90 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                      ✓ Only moves {selectedKeys.length} selected elements. Other elements stay fixed.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-[var(--text-secondary)] flex items-center gap-1">
+                    <Grid className="h-3 w-3 text-[var(--accent-primary)]" />
+                    Row Gap Spacing:
+                  </span>
+                  <span className="font-bold text-[var(--accent-primary)] font-numbers">
+                    {alignment.rowGap || 68}px
+                  </span>
+                </div>
+              )}
+
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
@@ -1844,12 +1975,13 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                 </button>
                 <input
                   type="range"
-                  min="20"
-                  max="180"
-                  value={alignment.rowGap || 68}
+                  min="10"
+                  max="200"
+                  value={rowGapScope === 'selected' && selectedRowGroups.length >= 2 ? currentSelectedGap : (alignment.rowGap || 68)}
                   onChange={(e) => {
                     const val = Number(e.target.value);
-                    handleAdjustRowGap(val - (alignment.rowGap || 68));
+                    const cur = rowGapScope === 'selected' && selectedRowGroups.length >= 2 ? currentSelectedGap : (alignment.rowGap || 68);
+                    handleAdjustRowGap(val - cur);
                   }}
                   className="flex-1 accent-[var(--accent-primary)] cursor-pointer"
                 />
