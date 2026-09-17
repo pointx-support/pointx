@@ -154,9 +154,12 @@ export const GraphicsStudioView: React.FC = () => {
 
   const currentTemplate = currentCategoryTemplate;
 
-  // Real-time synchronization to live OBS instances
+  // Real-time synchronization to live OBS instances with 150ms debounce
+  // Prevents slider dragging and live typing from flooding WebSocket connections while keeping OBS latency <150ms
   useEffect(() => {
-    if (currentTemplate) {
+    if (!currentTemplate) return;
+
+    const timer = setTimeout(() => {
       broadcastTemplateLiveUpdate(currentTemplate, {
         tournamentId: currentTournament.id,
         themeHue: hueRotate,
@@ -164,7 +167,9 @@ export const GraphicsStudioView: React.FC = () => {
         customEventTitle,
         customOrgName,
       });
-    }
+    }, 150);
+
+    return () => clearTimeout(timer);
   }, [currentTemplate, hueRotate, selectedScope, customEventTitle, customOrgName, currentTournament.id]);
 
   // Compute standings and subtitle dynamically based on selected scope

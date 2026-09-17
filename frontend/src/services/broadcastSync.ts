@@ -115,6 +115,7 @@ export class RealtimeSyncClient {
   private isConnecting: boolean = false;
   private reconnectTimer: any = null;
   private healthCheckTimer: any = null;
+  private healthCheckCount: number = 0;
   private reconnectAttempts: number = 0;
   private connectionState: ConnectionState = 'DISCONNECTED';
 
@@ -659,9 +660,16 @@ export class RealtimeSyncClient {
 
   private startHealthCheck(): void {
     if (this.healthCheckTimer) clearInterval(this.healthCheckTimer);
+    this.healthCheckCount = 0;
     this.healthCheckTimer = setInterval(() => {
-      // Lightweight HTTP state check every 10 seconds to reconcile state
-      this.fetchAuthoritativeSnapshot();
+      this.healthCheckCount += 1;
+      const isWsOpen = this.ws && this.ws.readyState === WebSocket.OPEN;
+      // When WebSocket is actively connected, all live mutations stream instantaneously (<10ms).
+      // Reconcile via HTTP only every 60s (every 6th interval) to drastically reduce bandwidth.
+      // When disconnected or reconnecting, check every 10s as a fallback.
+      if (!isWsOpen || this.healthCheckCount % 6 === 0) {
+        this.fetchAuthoritativeSnapshot();
+      }
     }, 10000);
   }
 

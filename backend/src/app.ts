@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
+import compression from 'compression';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -146,6 +147,20 @@ export function createApp(): Application {
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-broadcast-token', 'x-device-id'],
+    })
+  );
+
+  // 2.5 HTTP Response Compression (Gzip/Deflate)
+  // Smart filter: Bypasses Server-Sent Events (SSE) to ensure 0-latency live streaming to OBS / remotes
+  app.use(
+    compression({
+      filter: (req, res) => {
+        if (req.headers['accept'] === 'text/event-stream' || req.path.includes('/sync/stream')) {
+          return false;
+        }
+        return compression.filter(req, res);
+      },
+      threshold: 1024,
     })
   );
 

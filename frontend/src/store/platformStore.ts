@@ -71,13 +71,16 @@ export const usePlatformStore = create<PlatformState>()(
         set({ previewMaintenance: preview });
       },
 
-      startPolling: (intervalMs = 6000) => {
+      startPolling: (intervalMs = 30000) => {
         if (pollingTimer) {
           clearInterval(pollingTimer);
         }
         get().fetchPlatformStatus();
         pollingTimer = setInterval(() => {
-          get().fetchPlatformStatus();
+          // Bandwidth optimization: avoid polling when browser tab is inactive/hidden
+          if (typeof document === 'undefined' || !document.hidden) {
+            get().fetchPlatformStatus();
+          }
         }, intervalMs);
 
         return () => {

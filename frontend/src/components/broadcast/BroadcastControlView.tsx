@@ -4,7 +4,7 @@ import { ObsLiveOverlay } from './ObsLiveOverlay';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { useToast } from '../ui/Toast';
-import { broadcastLayoutChange } from '../../services/broadcastSync';
+import { broadcastLayoutChange, RealtimeSyncClient } from '../../services/broadcastSync';
 import { getStoredToken } from '../../services/api';
 import {
   Tv,
@@ -167,6 +167,7 @@ export const BroadcastControlView: React.FC = () => {
   };
 
   // Poll live sync state for connected devices and active PIN across all networks
+  // Smart bandwidth optimization: 10s interval (reduced from aggressive 2.5s) combined with instant WebSocket event updates
   useEffect(() => {
     let isMounted = true;
 
@@ -191,11 +192,26 @@ export const BroadcastControlView: React.FC = () => {
     };
 
     fetchSyncState();
-    const interval = setInterval(fetchSyncState, 2500);
+    const interval = setInterval(fetchSyncState, 10000);
+
+    // Instant WebSocket listener: updates connected devices/blocks in real time without waiting for poll
+    const syncClient = RealtimeSyncClient.getInstance();
+    syncClient.setTournament(currentTournament.id);
+    const unsubscribeRaw = syncClient.subscribeRawMessage((msg) => {
+      if (msg && msg.data && isMounted) {
+        if (Array.isArray(msg.data.connectedDevices)) {
+          setConnectedDevices(msg.data.connectedDevices);
+        }
+        if (Array.isArray(msg.data.blockedDeviceIds)) {
+          setBlockedDeviceIds(msg.data.blockedDeviceIds);
+        }
+      }
+    });
 
     return () => {
       isMounted = false;
       clearInterval(interval);
+      unsubscribeRaw();
     };
   }, [currentTournament.id]);
 

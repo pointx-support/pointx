@@ -124,9 +124,9 @@ export function App() {
     useAuthStore.getState().checkAuth();
   }, []);
 
-  // Poll platform status every 8 seconds for real-time maintenance detection
+  // Poll platform status every 30 seconds for real-time maintenance detection (conserves bandwidth)
   useEffect(() => {
-    const stopPolling = startPolling(8000);
+    const stopPolling = startPolling(30000);
     return () => stopPolling();
   }, [startPolling]);
 
