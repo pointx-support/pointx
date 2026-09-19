@@ -297,17 +297,17 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
     <div className="space-y-8 font-sans w-full max-w-[1680px] mx-auto animate-page-enter">
       {/* ================= 1. CLEAN POINTX ESPORTS COMMAND-CENTER HERO SECTION ================= */}
       <motion.section
-        initial={{ opacity: 0, y: -16 }}
+        initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-        className="relative rounded-3xl border border-[var(--border-subtle)] bg-gradient-to-b from-[var(--bg-surface-raised)] via-[var(--bg-hero)] to-[var(--bg-surface)] overflow-hidden shadow-[var(--shadow-raised)] p-6 sm:p-10 lg:p-12 text-center transition-all duration-300"
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        className="relative pt-4 pb-2 sm:pt-8 sm:pb-4 text-center"
       >
         
         {/* Subtle, soft ambient highlight behind logo */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] sm:w-[540px] h-[200px] sm:h-[260px] bg-[var(--accent-primary)]/10 rounded-full blur-[100px] pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] sm:w-[580px] md:w-[720px] h-[180px] sm:h-[240px] bg-[var(--accent-primary)]/8 rounded-full blur-[100px] pointer-events-none" />
 
         {/* --- HERO CONTENT COMPOSITION --- */}
-        <div className="relative z-10 flex flex-col items-center justify-center max-w-3xl mx-auto space-y-5 sm:space-y-6">
+        <div className="relative z-10 flex flex-col items-center justify-center max-w-3xl mx-auto space-y-4 sm:space-y-5">
           
           {/* 1. PointX Esports Authority Tag */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/25 backdrop-blur-md text-[var(--accent-primary-text)] dark:text-[var(--accent-primary)] shadow-sm">
