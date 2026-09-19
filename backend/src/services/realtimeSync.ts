@@ -184,7 +184,23 @@ export async function getOrCreateAuthoritativeState(tournamentId: string): Promi
 
       if (doc) {
         if (doc.matches && Array.isArray(doc.matches)) {
-          doc.matches = doc.matches.filter((m: any) => !deletedMatchTombstones.has(m.id || m.customId));
+          const validMatches = doc.matches.filter((m: any) => !deletedMatchTombstones.has(m.id || m.customId));
+          const seenNums = new Set<number>();
+          const deduped: any[] = [];
+          const sorted = [...validMatches].sort((a: any, b: any) => {
+            if (a.matchNumber !== b.matchNumber) return (a.matchNumber || 0) - (b.matchNumber || 0);
+            if (a.status === 'Completed' && b.status !== 'Completed') return -1;
+            if (b.status === 'Completed' && a.status !== 'Completed') return 1;
+            return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
+          });
+          for (const m of sorted) {
+            if (m.matchNumber !== undefined && m.matchNumber !== null) {
+              if (seenNums.has(m.matchNumber)) continue;
+              seenNums.add(m.matchNumber);
+            }
+            deduped.push(m);
+          }
+          doc.matches = deduped.sort((a: any, b: any) => (a.matchNumber || 0) - (b.matchNumber || 0));
         }
         state.tournament = {
           ...doc,
@@ -293,9 +309,25 @@ export async function updateAuthoritativeState(
   // Apply updates
   if (updates.tournament !== undefined) {
     if (updates.tournament && Array.isArray(updates.tournament.matches)) {
-      updates.tournament.matches = updates.tournament.matches.filter(
+      const validMatches = updates.tournament.matches.filter(
         (m: any) => !deletedMatchTombstones.has(m.id || m.customId)
       );
+      const seenNums = new Set<number>();
+      const deduped: any[] = [];
+      const sorted = [...validMatches].sort((a: any, b: any) => {
+        if (a.matchNumber !== b.matchNumber) return (a.matchNumber || 0) - (b.matchNumber || 0);
+        if (a.status === 'Completed' && b.status !== 'Completed') return -1;
+        if (b.status === 'Completed' && a.status !== 'Completed') return 1;
+        return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
+      });
+      for (const m of sorted) {
+        if (m.matchNumber !== undefined && m.matchNumber !== null) {
+          if (seenNums.has(m.matchNumber)) continue;
+          seenNums.add(m.matchNumber);
+        }
+        deduped.push(m);
+      }
+      updates.tournament.matches = deduped.sort((a: any, b: any) => (a.matchNumber || 0) - (b.matchNumber || 0));
     }
     state.tournament = updates.tournament;
   }

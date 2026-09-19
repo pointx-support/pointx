@@ -34,7 +34,9 @@ async function executeMongoPersistence(state: CanonicalLiveMatchState, _scoringP
     if (!tour) return;
 
     if (!Array.isArray(tour.matches)) tour.matches = [];
-    let match = tour.matches.find((m: any) => (m.id || m.customId) === state.matchId);
+    let match = tour.matches.find(
+      (m: any) => (m.id || m.customId) === state.matchId || (state.matchNumber && m.matchNumber === state.matchNumber)
+    );
 
     if (!match) {
       // The match does not exist or was deleted by the user. Do not resurrect it!

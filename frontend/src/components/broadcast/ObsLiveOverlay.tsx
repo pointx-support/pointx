@@ -161,9 +161,16 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
         const targetId = disp.activeMatchId || (disp.activeMatchNumber !== undefined ? `live-match-${disp.activeMatchNumber}` : '');
         if (targetId) {
           const org = canonicalState?.organizationId || 'org-default';
-          liveStore.setMatchContext(org, effectiveTournamentId, targetId, false);
+          liveStore.setMatchContext(org, effectiveTournamentId, targetId, true);
           setLastSyncTime(Date.now());
         }
+      }
+    });
+
+    // Subscribe to tournament updates so published matches update overlay immediately
+    const unsubTour = syncClient.subscribeTournament(() => {
+      if (!isCancelled) {
+        setLastSyncTime(Date.now());
       }
     });
 
@@ -180,6 +187,7 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
       unsubLive();
       unsubNext();
       unsubDisplay();
+      unsubTour();
       unsubConn();
     };
   }, [effectiveTournamentId, effectiveMatchId]);

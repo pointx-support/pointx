@@ -72,16 +72,34 @@ export function calculateTournamentStandings(
   const scoringPreset = normalizeScoringConfig(tournament.scoringPreset);
   const includeDrafts = options?.includeDrafts ?? false;
 
-  // Filter eligible matches
-  const eligibleMatches = matches
+  // Filter eligible matches and deduplicate by matchNumber so no round is counted twice
+  const rawEligible = matches
     .filter((m) => {
       if (!m) return false;
       if (!includeDrafts && m.status === 'Draft') return false;
       if (options?.matchRange?.start && m.matchNumber < options.matchRange.start) return false;
       if (options?.matchRange?.end && m.matchNumber > options.matchRange.end) return false;
       return true;
-    })
-    .sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0));
+    });
+
+  // Prioritize Completed matches with latest updates if duplicates exist
+  const sortedEligible = [...rawEligible].sort((a, b) => {
+    if (a.matchNumber !== b.matchNumber) return (a.matchNumber || 0) - (b.matchNumber || 0);
+    if (a.status === 'Completed' && b.status !== 'Completed') return -1;
+    if (b.status === 'Completed' && a.status !== 'Completed') return 1;
+    return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
+  });
+
+  const seenNumbers = new Set<number>();
+  const eligibleMatches: typeof matches = [];
+  for (const m of sortedEligible) {
+    if (m.matchNumber !== undefined && m.matchNumber !== null) {
+      if (seenNumbers.has(m.matchNumber)) continue;
+      seenNumbers.add(m.matchNumber);
+    }
+    eligibleMatches.push(m);
+  }
+  eligibleMatches.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0));
 
   // Initialize accumulators for all teams
   const createFreshAccumulators = () => {

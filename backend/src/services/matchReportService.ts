@@ -158,7 +158,19 @@ export async function getMatchReport(
   matchId: string,
   version?: number
 ): Promise<IMatchReport | null> {
-  const query: any = { tournamentId, matchId };
+  const numMatch = matchId.match(/match.*?(\d+)/i) || matchId.match(/^m(\d+)$/i);
+  const parsedNum = numMatch ? parseInt(numMatch[1], 10) : null;
+
+  const matchConditions: any[] = [{ matchId }];
+  if (parsedNum !== null) {
+    matchConditions.push({ matchNumber: parsedNum });
+    matchConditions.push({ matchId: `live-match-${parsedNum}` });
+  }
+
+  const query: any = {
+    tournamentId,
+    $or: matchConditions,
+  };
   if (version && version > 0) {
     query.version = version;
   }
@@ -365,8 +377,21 @@ export async function publishMatchReport(
 
   if (!Array.isArray(tour.matches)) tour.matches = [];
 
-  let match = tour.matches.find((m: any) => (m.id || m.customId) === matchId);
-  const matchNumber = liveState.matchNumber || (match?.matchNumber || tour.matches.length + 1);
+  let parsedMatchNum: number | null = null;
+  if (typeof matchId === 'string') {
+    const numMatch = matchId.match(/match.*?(\d+)/i) || matchId.match(/^m(\d+)$/i);
+    if (numMatch) {
+      parsedMatchNum = parseInt(numMatch[1], 10);
+    }
+  }
+  const targetMatchNum = liveState.matchNumber || parsedMatchNum;
+
+  // Search existing match by ID OR by matchNumber
+  let match = tour.matches.find((m: any) =>
+    (m.id || m.customId) === matchId ||
+    (targetMatchNum && m.matchNumber === targetMatchNum)
+  );
+  const matchNumber = match?.matchNumber || targetMatchNum || (tour.matches.length + 1);
 
   let booyahAlreadySet = false;
   const results = (Array.isArray(customResults) && customResults.length > 0)
@@ -404,6 +429,8 @@ export async function publishMatchReport(
     match.results = results;
     if (customMapName) {
       match.mapName = customMapName;
+    } else if (report.mapName) {
+      match.mapName = report.mapName;
     }
     match.updatedAt = new Date().toISOString();
   } else {
@@ -427,8 +454,72 @@ export async function publishMatchReport(
     tour.matches.push(match);
   }
 
+  // Deduplicate matches so that NO two matches can ever share the same matchNumber
+  const seenNumbers = new Set<number>();
+  const deduplicatedMatches: any[] = [];
+  for (const m of tour.matches) {
+    if (!m) continue;
+    const mNum = m.matchNumber;
+    if (mNum === matchNumber && m !== match) {
+      // Drop any old duplicate of this same matchNumber
+      continue;
+    }
+    if (mNum !== undefined && mNum !== null) {
+      if (seenNumbers.has(mNum)) continue;
+      seenNumbers.add(mNum);
+    }
+    deduplicatedMatches.push(m);
+  }
+  tour.matches = deduplicatedMatches.sort((a: any, b: any) => (a.matchNumber || 0) - (b.matchNumber || 0));
+
   tour.status = 'Live';
   await Tournament.updateOne({ $or: idQueries }, { $set: { matches: tour.matches, status: 'Live' } });
+
+  // Update LiveStateStore in memory so any immediate reads of this match return completed state with Booyah team alive
+  try {
+    const eliminationOrder: string[] = [];
+    const eliminated = results
+      .filter((r: any) => !r.isBooyah && r.placement > 1)
+      .sort((a: any, b: any) => (b.placement || 12) - (a.placement || 12));
+    for (const r of eliminated) {
+      if (r.teamId) eliminationOrder.push(r.teamId);
+    }
+
+    for (const [teamId, teamState] of Object.entries(liveState.teams)) {
+      const res = results.find((r: any) => r.teamId === teamId);
+      if (res) {
+        teamState.kills = res.kills;
+        teamState.placement = res.placement;
+        teamState.placementPoints = res.placementPoints;
+        teamState.killPoints = res.killPoints;
+        teamState.isBooyah = Boolean(res.isBooyah || res.placement === 1);
+        teamState.points = (teamState.priorTotalPoints || 0) + res.totalPoints;
+        const playerStatus: any = teamState.isBooyah ? 'alive' : 'eliminated';
+        if (teamState.players) {
+          for (const p of Object.values(teamState.players)) {
+            p.status = playerStatus;
+            p.updatedAt = Date.now();
+          }
+        }
+      }
+    }
+    liveState.eliminationOrder = eliminationOrder;
+    liveState.isMatchFinished = true;
+    liveState.revision += 1;
+    liveState.updatedAt = Date.now();
+
+    const lStore = LiveStateStore.getInstance();
+    const k1 = lStore.getKey(orgId, tournamentId, matchId);
+    const k2 = lStore.getKey(orgId, tour.customId || tournamentId, matchId);
+    (lStore as any).inMemoryStore?.set(k1, liveState);
+    (lStore as any).inMemoryStore?.set(k2, liveState);
+    if (match.id && match.id !== matchId) {
+      const k3 = lStore.getKey(orgId, tournamentId, match.id);
+      const k4 = lStore.getKey(orgId, tour.customId || tournamentId, match.id);
+      (lStore as any).inMemoryStore?.set(k3, liveState);
+      (lStore as any).inMemoryStore?.set(k4, liveState);
+    }
+  } catch {}
 
   // Broadcast update to all rooms with properly formatted JSON
   try {

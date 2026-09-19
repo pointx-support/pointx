@@ -253,8 +253,13 @@ export class LiveStateStore {
     return true;
   }
 
-  private getKey(orgId: string, tournamentId: string, matchId: string): string {
+  public getKey(orgId: string, tournamentId: string, matchId: string): string {
     return `pointx:live:${orgId || 'org-default'}:${tournamentId || 'tour-default'}:${matchId || 'm1'}`;
+  }
+
+  public setLiveState(orgId: string, tournamentId: string, matchId: string, state: CanonicalLiveMatchState): void {
+    const key = this.getKey(orgId, tournamentId, matchId);
+    inMemoryStore.set(key, state);
   }
 
   public isCommandProcessed(commandId: string): boolean {
@@ -285,33 +290,25 @@ export class LiveStateStore {
     }
 
     const canonicalTourId = tour?.customId || (tour?._id ? String(tour._id) : tournamentId);
-    const key = this.getKey(organizationId, canonicalTourId, matchId);
-    const aliasKey = this.getKey(organizationId, tournamentId, matchId);
-
-    let state = inMemoryStore.get(key) || inMemoryStore.get(aliasKey);
-    if (state) {
-      inMemoryStore.set(key, state);
-      inMemoryStore.set(aliasKey, state);
-      return state;
-    }
-
-    if (this.isRedisConnected && this.redis) {
-      try {
-        const raw = await this.redis.get(key) || await this.redis.get(aliasKey);
-        if (raw) {
-          state = JSON.parse(raw);
-          if (state) {
-            inMemoryStore.set(key, state);
-            inMemoryStore.set(aliasKey, state);
-            return state;
-          }
-        }
-      } catch {}
-    }
-
-    const effectiveOrgId = organizationId || (tour?.organizationId ? String(tour.organizationId) : 'org-default');
     const hasMatches = Array.isArray(tour?.matches) && tour.matches.length > 0;
-    const requestedMatch = hasMatches ? tour.matches.find((m: any) => (m.id || m.customId) === matchId) : null;
+
+    let parsedMatchNum: number | null = null;
+    if (typeof matchId === 'string') {
+      const numMatch = matchId.match(/match.*?(\d+)/i) || matchId.match(/^m(\d+)$/i);
+      if (numMatch) {
+        parsedMatchNum = parseInt(numMatch[1], 10);
+      }
+    }
+
+    // Resolve match from tour.matches by exact ID or by matchNumber
+    const requestedMatch = hasMatches
+      ? tour.matches.find(
+          (m: any) =>
+            (m.id || m.customId) === matchId ||
+            (parsedMatchNum !== null && m.matchNumber === parsedMatchNum)
+        )
+      : null;
+
     const effectiveMatchId = requestedMatch
       ? (requestedMatch.id || requestedMatch.customId)
       : (matchId && matchId !== 'none'
@@ -320,42 +317,123 @@ export class LiveStateStore {
               ? (tour.matches[0].id || tour.matches[0].customId)
               : 'none'));
 
-    // Resolve match number intelligently (e.g. from match document, or live-match-2 -> 2)
+    // Resolve match number intelligently
     let matchNumber = 1;
     if (requestedMatch?.matchNumber) {
       matchNumber = requestedMatch.matchNumber;
-    } else if (matchId && matchId.match(/match.*?(\d+)/i)) {
-      matchNumber = parseInt(matchId.match(/match.*?(\d+)/i)![1], 10);
+    } else if (parsedMatchNum !== null) {
+      matchNumber = parsedMatchNum;
     } else if (effectiveMatchId === 'none') {
       matchNumber = 0;
     } else if (hasMatches) {
       matchNumber = tour.matches.length + 1;
     }
+
+    const existingMatch = requestedMatch || tour?.matches?.find(
+      (m: any) => (m.id || m.customId) === effectiveMatchId || (matchNumber && m.matchNumber === matchNumber)
+    );
+    const isCompletedMatch = Boolean(
+      existingMatch?.status === 'Completed' ||
+      (existingMatch?.results && existingMatch.results.length > 0 && existingMatch.results.some((r: any) => r.isBooyah || r.placement === 1))
+    );
+
+    const key = this.getKey(organizationId, canonicalTourId, matchId);
+    const aliasKey = this.getKey(organizationId, tournamentId, matchId);
+    const effKey = this.getKey(organizationId, canonicalTourId, effectiveMatchId);
+    const effAliasKey = this.getKey(organizationId, tournamentId, effectiveMatchId);
+
+    let state = inMemoryStore.get(key) || inMemoryStore.get(aliasKey) || inMemoryStore.get(effKey) || inMemoryStore.get(effAliasKey);
+    // If the database has this match as Completed with results, but the in-memory state has all teams alive or is not finished,
+    // re-hydrate directly from DB so we never show stale alive squads on a completed match!
+    const isStateValid = state && (!isCompletedMatch || state.isMatchFinished);
+    if (isStateValid) {
+      inMemoryStore.set(key, state);
+      inMemoryStore.set(aliasKey, state);
+      inMemoryStore.set(effKey, state);
+      inMemoryStore.set(effAliasKey, state);
+      return state;
+    }
+
+    if (this.isRedisConnected && this.redis) {
+      try {
+        const raw = await this.redis.get(key) || await this.redis.get(aliasKey);
+        if (raw) {
+          state = JSON.parse(raw);
+          if (state && (!isCompletedMatch || state.isMatchFinished)) {
+            inMemoryStore.set(key, state);
+            inMemoryStore.set(aliasKey, state);
+            inMemoryStore.set(effKey, state);
+            inMemoryStore.set(effAliasKey, state);
+            return state;
+          }
+        }
+      } catch {}
+    }
+
+    const effectiveOrgId = organizationId || (tour?.organizationId ? String(tour.organizationId) : 'org-default');
     const threshold = tour?.scoringPreset?.pointRushThreshold ?? 50;
 
-    // Sum up totalPoints for each team from prior COMPLETED matches
-    const priorCompletedMatches = Array.isArray(tour?.matches)
-      ? tour.matches.filter((m: any) =>
-          m.status === 'Completed' &&
-          (m.id || m.customId) !== effectiveMatchId &&
-          (m.matchNumber !== undefined && matchNumber ? m.matchNumber < matchNumber : true)
-        )
-      : [];
+    // Sum up totalPoints for each team from prior COMPLETED matches (deduplicated by matchNumber!)
+    const seenMatchNums = new Set<number>();
+    const priorCompletedMatches: any[] = [];
+    if (Array.isArray(tour?.matches)) {
+      const sortedTourMatches = [...tour.matches].sort((a: any, b: any) => {
+        if (a.matchNumber !== b.matchNumber) return (a.matchNumber || 0) - (b.matchNumber || 0);
+        if (a.status === 'Completed' && b.status !== 'Completed') return -1;
+        if (b.status === 'Completed' && a.status !== 'Completed') return 1;
+        return 0;
+      });
+
+      for (const m of sortedTourMatches) {
+        if (!m || m.status !== 'Completed') continue;
+        if ((m.id || m.customId) === effectiveMatchId) continue;
+        const mNum = m.matchNumber;
+        if (mNum !== undefined && matchNumber && mNum >= matchNumber) continue;
+        if (mNum !== undefined && mNum !== null) {
+          if (seenMatchNums.has(mNum)) continue;
+          seenMatchNums.add(mNum);
+        }
+        priorCompletedMatches.push(m);
+      }
+    }
 
     const teamsMap: Record<string, TeamLiveStatus> = {};
     const effectiveTeams = Array.isArray(tour?.teams) && tour.teams.length > 0
       ? tour.teams
       : [];
 
-    const existingMatch = tour?.matches?.find((m: any) => (m.id || m.customId) === effectiveMatchId);
     const resultsMap = new Map<string, any>();
     if (existingMatch && Array.isArray(existingMatch.results)) {
-      existingMatch.results.forEach((r: any) => resultsMap.set(r.teamId, r));
+      existingMatch.results.forEach((r: any) => {
+        if (r.teamId) resultsMap.set(r.teamId, r);
+      });
+    }
+
+    // Build eliminationOrder from completed results (12th place down to 2nd place)
+    const eliminationOrder: string[] = [];
+    if (isCompletedMatch && existingMatch && Array.isArray(existingMatch.results)) {
+      const eliminated = [...existingMatch.results]
+        .filter((r: any) => !r.isBooyah && (r.placement === undefined || r.placement > 1))
+        .sort((a: any, b: any) => (b.placement || 12) - (a.placement || 12));
+      for (const r of eliminated) {
+        if (r.teamId) eliminationOrder.push(r.teamId);
+      }
     }
 
     if (effectiveMatchId !== 'none') {
       effectiveTeams.forEach((t: any, teamIdx: number) => {
-        const res = resultsMap.get(t.id);
+        const res = resultsMap.get(t.id) ||
+          (t.customId ? resultsMap.get(t.customId) : null) ||
+          (t._id ? resultsMap.get(String(t._id)) : null);
+
+        const isBooyah = Boolean(res?.isBooyah || (res && res.placement === 1));
+
+        // When a match is completed on the website:
+        // The Booyah winning team stays ALIVE; all other teams (placement > 1) are DEAD / ELIMINATED!
+        const teamPlayerStatus: PlayerState = (isCompletedMatch && !isBooyah && (res?.placement ?? 2) > 1)
+          ? 'eliminated'
+          : 'alive';
+
         const playersObj: Record<string, PlayerLiveStatus> = {};
         const rawPlayers = Array.isArray(t.players) ? [...t.players] : [];
         while (rawPlayers.length < 4) {
@@ -365,7 +443,7 @@ export class LiveStateStore {
 
         teamPlayers.forEach((p: any, idx: number) => {
           const pid = p.id || `${t.id}-p${idx + 1}`;
-          playersObj[pid] = { status: 'alive', updatedAt: Date.now() };
+          playersObj[pid] = { status: teamPlayerStatus, updatedAt: Date.now() };
         });
 
         // Compute prior matches total points
@@ -386,7 +464,7 @@ export class LiveStateStore {
 
         const kills = res?.kills || 0;
         const killRate = tour?.scoringPreset?.killPoints ?? 1;
-        const killPoints = res?.killPoints || (kills * killRate);
+        const killPoints = res?.killPoints !== undefined ? res.killPoints : (kills * killRate);
         const placementPoints = res?.placementPoints || 0;
         const points = priorTotalPoints + killPoints + placementPoints + (res?.bonusPoints || 0) - (res?.penaltyPoints || 0);
 
@@ -401,7 +479,7 @@ export class LiveStateStore {
           placementPoints,
           killPoints,
           placement: res?.placement,
-          isBooyah: res?.isBooyah || false,
+          isBooyah,
           bonusPoints: res?.bonusPoints || 0,
           penaltyPoints: res?.penaltyPoints || 0,
           players: playersObj,
@@ -427,13 +505,15 @@ export class LiveStateStore {
       fireTeamId,
       pointRushThreshold: threshold,
       teams: teamsMap,
-      eliminationOrder: [],
-      isMatchFinished: false,
+      eliminationOrder,
+      isMatchFinished: Boolean(isCompletedMatch),
       updatedAt: Date.now(),
     };
 
     inMemoryStore.set(key, state);
     inMemoryStore.set(aliasKey, state);
+    inMemoryStore.set(effKey, state);
+    inMemoryStore.set(effAliasKey, state);
     if (this.isRedisConnected && this.redis) {
       try {
         await this.redis.set(key, JSON.stringify(state), 'EX', 86400);

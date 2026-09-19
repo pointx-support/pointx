@@ -264,6 +264,16 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       }
     });
 
+    // Subscribe to tournament updates (ensures availableMatches is always up to date when matches are published/created)
+    const unsubTour = syncClient.subscribeTournament((updatedTour) => {
+      if (!isCancelled && updatedTour) {
+        setTournamentInfo(updatedTour);
+        if (Array.isArray(updatedTour.matches)) {
+          setAvailableMatches(updatedTour.matches);
+        }
+      }
+    });
+
     // Track WebSocket connection health
     const unsubConn = syncClient.subscribeConnection((connState: ConnectionState) => {
       if (!isCancelled) {
@@ -276,6 +286,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       unsubLive();
       unsubNext();
       unsubFinalized();
+      unsubTour();
       unsubConn();
     };
   }, [effectiveTournamentId, effectiveMatchId, showToast]);
@@ -448,7 +459,16 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
         const nextNum = matchNum + 1;
         const nextMatchId = `live-match-${nextNum}`;
 
-        // Immediately update frontend tournament store with the newly published match
+        // Immediately update availableMatches and frontend tournament store with the newly published match
+        if (data.data?.match) {
+          setAvailableMatches((prev) => {
+            const matchIdToReplace = data.data.match.id || data.data.match.customId;
+            const filtered = prev.filter(
+              (m: any) => m.matchNumber !== matchNum && (m.id || m.customId) !== matchIdToReplace
+            );
+            return [...filtered, data.data.match].sort((a: any, b: any) => (a.matchNumber || 0) - (b.matchNumber || 0));
+          });
+        }
         useTournamentStore.getState().refreshCurrentTournament(effectiveTournamentId);
 
         showToast({

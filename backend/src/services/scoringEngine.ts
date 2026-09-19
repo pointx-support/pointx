@@ -1,4 +1,4 @@
-﻿/**
+/**
  * PointX Authoritative Backend Scoring Engine
  */
 
@@ -392,13 +392,31 @@ export function calculateStandings(
 ): CalculatedStanding[] {
   const normalized = normalizeScoringConfig(scoringConfig);
   const effectiveTeams = Array.isArray(teams) ? teams : [];
-  const effectiveMatches = Array.isArray(matches)
+  const rawMatches = Array.isArray(matches)
     ? matches.filter((m) => {
         if (options.includeDrafts) return true;
         const status = (m.status || '').toLowerCase();
         return status === 'completed' || status === 'finalized';
       })
     : [];
+
+  const seenNumbers = new Set<number>();
+  const effectiveMatches: any[] = [];
+  const sortedMatches = [...rawMatches].sort((a, b) => {
+    if (a.matchNumber !== b.matchNumber) return (a.matchNumber || 0) - (b.matchNumber || 0);
+    const aComp = (a.status || '').toLowerCase() === 'completed';
+    const bComp = (b.status || '').toLowerCase() === 'completed';
+    if (aComp && !bComp) return -1;
+    if (bComp && !aComp) return 1;
+    return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
+  });
+  for (const m of sortedMatches) {
+    if (m.matchNumber !== undefined && m.matchNumber !== null) {
+      if (seenNumbers.has(m.matchNumber)) continue;
+      seenNumbers.add(m.matchNumber);
+    }
+    effectiveMatches.push(m);
+  }
 
   const teamStatsMap = new Map<
     string,
