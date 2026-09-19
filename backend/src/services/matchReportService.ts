@@ -40,13 +40,18 @@ export async function generateAndSaveMatchReport(
     const teamKillPoints = team.killPoints !== undefined && team.killPoints > 0 ? team.killPoints : (team.kills * killRate);
     const isBooyah = team.isBooyah || pInfo?.isBooyah || placement === 1;
     const matchTotalPoints = placementPoints + teamKillPoints + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
-    const totalPoints = (team.priorTotalPoints || 0) + matchTotalPoints;
+    const totalPoints = matchTotalPoints;
+    const priorPoints = team.priorTotalPoints || 0;
+    const cumulativePoints = priorPoints + matchTotalPoints;
 
     return {
       ...team,
       placement,
       placementPoints,
       killPoints: teamKillPoints,
+      matchPoints: matchTotalPoints,
+      priorPoints,
+      cumulativePoints,
       totalPoints,
       isBooyah,
     };
@@ -59,7 +64,7 @@ export async function generateAndSaveMatchReport(
     return (a.slotNumber || 0) - (b.slotNumber || 0);
   });
 
-  const standings: ITeamStandingReport[] = sortedTeams.map((team, idx) => ({
+  const standings: (ITeamStandingReport & { matchPoints?: number; priorPoints?: number; cumulativePoints?: number })[] = sortedTeams.map((team, idx) => ({
     rank: idx + 1,
     teamId: team.teamId,
     teamName: team.name || `Team ${team.slotNumber || idx + 1}`,
@@ -72,6 +77,9 @@ export async function generateAndSaveMatchReport(
     killPoints: team.killPoints,
     bonusPoints: team.bonusPoints || 0,
     penaltyPoints: team.penaltyPoints || 0,
+    matchPoints: (team as any).matchPoints ?? team.totalPoints,
+    priorPoints: (team as any).priorPoints ?? 0,
+    cumulativePoints: (team as any).cumulativePoints ?? team.totalPoints,
     totalPoints: team.totalPoints,
     isBooyah: idx === 0,
   }));
@@ -251,13 +259,18 @@ export async function generateMatchReportPreview(
     const teamKillPoints = team.killPoints !== undefined && team.killPoints > 0 ? team.killPoints : (team.kills * killRate);
     const isBooyah = team.isBooyah || pInfo?.isBooyah || placement === 1;
     const matchTotalPoints = placementPoints + teamKillPoints + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
-    const totalPoints = (team.priorTotalPoints || 0) + matchTotalPoints;
+    const totalPoints = matchTotalPoints;
+    const priorPoints = team.priorTotalPoints || 0;
+    const cumulativePoints = priorPoints + matchTotalPoints;
 
     return {
       ...team,
       placement,
       placementPoints,
       killPoints: teamKillPoints,
+      matchPoints: matchTotalPoints,
+      priorPoints,
+      cumulativePoints,
       totalPoints,
       isBooyah,
     };
@@ -270,7 +283,7 @@ export async function generateMatchReportPreview(
     return (a.slotNumber || 0) - (b.slotNumber || 0);
   });
 
-  const standings: ITeamStandingReport[] = sortedTeams.map((team, idx) => ({
+  const standings: (ITeamStandingReport & { matchPoints?: number; priorPoints?: number; cumulativePoints?: number })[] = sortedTeams.map((team, idx) => ({
     rank: idx + 1,
     teamId: team.teamId,
     teamName: team.name || `Team ${team.slotNumber || idx + 1}`,
@@ -283,6 +296,9 @@ export async function generateMatchReportPreview(
     killPoints: team.killPoints,
     bonusPoints: team.bonusPoints || 0,
     penaltyPoints: team.penaltyPoints || 0,
+    matchPoints: (team as any).matchPoints ?? team.totalPoints,
+    priorPoints: (team as any).priorPoints ?? 0,
+    cumulativePoints: (team as any).cumulativePoints ?? team.totalPoints,
     totalPoints: team.totalPoints,
     isBooyah: idx === 0,
   }));
@@ -398,18 +414,22 @@ export async function publishMatchReport(
     ? customResults.map((s, idx) => {
         const isBooyah = (s.isBooyah === true || s.placement === 1) && !booyahAlreadySet;
         if (isBooyah) booyahAlreadySet = true;
+        const pPts = s.placementPoints !== undefined ? Number(s.placementPoints) : 0;
+        const kPts = s.killPoints !== undefined ? Number(s.killPoints) : (Number(s.kills) || 0);
+        const bPts = Number(s.bonusPoints) || 0;
+        const penPts = Number(s.penaltyPoints) || 0;
+        // Total points of a match result must ALWAYS be strictly for this match (never cumulative)
+        const matchTotalPoints = pPts + kPts + bPts - penPts;
         return {
           teamId: s.teamId,
           placement: s.placement || idx + 1,
-          kills: s.kills || 0,
-          placementPoints: s.placementPoints !== undefined ? s.placementPoints : 0,
-          killPoints: s.killPoints !== undefined ? s.killPoints : (s.kills || 0),
-          totalPoints: s.totalPoints !== undefined
-            ? s.totalPoints
-            : (s.placementPoints !== undefined ? s.placementPoints : 0) + (s.kills || 0) + (s.bonusPoints || 0) - (s.penaltyPoints || 0),
+          kills: Number(s.kills) || 0,
+          placementPoints: pPts,
+          killPoints: kPts,
+          totalPoints: matchTotalPoints,
           isBooyah,
-          bonusPoints: s.bonusPoints || 0,
-          penaltyPoints: s.penaltyPoints || 0,
+          bonusPoints: bPts,
+          penaltyPoints: penPts,
         };
       })
     : report.standings.map((s, idx) => ({
@@ -418,7 +438,7 @@ export async function publishMatchReport(
         kills: s.kills,
         placementPoints: s.placementPoints,
         killPoints: s.killPoints,
-        totalPoints: s.placementPoints + s.killPoints + (s.bonusPoints || 0) - (s.penaltyPoints || 0),
+        totalPoints: (s.placementPoints || 0) + (s.killPoints || 0) + (s.bonusPoints || 0) - (s.penaltyPoints || 0),
         isBooyah: idx === 0,
         bonusPoints: s.bonusPoints,
         penaltyPoints: s.penaltyPoints,
@@ -519,6 +539,8 @@ export async function publishMatchReport(
       (lStore as any).inMemoryStore?.set(k3, liveState);
       (lStore as any).inMemoryStore?.set(k4, liveState);
     }
+    // Update and link priorTotalPoints for all future matches in memory
+    LiveStateStore.getInstance().onMatchPublished(tournamentId, matchNumber, tour).catch(() => {});
   } catch {}
 
   // Broadcast update to all rooms with properly formatted JSON

@@ -41,6 +41,8 @@ export interface MatchReportData {
     killPoints: number;
     bonusPoints: number;
     penaltyPoints: number;
+    matchPoints?: number;
+    priorPoints?: number;
     totalPoints: number;
     isBooyah: boolean;
   }>;
@@ -203,7 +205,20 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
 
   const handlePublishClick = () => {
     if (onPublish) {
-      onPublish(standings, selectedMap);
+      const sanitized = standings.map((t) => {
+        const pPts = Number(t.placementPoints) || 0;
+        const kPts = t.killPoints !== undefined ? Number(t.killPoints) : (Number(t.kills) || 0);
+        const bPts = Number(t.bonusPoints) || 0;
+        const penPts = Number(t.penaltyPoints) || 0;
+        const matchTotalPoints = pPts + kPts + bPts - penPts;
+        return {
+          ...t,
+          placementPoints: pPts,
+          killPoints: kPts,
+          totalPoints: matchTotalPoints,
+        };
+      });
+      onPublish(sanitized, selectedMap);
     }
   };
 
@@ -584,7 +599,8 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
                     <th className="py-2.5 px-3 text-center text-rose-400 font-bold print:text-black">Kills (Elims)</th>
                     <th className="py-2.5 px-3 text-center text-cyan-400 font-bold print:text-black">Place Pts</th>
                     <th className="py-2.5 px-3 text-center">Kill Pts</th>
-                    <th className="py-2.5 px-3 text-right pr-4 font-black text-amber-400 print:text-black">Total Pts</th>
+                    <th className="py-2.5 px-3 text-center text-cyan-300 font-mono text-[10px] print:text-black">Prior Pts</th>
+                    <th className="py-2.5 px-3 text-right pr-4 font-black text-amber-400 print:text-black">Match Pts</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-purple-900/20 font-medium print:divide-neutral-200">
@@ -674,8 +690,16 @@ export const MatchReportView: React.FC<MatchReportViewProps> = ({
                         <td className="py-2.5 px-3 text-center font-mono text-[11px] text-slate-300 print:text-black">
                           {team.killPoints}
                         </td>
+                        <td className="py-2.5 px-3 text-center font-mono text-[11px] text-cyan-300/80 print:text-black">
+                          {team.priorPoints || 0}
+                        </td>
                         <td className="py-2.5 px-3 text-right pr-4 font-mono text-xs font-black text-amber-400 print:text-black">
-                          {team.totalPoints}
+                          <div>{team.totalPoints}</div>
+                          {((team.priorPoints || 0) > 0) && (
+                            <div className="text-[9px] text-slate-400 font-normal font-sans">
+                              Tot: {(team.priorPoints || 0) + team.totalPoints}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );

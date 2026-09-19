@@ -80,7 +80,9 @@ export interface RemoteCommand {
     | 'FINALIZE_MATCH'
     | 'REOPEN_MATCH'
     | 'NEXT_MATCH'
-    | 'REFRESH_OVERLAY';
+    | 'REFRESH_OVERLAY'
+    | 'RESET_PRIOR_POINTS'
+    | 'RECALCULATE_PRIOR_POINTS';
   sessionId?: string;
   organizationId: string;
   tournamentId: string;
@@ -923,6 +925,84 @@ export class LiveStateStore {
         diff.teams = updatedTeams;
         break;
       }
+
+      case 'RESET_PRIOR_POINTS': {
+        const targetTeamId = payload?.teamId;
+        const updatedTeams: Record<string, Partial<TeamLiveStatus>> = {};
+        for (const [tid, team] of Object.entries(state.teams)) {
+          if (!targetTeamId || targetTeamId === tid) {
+            team.priorTotalPoints = 0;
+            team.points = 0 + (team.placementPoints || 0) + (team.killPoints || 0) + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
+            team.pointRushEnabled = team.points >= state.pointRushThreshold;
+            updatedTeams[tid] = {
+              priorTotalPoints: 0,
+              points: team.points,
+              pointRushEnabled: team.pointRushEnabled,
+            };
+          }
+        }
+        diff.teams = updatedTeams;
+        break;
+      }
+
+      case 'RECALCULATE_PRIOR_POINTS': {
+        const { Tournament } = await import('../models/Tournament');
+        const idQueries: any[] = [{ customId: tournamentId }];
+        if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
+          idQueries.push({ _id: tournamentId });
+        }
+        const tour = await Tournament.findOne({ $or: idQueries }).lean();
+        const updatedTeams: Record<string, Partial<TeamLiveStatus>> = {};
+
+        if (tour && Array.isArray(tour.matches)) {
+          const priorCompletedMatches: any[] = [];
+          const seenMatchNums = new Set<number>();
+          const sortedTourMatches = [...tour.matches].sort((a: any, b: any) => {
+            if (a.matchNumber !== b.matchNumber) return (a.matchNumber || 0) - (b.matchNumber || 0);
+            if (a.status === 'Completed' && b.status !== 'Completed') return -1;
+            if (b.status === 'Completed' && a.status !== 'Completed') return 1;
+            return 0;
+          });
+
+          for (const m of sortedTourMatches) {
+            if (!m || m.status !== 'Completed') continue;
+            if ((m.id || m.customId) === state.matchId) continue;
+            const mNum = m.matchNumber;
+            if (mNum !== undefined && state.matchNumber && mNum >= state.matchNumber) continue;
+            if (mNum !== undefined && mNum !== null) {
+              if (seenMatchNums.has(mNum)) continue;
+              seenMatchNums.add(mNum);
+            }
+            priorCompletedMatches.push(m);
+          }
+
+          for (const [tid, team] of Object.entries(state.teams)) {
+            let priorTotalPoints = 0;
+            for (const pm of priorCompletedMatches) {
+              if (Array.isArray(pm.results)) {
+                const priorRes = pm.results.find((r: any) =>
+                  r.teamId === tid ||
+                  (team.slotNumber !== undefined && r.slotNumber !== undefined && r.slotNumber === team.slotNumber)
+                );
+                if (priorRes && priorRes.totalPoints !== undefined) {
+                  priorTotalPoints += Number(priorRes.totalPoints) || 0;
+                }
+              }
+            }
+
+            team.priorTotalPoints = priorTotalPoints;
+            team.points = priorTotalPoints + (team.placementPoints || 0) + (team.killPoints || 0) + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
+            team.pointRushEnabled = team.points >= state.pointRushThreshold;
+            updatedTeams[tid] = {
+              priorTotalPoints,
+              points: team.points,
+              pointRushEnabled: team.pointRushEnabled,
+            };
+          }
+        }
+        diff.teams = updatedTeams;
+        break;
+      }
     }
 
     if (commandId) {
@@ -950,6 +1030,211 @@ export class LiveStateStore {
       try {
         await this.redis.del(key);
       } catch {}
+    }
+  }
+
+  public async onMatchDeleted(tournamentId: string, deletedMatchId: string, updatedTour?: any): Promise<void> {
+    try {
+      let tour = updatedTour;
+      if (!tour) {
+        const { Tournament } = await import('../models/Tournament');
+        const idQueries: any[] = [{ customId: tournamentId }];
+        if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
+          idQueries.push({ _id: tournamentId });
+        }
+        tour = await Tournament.findOne({ $or: idQueries }).lean();
+      }
+      if (!tour) return;
+
+      const numMatch = deletedMatchId.match(/match.*?(\d+)/i) || deletedMatchId.match(/^m?(\d+)$/i);
+      const deletedNum = numMatch ? parseInt(numMatch[1], 10) : null;
+
+      // Clean deleted match from inMemoryStore
+      for (const [key, state] of inMemoryStore.entries()) {
+        if (
+          state.tournamentId === tournamentId ||
+          state.tournamentId === tour.customId ||
+          (tour._id && state.tournamentId === tour._id.toString())
+        ) {
+          if (
+            state.matchId === deletedMatchId ||
+            (deletedNum !== null && state.matchNumber === deletedNum)
+          ) {
+            inMemoryStore.delete(key);
+            if (this.isRedisConnected && this.redis) {
+              this.redis.del(key).catch(() => {});
+            }
+          }
+        }
+      }
+
+      // Re-calculate priorTotalPoints for all remaining matches of this tournament in memory
+      const matches = Array.isArray(tour.matches) ? tour.matches : [];
+      const completedMatches = matches.filter((m: any) => m && m.status === 'Completed');
+
+      const seenNums = new Set<number>();
+      const dedupedCompleted: any[] = [];
+      for (const m of completedMatches) {
+        if (m.matchNumber !== undefined && m.matchNumber !== null) {
+          if (seenNums.has(m.matchNumber)) continue;
+          seenNums.add(m.matchNumber);
+        }
+        dedupedCompleted.push(m);
+      }
+
+      const { broadcastToSession } = await import('./realtimeSync');
+
+      for (const [, state] of inMemoryStore.entries()) {
+        if (
+          state.tournamentId === tournamentId ||
+          state.tournamentId === tour.customId ||
+          (tour._id && state.tournamentId === tour._id.toString())
+        ) {
+          const priorMatches = dedupedCompleted.filter((m: any) =>
+            m.matchNumber !== undefined && state.matchNumber !== undefined && m.matchNumber < state.matchNumber
+          );
+
+          let stateChanged = false;
+          const patchTeams: Record<string, Partial<TeamLiveStatus>> = {};
+
+          for (const [tid, team] of Object.entries(state.teams)) {
+            let priorTotalPoints = 0;
+            for (const pm of priorMatches) {
+              if (Array.isArray(pm.results)) {
+                const priorRes = pm.results.find((r: any) =>
+                  r.teamId === tid ||
+                  (team.slotNumber !== undefined && r.slotNumber !== undefined && r.slotNumber === team.slotNumber)
+                );
+                if (priorRes && priorRes.totalPoints !== undefined) {
+                  priorTotalPoints += Number(priorRes.totalPoints) || 0;
+                }
+              }
+            }
+
+            if (team.priorTotalPoints !== priorTotalPoints) {
+              stateChanged = true;
+              team.priorTotalPoints = priorTotalPoints;
+              team.points = priorTotalPoints + (team.placementPoints || 0) + (team.killPoints || 0) + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
+              team.pointRushEnabled = team.points >= state.pointRushThreshold;
+              patchTeams[tid] = {
+                priorTotalPoints,
+                points: team.points,
+                pointRushEnabled: team.pointRushEnabled,
+              };
+            }
+          }
+
+          if (stateChanged) {
+            state.revision += 1;
+            state.updatedAt = Date.now();
+            if (state.sessionId) {
+              broadcastToSession(state.sessionId, {
+                type: 'MATCH_DELTA_PATCH',
+                patch: {
+                  revision: state.revision,
+                  matchId: state.matchId,
+                  teams: patchTeams,
+                  timestamp: state.updatedAt,
+                },
+              });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[LiveStateStore] onMatchDeleted error:', err);
+    }
+  }
+
+  public async onMatchPublished(tournamentId: string, matchNumber: number, updatedTour?: any): Promise<void> {
+    try {
+      let tour = updatedTour;
+      if (!tour) {
+        const { Tournament } = await import('../models/Tournament');
+        const idQueries: any[] = [{ customId: tournamentId }];
+        if (tournamentId.match(/^[0-9a-fA-F]{24}$/)) {
+          idQueries.push({ _id: tournamentId });
+        }
+        tour = await Tournament.findOne({ $or: idQueries }).lean();
+      }
+      if (!tour) return;
+
+      const matches = Array.isArray(tour.matches) ? tour.matches : [];
+      const completedMatches = matches.filter((m: any) => m && m.status === 'Completed');
+
+      const seenNums = new Set<number>();
+      const dedupedCompleted: any[] = [];
+      for (const m of completedMatches) {
+        if (m.matchNumber !== undefined && m.matchNumber !== null) {
+          if (seenNums.has(m.matchNumber)) continue;
+          seenNums.add(m.matchNumber);
+        }
+        dedupedCompleted.push(m);
+      }
+
+      const { broadcastToSession } = await import('./realtimeSync');
+
+      for (const [, state] of inMemoryStore.entries()) {
+        if (
+          state.tournamentId === tournamentId ||
+          state.tournamentId === tour.customId ||
+          (tour._id && state.tournamentId === tour._id.toString())
+        ) {
+          if (state.matchNumber > matchNumber) {
+            const priorMatches = dedupedCompleted.filter((m: any) =>
+              m.matchNumber !== undefined && m.matchNumber < state.matchNumber
+            );
+
+            let stateChanged = false;
+            const patchTeams: Record<string, Partial<TeamLiveStatus>> = {};
+
+            for (const [tid, team] of Object.entries(state.teams)) {
+              let priorTotalPoints = 0;
+              for (const pm of priorMatches) {
+                if (Array.isArray(pm.results)) {
+                  const priorRes = pm.results.find((r: any) =>
+                    r.teamId === tid ||
+                    (team.slotNumber !== undefined && r.slotNumber !== undefined && r.slotNumber === team.slotNumber)
+                  );
+                  if (priorRes && priorRes.totalPoints !== undefined) {
+                    priorTotalPoints += Number(priorRes.totalPoints) || 0;
+                  }
+                }
+              }
+
+              if (team.priorTotalPoints !== priorTotalPoints) {
+                stateChanged = true;
+                team.priorTotalPoints = priorTotalPoints;
+                team.points = priorTotalPoints + (team.placementPoints || 0) + (team.killPoints || 0) + (team.bonusPoints || 0) - (team.penaltyPoints || 0);
+                team.pointRushEnabled = team.points >= state.pointRushThreshold;
+                patchTeams[tid] = {
+                  priorTotalPoints,
+                  points: team.points,
+                  pointRushEnabled: team.pointRushEnabled,
+                };
+              }
+            }
+
+            if (stateChanged) {
+              state.revision += 1;
+              state.updatedAt = Date.now();
+              if (state.sessionId) {
+                broadcastToSession(state.sessionId, {
+                  type: 'MATCH_DELTA_PATCH',
+                  patch: {
+                    revision: state.revision,
+                    matchId: state.matchId,
+                    teams: patchTeams,
+                    timestamp: state.updatedAt,
+                  },
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[LiveStateStore] onMatchPublished error:', err);
     }
   }
 }

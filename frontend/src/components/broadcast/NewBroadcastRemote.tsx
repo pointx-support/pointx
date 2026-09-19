@@ -9,6 +9,7 @@ import {
   Plus,
   Minus,
   RotateCcw,
+  RefreshCw,
   Skull,
   Radio,
   CheckCircle2,
@@ -274,6 +275,21 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       }
     });
 
+    // Listen for MATCH_DELETED events to remove deleted match points and update match list
+    const unsubRaw = syncClient.subscribeRawMessage((msg: any) => {
+      if (!isCancelled && msg) {
+        if (msg.type === 'MATCH_DELETED' || msg.action === 'MATCH_DELETED') {
+          const deletedId = msg.matchId || msg.data?.matchId;
+          if (deletedId) {
+            setAvailableMatches((prev) => prev.filter((m: any) => (m.id || m.customId) !== deletedId));
+          }
+          useTournamentStore.getState().refreshCurrentTournament(effectiveTournamentId);
+          const org = canonicalState?.organizationId || tournamentInfo?.organizationId || 'org-default';
+          liveStore.setMatchContext(org, effectiveTournamentId, activeMatchId, true);
+        }
+      }
+    });
+
     // Track WebSocket connection health
     const unsubConn = syncClient.subscribeConnection((connState: ConnectionState) => {
       if (!isCancelled) {
@@ -287,6 +303,7 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       unsubNext();
       unsubFinalized();
       unsubTour();
+      unsubRaw();
       unsubConn();
     };
   }, [effectiveTournamentId, effectiveMatchId, showToast]);
@@ -347,6 +364,24 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
       type: 'info',
       title: 'Squads Reset',
       message: 'All players reset to ALIVE.',
+    });
+  };
+
+  const handleResetPriorPoints = () => {
+    executeCommand('RESET_PRIOR_POINTS', {});
+    showToast({
+      type: 'info',
+      title: 'Prior Points Reset to 0',
+      message: 'Previous match points reset to 0 for all teams. You can now correct or recalculate points.',
+    });
+  };
+
+  const handleRecalculatePriorPoints = () => {
+    executeCommand('RECALCULATE_PRIOR_POINTS', {});
+    showToast({
+      type: 'success',
+      title: 'Points Recalculated',
+      message: 'Previous match points recalculated from official completed matches in website database.',
     });
   };
 
@@ -693,17 +728,24 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
 
           {/* Eliminations & Points Row */}
           <div className="mt-3 flex items-center justify-between bg-black/25 rounded-lg p-2 border border-purple-950">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <div>
-                <span className="text-[10px] font-mono text-slate-400 block uppercase">Elims</span>
-                <span className="text-lg font-black text-rose-400 font-mono leading-none">
+                <span className="text-[9px] font-mono text-slate-400 block uppercase">Elims</span>
+                <span className="text-base font-black text-rose-400 font-mono leading-none">
                   {team.kills}
                 </span>
               </div>
-              <div className="h-6 w-px bg-purple-900/40" />
+              <div className="h-5 w-px bg-purple-900/40" />
               <div>
-                <span className="text-[10px] font-mono text-slate-400 block uppercase">Total Pts</span>
-                <span className="text-lg font-black text-amber-400 font-mono leading-none">
+                <span className="text-[9px] font-mono text-cyan-400 block uppercase" title="Points from previous matches">Prior Pts</span>
+                <span className="text-base font-black text-cyan-300 font-mono leading-none">
+                  {team.priorTotalPoints || 0}
+                </span>
+              </div>
+              <div className="h-5 w-px bg-purple-900/40" />
+              <div>
+                <span className="text-[9px] font-mono text-amber-400 block uppercase" title="Overall Cumulative Points">Total Pts</span>
+                <span className="text-base font-black text-amber-400 font-mono leading-none">
                   {team.points}
                 </span>
               </div>
@@ -952,6 +994,28 @@ export const NewBroadcastRemote: React.FC<NewBroadcastRemoteProps> = ({
             >
               <RotateCcw className="h-3 w-3" />
               <span>Reset All Alive</span>
+            </Button>
+
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleResetPriorPoints}
+              className="flex items-center gap-1 text-[11px] py-1 px-2.5 h-auto bg-amber-950/70 hover:bg-amber-900/90 text-amber-300 border border-amber-500/40 font-bold cursor-pointer"
+              title="Reset prior match points to 0 for all teams so you can recalculate"
+            >
+              <RotateCcw className="h-3 w-3 text-amber-400" />
+              <span>Reset Prior Pts (0)</span>
+            </Button>
+
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleRecalculatePriorPoints}
+              className="flex items-center gap-1 text-[11px] py-1 px-2.5 h-auto bg-cyan-950/70 hover:bg-cyan-900/90 text-cyan-300 border border-cyan-500/40 font-bold cursor-pointer"
+              title="Recalculate prior points from official completed matches in website database"
+            >
+              <RefreshCw className="h-3 w-3 text-cyan-400" />
+              <span>Recalculate from Website</span>
             </Button>
 
             {availableMatches.length > 1 && (

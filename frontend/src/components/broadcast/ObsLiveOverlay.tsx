@@ -174,6 +174,16 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
       }
     });
 
+    // Subscribe to raw messages for MATCH_DELETED to refresh overlay state
+    const unsubRaw = syncClient.subscribeRawMessage((msg: any) => {
+      if (!isCancelled && msg && (msg.type === 'MATCH_DELETED' || msg.action === 'MATCH_DELETED')) {
+        const org = canonicalState?.organizationId || 'org-default';
+        const targetId = effectiveMatchId || 'live-match-1';
+        liveStore.setMatchContext(org, effectiveTournamentId, targetId, true);
+        setLastSyncTime(Date.now());
+      }
+    });
+
     // Track WebSocket health
     const unsubConn = syncClient.subscribeConnection((status: ConnectionState) => {
       if (!isCancelled) {
@@ -188,6 +198,7 @@ export const ObsLiveOverlay: React.FC<ObsLiveOverlayProps> = ({
       unsubNext();
       unsubDisplay();
       unsubTour();
+      unsubRaw();
       unsubConn();
     };
   }, [effectiveTournamentId, effectiveMatchId]);

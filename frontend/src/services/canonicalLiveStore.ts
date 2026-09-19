@@ -340,7 +340,9 @@ export class CanonicalLiveStore {
       | 'FINALIZE_MATCH'
       | 'REOPEN_MATCH'
       | 'NEXT_MATCH'
-      | 'REFRESH_OVERLAY',
+      | 'REFRESH_OVERLAY'
+      | 'RESET_PRIOR_POINTS'
+      | 'RECALCULATE_PRIOR_POINTS',
     payload: any
   ): string {
     const commandId = `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
@@ -504,6 +506,27 @@ export class CanonicalLiveStore {
       } else if (command === 'REOPEN_MATCH') {
         this.currentState.isMatchFinished = false;
         this.notify();
+      } else if (command === 'RESET_PRIOR_POINTS') {
+        const targetTeamId = payload?.teamId;
+        for (const [tid, t] of Object.entries(this.currentState.teams)) {
+          if (!targetTeamId || targetTeamId === tid) {
+            t.priorTotalPoints = 0;
+            t.points = 0 + (t.placementPoints || 0) + (t.killPoints || 0) + (t.bonusPoints || 0) - (t.penaltyPoints || 0);
+            if (t.isPointRushManual === undefined) {
+              t.pointRushEnabled = t.points >= this.currentState.pointRushThreshold;
+            }
+          }
+        }
+        this.notify();
+      } else if (command === 'RECALCULATE_PRIOR_POINTS') {
+        // Request authoritative state refresh to pull recalculated points from website
+        client.sendRawMessage({
+          type: 'REQUEST_FULL_STATE',
+          organizationId: this.activeOrgId,
+          tournamentId: this.activeTourId,
+          matchId: this.activeMatchId,
+          lastAppliedRevision: 0,
+        });
       }
     }
 

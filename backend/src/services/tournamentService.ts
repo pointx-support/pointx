@@ -243,10 +243,16 @@ export async function deleteMatchFromTournament(
     }
   }
 
+  const pullCondition: any[] = [{ id: matchId }, { customId: matchId }];
+  const numMatch = matchId.match(/match.*?(\d+)/i) || matchId.match(/^m?(\d+)$/i);
+  if (numMatch) {
+    pullCondition.push({ matchNumber: parseInt(numMatch[1], 10) });
+  }
+
   // Atomically pull match from matches array in MongoDB
   const updated = await Tournament.findOneAndUpdate(
     query,
-    { $pull: { matches: { id: matchId } } as any },
+    { $pull: { matches: { $or: pullCondition } } as any },
     { returnDocument: 'after', runValidators: true }
   );
 
@@ -255,6 +261,12 @@ export async function deleteMatchFromTournament(
     MatchReport.deleteMany({
       $or: [{ tournamentId, matchId }, { matchId }],
     }).catch(() => {});
+
+    // Notify LiveStateStore to remove the deleted match state and recalculate priorTotalPoints for remaining matches
+    try {
+      const { LiveStateStore } = await import('./liveStateStore');
+      LiveStateStore.getInstance().onMatchDeleted(tournamentId, matchId, updated.toJSON ? updated.toJSON() : updated).catch(() => {});
+    } catch {}
 
     updateAuthoritativeState(
       tournamentId,
