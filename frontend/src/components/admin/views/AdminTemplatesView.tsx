@@ -25,6 +25,7 @@ import {
   Edit3,
   Building,
   AlertTriangle,
+  Loader2,
   RotateCcw
 } from 'lucide-react';
 import type { GraphicTemplateCategory, CustomGraphicsTemplate } from '../../../types/customTemplate';
@@ -62,33 +63,70 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
   const [editingTemplate, setEditingTemplate] = useState<CustomGraphicsTemplate | null>(null);
   const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [updatingPublishId, setUpdatingPublishId] = useState<string | null>(null);
 
-  // Sync server templates on mount
+  // Sync server templates on mount and keep synchronized in real-time across multiple admins
   useEffect(() => {
     let isMounted = true;
-    async function loadInitialData() {
+
+    const fetchAndSync = async () => {
       try {
         const tmplRes = await templatesApi.getAll();
         if (isMounted && tmplRes.success && Array.isArray(tmplRes.data)) {
           syncTemplates(tmplRes.data as any);
         }
       } catch (err) {
-        console.warn('Failed to load initial data for AdminTemplatesView:', err);
+        console.warn('Failed to load server templates for AdminTemplatesView:', err);
       }
-    }
-    loadInitialData();
+    };
+
+    fetchAndSync();
+
+    // Auto-sync when window regains focus
+    const handleFocus = () => {
+      fetchAndSync();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    // Auto-sync when a template publish/edit event fires locally or across tabs
+    const handleTemplateUpdated = () => {
+      fetchAndSync();
+    };
+    window.addEventListener('pointx_template_updated', handleTemplateUpdated);
+
+    // Periodic background sync every 10 seconds while admin view is active
+    const pollInterval = setInterval(fetchAndSync, 10000);
+
     return () => {
       isMounted = false;
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pointx_template_updated', handleTemplateUpdated);
+      clearInterval(pollInterval);
     };
   }, [syncTemplates]);
 
-  const handleTogglePublish = (id: string, currentlyPublished: boolean) => {
-    if (currentlyPublished) {
-      unpublishTemplate(id);
-      showToast({ type: 'info', title: 'Template Unpublished', message: 'Hidden from organizer workspace.' });
-    } else {
-      publishTemplate(id);
-      showToast({ type: 'success', title: 'Template Published', message: 'Now live for permitted organizers.' });
+  const handleTogglePublish = async (id: string, currentlyPublished: boolean) => {
+    setUpdatingPublishId(id);
+    try {
+      if (currentlyPublished) {
+        const ok = await unpublishTemplate(id);
+        if (ok) {
+          showToast({ type: 'info', title: 'Template Unpublished', message: 'Hidden from organizer workspace.' });
+        } else {
+          showToast({ type: 'error', title: 'Unpublish Failed', message: 'Could not sync template status with server.' });
+        }
+      } else {
+        const ok = await publishTemplate(id);
+        if (ok) {
+          showToast({ type: 'success', title: 'Template Published', message: 'Now live for permitted organizers.' });
+        } else {
+          showToast({ type: 'error', title: 'Publish Failed', message: 'Could not sync template status with server.' });
+        }
+      }
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Action Failed', message: err?.message || 'Failed to update publish state.' });
+    } finally {
+      setUpdatingPublishId(null);
     }
   };
 
@@ -340,10 +378,11 @@ export const AdminTemplatesView: React.FC<AdminTemplatesViewProps> = ({ onOpenTe
                     variant={t.isPublished ? 'outline' : 'secondary'}
                     size="xs"
                     onClick={() => handleTogglePublish(t.id, t.isPublished)}
-                    leftIcon={t.isPublished ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    leftIcon={updatingPublishId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : t.isPublished ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    disabled={updatingPublishId === t.id}
                     className="flex-1"
                   >
-                    {t.isPublished ? 'Unpublish' : 'Publish'}
+                    {updatingPublishId === t.id ? 'Saving...' : t.isPublished ? 'Unpublish' : 'Publish'}
                   </Button>
 
                   <Button

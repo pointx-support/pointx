@@ -303,40 +303,42 @@ function loadStoredTournaments(): { tournaments: Tournament[]; activeTournamentI
 
   const storedActiveId = getStoredActiveTournamentId();
   const userId = getActiveUserId();
-  if (!userId || userId === 'guest') {
-    return {
-      tournaments: [],
-      activeTournamentId: storedActiveId || '',
-      currentTournament: blank
-    };
-  }
+  
+  // Try user-specific key, then global active cache fallbacks
+  const candidateKeys = [
+    userId && userId !== 'guest' ? `${STORAGE_KEY_PREFIX}${userId}` : null,
+    'pointx_tournaments_active_cache',
+    'pointx_tournaments_state'
+  ].filter(Boolean) as string[];
 
-  try {
-    const raw = window.localStorage.getItem(`${STORAGE_KEY_PREFIX}${userId}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Strip demo tournaments for regular users
-        const nonDemo = parsed.filter(
-          (t) =>
-            t.id !== 'tour-ff-champ-2026' &&
-            t.id !== 'tour-ff-night-scrims' &&
-            t.id !== 'tour-ff-summer-finals' &&
-            !t.id.startsWith('tour-demo-')
-        );
-        if (nonDemo.length > 0) {
-          const matched = storedActiveId
-            ? nonDemo.find((t) => t.id === storedActiveId || (t as any).customId === storedActiveId || (t as any)._id === storedActiveId)
-            : null;
-          return {
-            tournaments: nonDemo,
-            activeTournamentId: matched ? matched.id : (storedActiveId || nonDemo[0]?.id || ''),
-            currentTournament: matched || nonDemo[0]
-          };
+  for (const key of candidateKeys) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Strip demo tournaments for regular users
+          const nonDemo = parsed.filter(
+            (t) =>
+              t.id !== 'tour-ff-champ-2026' &&
+              t.id !== 'tour-ff-night-scrims' &&
+              t.id !== 'tour-ff-summer-finals' &&
+              !t.id.startsWith('tour-demo-')
+          );
+          if (nonDemo.length > 0) {
+            const matched = storedActiveId
+              ? nonDemo.find((t) => t.id === storedActiveId || (t as any).customId === storedActiveId || (t as any)._id === storedActiveId)
+              : null;
+            return {
+              tournaments: nonDemo,
+              activeTournamentId: matched ? matched.id : (storedActiveId || nonDemo[0]?.id || ''),
+              currentTournament: matched || nonDemo[0]
+            };
+          }
         }
       }
-    }
-  } catch {}
+    } catch {}
+  }
 
   return {
     tournaments: [],
@@ -349,9 +351,11 @@ function persistTournaments(tournaments: Tournament[]) {
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
       const userId = getActiveUserId();
+      const serialized = JSON.stringify(tournaments);
       if (userId && userId !== 'guest') {
-        window.localStorage.setItem(`${STORAGE_KEY_PREFIX}${userId}`, JSON.stringify(tournaments));
+        window.localStorage.setItem(`${STORAGE_KEY_PREFIX}${userId}`, serialized);
       }
+      window.localStorage.setItem('pointx_tournaments_active_cache', serialized);
     } catch {}
   }
 }
@@ -423,14 +427,31 @@ export const useTournamentStore = create<AppState>((set, get) => ({
       if (res.success && Array.isArray(res.data)) {
         const loadedTournaments = res.data;
 
+        // Non-destructive merge: preserve any recently created local non-demo tournaments that haven't synced yet
+        const existingLocal = get().tournaments.filter(
+          (t) =>
+            t.id !== 'tour-ff-champ-2026' &&
+            t.id !== 'tour-ff-night-scrims' &&
+            t.id !== 'tour-ff-summer-finals' &&
+            !t.id.startsWith('tour-demo-')
+        );
+        const serverIds = new Set(
+          loadedTournaments.map((t) => t.id || (t as any).customId || (t as any)._id)
+        );
+        const unSyncedLocal = existingLocal.filter(
+          (lt) => !serverIds.has(lt.id) && !serverIds.has((lt as any).customId) && !serverIds.has((lt as any)._id)
+        );
+
+        const reconciledList = [...loadedTournaments, ...unSyncedLocal];
+
         const storedActiveId = getStoredActiveTournamentId();
         const targetActiveId = storedActiveId || get().activeTournamentId;
         const matching = targetActiveId
-          ? loadedTournaments.find(
+          ? reconciledList.find(
               (t) => t.id === targetActiveId || (t as any).customId === targetActiveId || (t as any)._id === targetActiveId
             )
           : null;
-        const active = matching || (loadedTournaments.length > 0 ? loadedTournaments[0] : createBlankTournament());
+        const active = matching || (reconciledList.length > 0 ? reconciledList[0] : createBlankTournament());
 
         if (active.id && typeof window !== 'undefined' && window.localStorage) {
           try {
@@ -438,10 +459,10 @@ export const useTournamentStore = create<AppState>((set, get) => ({
           } catch {}
         }
 
-        persistTournaments(loadedTournaments);
+        persistTournaments(reconciledList);
 
         set({
-          tournaments: loadedTournaments,
+          tournaments: reconciledList,
           activeTournamentId: active.id || '',
           currentTournament: active,
           isLoadingTournaments: false,
@@ -522,20 +543,34 @@ export const useTournamentStore = create<AppState>((set, get) => ({
       const res = await tournamentsApi.create(tourWithMatch);
       if (res.success && res.data) {
         const savedTour = res.data;
+        const finalId = savedTour.id || (savedTour as any).customId || tourWithMatch.id;
+        const finalizedTour: Tournament = {
+          ...tourWithMatch,
+          ...savedTour,
+          id: finalId,
+        };
         set((state) => {
           const reconciled = state.tournaments.map((t) =>
-            t.id === tourWithMatch.id ? { ...t, ...savedTour } : t
+            t.id === tourWithMatch.id ? finalizedTour : t
           );
           persistTournaments(reconciled);
           return {
             tournaments: reconciled,
-            activeTournamentId: savedTour.id || tourWithMatch.id,
-            currentTournament: { ...tourWithMatch, ...savedTour }
+            activeTournamentId: finalId,
+            currentTournament: finalizedTour
           };
         });
-        return { ...tourWithMatch, ...savedTour };
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem('pointx_active_tournament_id', finalId);
+          } catch {}
+        }
+        broadcastTournamentUpdate(finalizedTour);
+        return finalizedTour;
       }
-    } catch {}
+    } catch (err) {
+      console.warn('Backend tournament creation sync notice (offline or unit test):', err);
+    }
 
     return tourWithMatch;
   },

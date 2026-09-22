@@ -23,9 +23,13 @@ export interface ITournament extends Document {
     name: string;
     version: number;
     killPoints: number;
-    placementPoints: Record<number, number>;
-    booyahBonus: number;
-    tieBreakers: string[];
+    placementPoints?: Record<string | number, number>;
+    placementTable?: Array<{ place: number; points: number }>;
+    booyahBonus?: number;
+    booyahBonusPoints?: number;
+    tieBreakers?: string[];
+    tieBreakOrder?: string[];
+    [key: string]: any;
   };
   bannerUrl?: string;
   logoUrl?: string;
@@ -66,13 +70,32 @@ const TournamentSchema = new Schema<ITournament>(
       slotsPerMatch: { type: Number, default: 12 },
     },
     scoringPreset: {
-      id: { type: String, default: 'preset-ff-official-v1' },
-      name: { type: String, default: 'Official Free Fire Scoring' },
-      version: { type: Number, default: 1 },
-      killPoints: { type: Number, default: 1 },
-      placementPoints: { type: Map, of: Number, default: () => ({ '1': 12, '2': 9, '3': 8, '4': 7, '5': 6, '6': 5, '7': 4, '8': 3, '9': 2, '10': 1, '11': 0, '12': 0 }) },
-      booyahBonus: { type: Number, default: 0 },
-      tieBreakers: { type: [String], default: ['total_points', 'total_booyahs', 'placement_points', 'kill_points'] },
+      type: Schema.Types.Mixed,
+      default: () => ({
+        id: 'preset-ff-official-v1',
+        name: 'Official Free Fire Scoring',
+        version: 1,
+        killPoints: 1,
+        placementPoints: { '1': 12, '2': 9, '3': 8, '4': 7, '5': 6, '6': 5, '7': 4, '8': 3, '9': 2, '10': 1, '11': 0, '12': 0 },
+        placementTable: [
+          { place: 1, points: 12 },
+          { place: 2, points: 9 },
+          { place: 3, points: 8 },
+          { place: 4, points: 7 },
+          { place: 5, points: 6 },
+          { place: 6, points: 5 },
+          { place: 7, points: 4 },
+          { place: 8, points: 3 },
+          { place: 9, points: 2 },
+          { place: 10, points: 1 },
+          { place: 11, points: 0 },
+          { place: 12, points: 0 },
+        ],
+        booyahBonus: 0,
+        booyahBonusPoints: 0,
+        tieBreakers: ['total_points', 'total_booyahs', 'placement_points', 'kill_points'],
+        tieBreakOrder: ['totalPoints', 'booyahs', 'placementPoints', 'totalKills'],
+      }),
     },
     bannerUrl: { type: String, default: '' },
     logoUrl: { type: String, default: '' },

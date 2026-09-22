@@ -28,6 +28,7 @@ export type BroadcastEvent =
   | 'TEAM_UPDATED'
   | 'PLAYER_UPDATED'
   | 'TEMPLATE_UPDATED'
+  | 'TEMPLATE_DELETED'
   | 'GRAPHICS_UPDATED'
   | 'OBS_STATE_UPDATED'
   | 'STATE_UPDATED';

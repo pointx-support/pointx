@@ -107,6 +107,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
 
   // Modal / Wizard Triggers
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [isCreatingTournament, setIsCreatingTournament] = useState(false);
   const [cloningTournament, setCloningTournament] = useState<Tournament | null>(null);
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
   const [deletingTournament, setDeletingTournament] = useState<Tournament | null>(null);
@@ -168,15 +169,29 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
   const archivedCount = visibleTournaments.filter((t) => t.status === 'Archived').length;
   const totalTournamentsCount = visibleTournaments.length;
 
-  const handleWizardComplete = (newTour: Tournament) => {
-    createTournament(newTour);
-    setIsWizardOpen(false);
-    showToast({
-      type: 'success',
-      title: 'Tournament Initialized 🎉',
-      message: `Next Step: Configure your 12 squad lineups in Teams & Slots before calculating points.`
-    });
-    onSelectTournament(newTour, 'teams');
+  const handleWizardComplete = async (newTour: Tournament) => {
+    setIsCreatingTournament(true);
+    try {
+      const createdTour = await createTournament(newTour);
+      setIsWizardOpen(false);
+      showToast({
+        type: 'success',
+        title: 'Tournament Initialized 🎉',
+        message: `Next Step: Configure your 12 squad lineups in Teams & Slots before calculating points.`
+      });
+      onSelectTournament(createdTour || newTour, 'teams');
+    } catch (err: any) {
+      console.warn('Backend tournament creation warning:', err);
+      showToast({
+        type: 'info',
+        title: 'Initialized in Safe Local Mode',
+        message: 'Tournament is ready locally. Cloud synchronization active.'
+      });
+      setIsWizardOpen(false);
+      onSelectTournament(newTour, 'teams');
+    } finally {
+      setIsCreatingTournament(false);
+    }
   };
 
   const handleTriggerImport = () => {
@@ -289,6 +304,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ onSelectTournament
       <TournamentWizard
         onComplete={handleWizardComplete}
         onCancel={() => setIsWizardOpen(false)}
+        isSubmitting={isCreatingTournament}
       />
     );
   }

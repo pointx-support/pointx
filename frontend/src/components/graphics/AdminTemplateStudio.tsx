@@ -53,7 +53,8 @@ import {
   Check,
   Loader2,
   ClipboardCopy,
-  ClipboardCheck
+  ClipboardCheck,
+  Pipette
 } from 'lucide-react';
 import type { GraphicsRenderData } from '../../types/graphics';
 import { normalizeTemplateType, type TemplateAlignmentConfig, type TextElementStyle, type GraphicTemplateCategory } from '../../types/customTemplate';
@@ -229,16 +230,17 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
 
     setSaveStatus('saving');
     try {
-      try {
-        await templatesApi.update(currentTemplate.id, {
-          alignment: finalAlignment,
-          name: currentTemplate.name,
-          category: currentTemplate.category,
-          aspectRatio: finalAspectRatio
-        });
-      } catch (apiErr) {
-        console.warn('API save note (preset or local template):', apiErr);
-      }
+      await templatesApi.update(currentTemplate.id, {
+        alignment: finalAlignment,
+        name: currentTemplate.name,
+        category: currentTemplate.category,
+        templateType: (normalizeTemplateType(currentTemplate.category) as any),
+        aspectRatio: finalAspectRatio,
+        imageUrl: currentTemplate.imageUrl,
+        isBuiltIn: currentTemplate.isBuiltIn,
+        isPublished: currentTemplate.isPublished ?? true,
+        visibility: currentTemplate.visibility || 'GLOBAL'
+      });
 
       setSaveStatus('saved');
       const now = new Date();
@@ -248,18 +250,18 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       if (!isAutosave) {
         showToast({
           type: 'success',
-          title: 'Alignment Saved',
-          message: `All coordinates and styling for "${currentTemplate.name}" saved successfully!`
+          title: 'Alignment Saved Globally',
+          message: `All coordinates and styling for "${currentTemplate.name}" are now live for all users!`
         });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save alignment:', err);
       setSaveStatus('error');
       if (!isAutosave) {
         showToast({
           type: 'error',
           title: 'Save Failed',
-          message: 'Could not save template changes. Please try again.'
+          message: err?.message || 'Could not save template changes. Please try again.'
         });
       }
     }
@@ -623,6 +625,123 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       defaultY = alignment.baseY + 32;
       defaultSize = alignment.totalFontSize;
       defaultFill = alignment.totalColor;
+    } else if (key === 'pointx_logo') {
+      const pCfg: any = alignment.pointXLogoConfig || {};
+      return {
+        x: pCfg.x ?? (width - 170),
+        y: pCfg.y ?? (height - 65),
+        fontSize: pCfg.height ?? 44,
+        fontFamily: 'sans-serif',
+        fontWeight: '900',
+        fill: '#f59e0b',
+        visible: alignment.showPointXLogo !== false,
+        customText: 'POINTX'
+      };
+    } else if (key.startsWith('custom_el_')) {
+      const id = key.replace('custom_el_', '');
+      const found = (alignment.customElements || []).find((c) => c.id === id);
+      if (found) {
+        return {
+          x: found.x,
+          y: found.y,
+          fontSize: found.fontSize || found.height || 28,
+          fontFamily: found.fontFamily || alignment.fontFamily || 'Rajdhani',
+          fontWeight: found.fontWeight || '800',
+          fill: found.color || found.borderColor || '#ffffff',
+          visible: found.visible !== false,
+          customText: found.text || found.type.toUpperCase()
+        };
+      }
+    } else if (key === 'kl_badge') {
+      defaultX = width / 2; defaultY = 310; defaultSize = 36; defaultFill = '#FFD200';
+    } else if (key === 'kl_player_photo') {
+      defaultX = width / 2 - 90; defaultY = 340; defaultSize = 180; defaultFill = '#ffffff';
+    } else if (key === 'kl_player_name') {
+      defaultX = width / 2; defaultY = 570; defaultSize = 52; defaultFill = '#ffffff';
+    } else if (key === 'kl_team_name') {
+      defaultX = width / 2; defaultY = 620; defaultSize = 26; defaultFill = '#00f0ff';
+    } else if (key === 'kl_team_logo') {
+      defaultX = width / 2 - 20; defaultY = 640; defaultSize = 40; defaultFill = '#ffffff';
+    } else if (key === 'kl_kills') {
+      defaultX = width / 2 - 220; defaultY = 760; defaultSize = 56; defaultFill = '#FF416C';
+    } else if (key === 'kl_damage') {
+      defaultX = width / 2; defaultY = 760; defaultSize = 52; defaultFill = '#FFD200';
+    } else if (key === 'kl_avg') {
+      defaultX = width / 2 + 220; defaultY = 760; defaultSize = 52; defaultFill = '#00f0ff';
+    } else if (key === 'tf_p1_badge') {
+      defaultX = width / 2; defaultY = 310; defaultSize = 32; defaultFill = '#FFD200';
+    } else if (key === 'tf_p1_photo') {
+      defaultX = width / 2 - 70; defaultY = 340; defaultSize = 140; defaultFill = '#ffffff';
+    } else if (key === 'tf_p1_name') {
+      defaultX = width / 2; defaultY = 520; defaultSize = 42; defaultFill = '#ffffff';
+    } else if (key === 'tf_p1_team') {
+      defaultX = width / 2; defaultY = 558; defaultSize = 24; defaultFill = '#FFD200';
+    } else if (key === 'tf_p1_kills') {
+      defaultX = width / 2; defaultY = 615; defaultSize = 38; defaultFill = '#FF416C';
+    } else if (key === 'tf_p2_badge') {
+      defaultX = width / 2 - 320; defaultY = 440; defaultSize = 26; defaultFill = '#CBD5E1';
+    } else if (key === 'tf_p2_photo') {
+      defaultX = width / 2 - 380; defaultY = 470; defaultSize = 120; defaultFill = '#ffffff';
+    } else if (key === 'tf_p2_name') {
+      defaultX = width / 2 - 320; defaultY = 630; defaultSize = 32; defaultFill = '#ffffff';
+    } else if (key === 'tf_p2_team') {
+      defaultX = width / 2 - 320; defaultY = 665; defaultSize = 20; defaultFill = '#CBD5E1';
+    } else if (key === 'tf_p2_kills') {
+      defaultX = width / 2 - 320; defaultY = 715; defaultSize = 32; defaultFill = '#FF416C';
+    } else if (key === 'tf_p3_badge') {
+      defaultX = width / 2 + 320; defaultY = 440; defaultSize = 26; defaultFill = '#CD7F32';
+    } else if (key === 'tf_p3_photo') {
+      defaultX = width / 2 + 260; defaultY = 470; defaultSize = 120; defaultFill = '#ffffff';
+    } else if (key === 'tf_p3_name') {
+      defaultX = width / 2 + 320; defaultY = 630; defaultSize = 32; defaultFill = '#ffffff';
+    } else if (key === 'tf_p3_team') {
+      defaultX = width / 2 + 320; defaultY = 665; defaultSize = 20; defaultFill = '#D97706';
+    } else if (key === 'tf_p3_kills') {
+      defaultX = width / 2 + 320; defaultY = 715; defaultSize = 32; defaultFill = '#FF416C';
+    } else if (key === 'tp_team_logo') {
+      defaultX = width / 2 - 70; defaultY = 240; defaultSize = 140; defaultFill = '#ffffff';
+    } else if (key === 'tp_team_name') {
+      defaultX = width / 2; defaultY = 430; defaultSize = 52; defaultFill = '#ffffff';
+    } else if (key === 'tp_team_slogan') {
+      defaultX = width / 2; defaultY = 475; defaultSize = 24; defaultFill = '#00f0ff';
+    } else if (key === 'tp_roster_title') {
+      defaultX = width / 2; defaultY = 550; defaultSize = 30; defaultFill = '#FFD200';
+    } else if (key === 'tp_player_1') {
+      defaultX = width / 2 - 360; defaultY = 640; defaultSize = 28; defaultFill = '#ffffff';
+    } else if (key === 'tp_player_2') {
+      defaultX = width / 2 - 120; defaultY = 640; defaultSize = 28; defaultFill = '#ffffff';
+    } else if (key === 'tp_player_3') {
+      defaultX = width / 2 + 120; defaultY = 640; defaultSize = 28; defaultFill = '#ffffff';
+    } else if (key === 'tp_player_4') {
+      defaultX = width / 2 + 360; defaultY = 640; defaultSize = 28; defaultFill = '#ffffff';
+    } else if (key === 'sl_group_badge') {
+      defaultX = width / 2; defaultY = 220; defaultSize = 32; defaultFill = '#00f0ff';
+    } else if (key.startsWith('sl_slot_')) {
+      const sNum = Number(key.replace('sl_slot_', ''));
+      const isRight = sNum > 6;
+      const row = isRight ? sNum - 7 : sNum - 1;
+      defaultX = isRight ? width / 2 + 250 : width / 2 - 250;
+      defaultY = 320 + row * 65;
+      defaultSize = 24;
+      defaultFill = '#ffffff';
+    } else if (key === 'vc_ribbon') {
+      defaultX = width / 2; defaultY = 220; defaultSize = 30; defaultFill = '#FFD200';
+    } else if (key === 'vc_cert_title') {
+      defaultX = width / 2; defaultY = 290; defaultSize = 54; defaultFill = '#ffffff';
+    } else if (key === 'vc_presented_to') {
+      defaultX = width / 2; defaultY = 350; defaultSize = 22; defaultFill = '#94a3b8';
+    } else if (key === 'vc_team_name') {
+      defaultX = width / 2; defaultY = 430; defaultSize = 60; defaultFill = '#FFD200';
+    } else if (key === 'vc_team_logo') {
+      defaultX = width / 2 - 60; defaultY = 460; defaultSize = 120; defaultFill = '#ffffff';
+    } else if (key === 'vc_award_subtitle') {
+      defaultX = width / 2; defaultY = 630; defaultSize = 24; defaultFill = '#e2e8f0';
+    } else if (key === 'vc_match_stats') {
+      defaultX = width / 2; defaultY = 685; defaultSize = 26; defaultFill = '#00f0ff';
+    } else if (key === 'vc_sign_left') {
+      defaultX = 260; defaultY = 840; defaultSize = 22; defaultFill = '#ffffff';
+    } else if (key === 'vc_sign_right') {
+      defaultX = width - 260; defaultY = 840; defaultSize = 22; defaultFill = '#ffffff';
     }
 
     return {
@@ -727,6 +846,43 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
         return;
       }
 
+      if (key === 'pointx_logo') {
+        const currentCfg = alignment.pointXLogoConfig || { x: width - 170, y: height - 65, width: 140, height: 44, opacity: 0.88 };
+        syncTopLevel.pointXLogoConfig = {
+          ...currentCfg,
+          x: props.x !== undefined ? props.x : (currentCfg.x ?? (width - 170)) + deltaX,
+          y: props.y !== undefined ? props.y : (currentCfg.y ?? (height - 65)) + deltaY,
+          width: props.fontSize !== undefined ? Math.round(props.fontSize * 3) : currentCfg.width,
+          height: props.fontSize !== undefined ? Math.round(props.fontSize) : currentCfg.height,
+        };
+        if (props.visible !== undefined) {
+          syncTopLevel.showPointXLogo = props.visible;
+        }
+        return;
+      }
+
+      if (key.startsWith('custom_el_')) {
+        const id = key.replace('custom_el_', '');
+        const customElements = [...(alignment.customElements || [])];
+        const idx = customElements.findIndex((e) => e.id === id);
+        if (idx !== -1) {
+          const item = customElements[idx];
+          customElements[idx] = {
+            ...item,
+            x: props.x !== undefined ? props.x : item.x + deltaX,
+            y: props.y !== undefined ? props.y : item.y + deltaY,
+            fontSize: props.fontSize !== undefined ? props.fontSize : item.fontSize,
+            color: props.fill !== undefined ? props.fill : item.color,
+            fontFamily: props.fontFamily !== undefined ? props.fontFamily : item.fontFamily,
+            fontWeight: props.fontWeight !== undefined ? props.fontWeight : item.fontWeight,
+            visible: props.visible !== undefined ? props.visible : item.visible,
+            text: props.customText !== undefined ? props.customText : item.text,
+          };
+          syncTopLevel.customElements = customElements;
+        }
+        return;
+      }
+
       // Top Level global element
       const curEl = (currentElements as any)[key] || {};
       const curStyle = getElementStyleByKey(key);
@@ -797,7 +953,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
       slots: currentSlots
     });
     triggerAutosave();
-  }, [alignment, selectedKeys, getElementStyleByKey, activeTemplateId, updateTemplateAlignment, triggerAutosave, pushUndoSnapshot]);
+  }, [alignment, selectedKeys, getElementStyleByKey, activeTemplateId, updateTemplateAlignment, triggerAutosave, pushUndoSnapshot, width, height]);
 
   // Tactile Nudge Action
   const handleNudge = useCallback((dx: number, dy: number) => {
@@ -1392,28 +1548,237 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
     });
   };
 
-  const handlePublishToggle = () => {
-    if (activeTemplate.isPublished) {
-      unpublishTemplate(activeTemplate.id);
-      showToast({ type: 'info', title: 'Template Unpublished', message: 'Template hidden from regular users.' });
-    } else {
-      publishTemplate(activeTemplate.id);
-      showToast({ type: 'success', title: 'Template Published', message: 'Template is now live for all users.' });
+  const [isPublishToggling, setIsPublishToggling] = useState(false);
+
+  const handlePublishToggle = async () => {
+    setIsPublishToggling(true);
+    try {
+      if (activeTemplate.isPublished) {
+        const ok = await unpublishTemplate(activeTemplate.id);
+        if (ok) {
+          showToast({ type: 'info', title: 'Template Unpublished', message: 'Template hidden from regular users.' });
+        } else {
+          showToast({ type: 'error', title: 'Unpublish Failed', message: 'Could not sync template unpublish with server.' });
+        }
+      } else {
+        const ok = await publishTemplate(activeTemplate.id);
+        if (ok) {
+          showToast({ type: 'success', title: 'Template Published', message: 'Template is now live for all users.' });
+        } else {
+          showToast({ type: 'error', title: 'Publish Failed', message: 'Could not sync template publish with server.' });
+        }
+      }
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Action Failed', message: err?.message || 'Failed to toggle publish status.' });
+    } finally {
+      setIsPublishToggling(false);
     }
   };
 
   const handleDeleteConfirmed = async () => {
     try {
-      await templatesApi.delete(activeTemplate.id);
-    } catch (err) {
-      console.warn('Backend delete (local or preset template fallback):', err);
+      await deleteTemplate(activeTemplate.id);
+      setIsDeleteModalOpen(false);
+      showToast({
+        type: 'info',
+        title: 'Template Deleted Globally',
+        message: `Permanently removed "${activeTemplate.name}" for all platform users.`
+      });
+    } catch (err: any) {
+      console.error('Failed to permanently delete template:', err);
+      showToast({
+        type: 'error',
+        title: 'Delete Failed',
+        message: err?.message || 'Could not remove template from server.'
+      });
     }
-    deleteTemplate(activeTemplate.id);
-    setIsDeleteModalOpen(false);
-    showToast({ type: 'info', title: 'Template Deleted', message: `Deleted "${activeTemplate.name}".` });
+  };
+
+  const handleAddCustomElement = (type: 'text' | 'rect' | 'line' | 'pill') => {
+    pushUndoSnapshot();
+    const newId = `el_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    let newEl: any;
+    if (type === 'text') {
+      newEl = {
+        id: newId,
+        type: 'text',
+        text: 'CUSTOM TITLE',
+        x: width / 2,
+        y: height / 2,
+        fontSize: 32,
+        fontFamily: alignment.fontFamily || 'Rajdhani',
+        fontWeight: '800',
+        color: '#ffffff',
+        opacity: 1,
+        visible: true,
+      };
+    } else if (type === 'rect') {
+      newEl = {
+        id: newId,
+        type: 'rect',
+        x: width / 2 - 120,
+        y: height / 2 - 40,
+        width: 240,
+        height: 80,
+        bgColor: 'rgba(15, 23, 42, 0.85)',
+        borderColor: '#00f0ff',
+        borderWidth: 2,
+        opacity: 1,
+        visible: true,
+      };
+    } else if (type === 'line') {
+      newEl = {
+        id: newId,
+        type: 'line',
+        x: width / 2 - 150,
+        y: height / 2,
+        width: 300,
+        height: 3,
+        color: '#f59e0b',
+        opacity: 1,
+        visible: true,
+      };
+    } else {
+      newEl = {
+        id: newId,
+        type: 'pill',
+        text: 'STAGE BADGE',
+        x: width / 2 - 80,
+        y: height / 2 - 22,
+        width: 160,
+        height: 44,
+        bgColor: 'rgba(239, 68, 68, 0.25)',
+        borderColor: '#ef4444',
+        borderWidth: 2,
+        color: '#ffffff',
+        fontSize: 16,
+        fontFamily: alignment.fontFamily || 'Rajdhani',
+        fontWeight: '900',
+        opacity: 1,
+        visible: true,
+      };
+    }
+    const updatedCustomElements = [...(alignment.customElements || []), newEl];
+    updateTemplateAlignment(activeTemplateId, { customElements: updatedCustomElements });
+    setSelectedKeys([`custom_el_${newId}`]);
+    setSelectedPresetLabel(`Custom: ${newEl.type.toUpperCase()}`);
+    triggerAutosave();
+    showToast({
+      type: 'success',
+      title: 'Element Added',
+      message: `Added new ${type} element to canvas. Drag or calibrate in inspector.`,
+    });
+  };
+
+  const handleDeleteCustomElement = (id: string) => {
+    pushUndoSnapshot();
+    const updatedCustomElements = (alignment.customElements || []).filter((e) => e.id !== id);
+    updateTemplateAlignment(activeTemplateId, { customElements: updatedCustomElements });
+    setSelectedKeys(['tournamentTitle']);
+    setSelectedPresetLabel('Tournament Title');
+    triggerAutosave();
+    showToast({
+      type: 'info',
+      title: 'Element Deleted',
+      message: 'Custom element removed from canvas.',
+    });
+  };
+
+  const handleUpdateCustomElementProp = (id: string, updates: Partial<any>) => {
+    const updatedCustomElements = (alignment.customElements || []).map((e) => {
+      if (e.id === id) {
+        return { ...e, ...updates };
+      }
+      return e;
+    });
+    updateTemplateAlignment(activeTemplateId, { customElements: updatedCustomElements });
+    triggerAutosave();
+  };
+
+  const handleUpdateScopeBadgeFont = (updates: Partial<any>) => {
+    const currentScopeFont = alignment.scopeBadgeFont || {
+      fontFamily: alignment.fontFamily || 'Rajdhani',
+      fontSize: alignment.subtitleFontSize || 28,
+      fontWeight: '800',
+      color: alignment.subtitleTextColor || '#ffffff',
+      bgColor: alignment.subtitleBgColor || 'rgba(5, 29, 56, 0.9)',
+      borderColor: alignment.subtitleBorderColor || '#00f0ff',
+      borderWidth: 3,
+    };
+    const nextScopeFont = { ...currentScopeFont, ...updates };
+    updateTemplateAlignment(activeTemplateId, {
+      scopeBadgeFont: nextScopeFont,
+      subtitleFontSize: nextScopeFont.fontSize,
+      subtitleTextColor: nextScopeFont.color,
+      subtitleBgColor: nextScopeFont.bgColor,
+      subtitleBorderColor: nextScopeFont.borderColor,
+    });
+    triggerAutosave();
+  };
+
+  const handleTogglePointXLogo = () => {
+    pushUndoSnapshot();
+    const nextVal = alignment.showPointXLogo === false ? true : false;
+    updateTemplateAlignment(activeTemplateId, { showPointXLogo: nextVal });
+    triggerAutosave();
+    showToast({
+      type: 'info',
+      title: nextVal ? 'PointX Logo Visible' : 'PointX Logo Hidden',
+      message: nextVal ? 'PointX watermark enabled on template.' : 'PointX watermark hidden from template.',
+    });
+  };
+
+  const handleUpdatePointXLogoConfig = (updates: Partial<any>) => {
+    const currentCfg = alignment.pointXLogoConfig || {
+      x: width - 170,
+      y: height - 65,
+      width: 140,
+      height: 44,
+      opacity: 0.88,
+    };
+    updateTemplateAlignment(activeTemplateId, {
+      pointXLogoConfig: { ...currentCfg, ...updates },
+    });
+    triggerAutosave();
+  };
+
+  const handlePickEyedropper = async (onColorPicked: (hex: string) => void) => {
+    if (typeof window !== 'undefined' && 'EyeDropper' in window) {
+      try {
+        const eyeDropper = new (window as any).EyeDropper();
+        const result = await eyeDropper.open();
+        if (result?.sRGBHex) {
+          onColorPicked(result.sRGBHex);
+        }
+      } catch (e) {
+        console.warn('EyeDropper closed without pick:', e);
+      }
+    } else {
+      showToast({
+        type: 'info',
+        title: 'EyeDropper Tool',
+        message: 'EyeDropper is supported on Chrome, Edge, and Opera. Pick colors using the hex input or swatches below.',
+      });
+    }
   };
 
   const allAvailableFonts = getAllFontNames();
+
+  if (user?.role !== 'admin') {
+    return (
+      <div className="p-8 rounded-2xl bg-[var(--bg-surface)] border border-rose-500/30 text-center space-y-4 max-w-md mx-auto my-12 font-sans">
+        <AlertTriangle className="h-12 w-12 text-rose-500 mx-auto" />
+        <h3 className="text-xl font-bold text-[var(--text-primary)]">Admin Access Required</h3>
+        <p className="text-sm text-[var(--text-secondary)]">
+          Only platform administrators can modify template geometries, alignments, and publish settings.
+          Organizers can preview graphics with live tournament standings and export in the Graphics Studio.
+        </p>
+        <Button variant="outline" onClick={onClose} leftIcon={<ArrowLeft className="h-4 w-4" />}>
+          Back to Graphics
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 font-sans min-h-[calc(100vh-100px)]">
@@ -1622,9 +1987,10 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
             variant={activeTemplate.isPublished ? 'secondary' : 'primary'}
             size="sm"
             onClick={handlePublishToggle}
-            leftIcon={<CheckCircle2 className="h-4 w-4" />}
+            disabled={isPublishToggling}
+            leftIcon={isPublishToggling ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
           >
-            {activeTemplate.isPublished ? 'Unpublish' : 'Publish'}
+            {isPublishToggling ? 'Saving...' : activeTemplate.isPublished ? 'Unpublish' : 'Publish'}
           </Button>
 
           {/* 🗑️ DELETE TEMPLATE */}
@@ -1828,51 +2194,274 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
               </div>
             </div>
 
+            {/* Custom Elements Adder Tool Row */}
+            <div className="p-2.5 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono font-bold uppercase text-[var(--accent-primary)] flex items-center gap-1">
+                  <Plus className="h-3 w-3" /> Add Custom Elements:
+                </span>
+                <button
+                  type="button"
+                  onClick={handleTogglePointXLogo}
+                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border transition-all cursor-pointer ${
+                    alignment.showPointXLogo !== false
+                      ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                      : 'bg-[var(--bg-surface)] text-[var(--text-muted)] border-[var(--border-subtle)]'
+                  }`}
+                  title="Toggle PointX Watermark Logo on this template"
+                >
+                  {alignment.showPointXLogo !== false ? 'PointX Logo: On' : 'PointX Logo: Off'}
+                </button>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleAddCustomElement('text')}
+                  className="px-2 py-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-[11px] font-bold transition-all cursor-pointer text-center shadow-xs"
+                >
+                  + Text
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddCustomElement('rect')}
+                  className="px-2 py-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-[11px] font-bold transition-all cursor-pointer text-center shadow-xs"
+                >
+                  + Box
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddCustomElement('line')}
+                  className="px-2 py-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-[11px] font-bold transition-all cursor-pointer text-center shadow-xs"
+                >
+                  + Line
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddCustomElement('pill')}
+                  className="px-2 py-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-[11px] font-bold transition-all cursor-pointer text-center shadow-xs"
+                >
+                  + Badge
+                </button>
+              </div>
+            </div>
+
             {/* Quick 1-Click Multi-Select Pills */}
             <div className="space-y-1.5">
               <div className="text-[11px] font-mono font-bold uppercase text-[var(--text-secondary)]">
-                Batch Quick-Select:
+                Batch Quick-Select ({templateType}):
               </div>
               <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => selectPreset('🛡️ All Team Names', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_teamName`))}
-                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                >
-                  🛡️ Team Names
-                </button>
+                {templateType === 'POINTS_TABLE' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('🛡️ All Team Names', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_teamName`))}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🛡️ Team Names
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('🎯 Total Points', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_total`))}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🎯 Total Points
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('💥 All Kills', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_kills`))}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      💥 All Kills
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('🔢 All Ranks', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_rank`))}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🔢 All Ranks
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('🖼️ Team Logos', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_logo`))}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🖼️ Team Logos
+                    </button>
+                  </>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => selectPreset('🎯 Total Points', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_total`))}
-                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                >
-                  🎯 Total Points
-                </button>
+                {templateType === 'KILL_LEADER' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('👑 Full Profile', ['kl_player_photo', 'kl_player_name', 'kl_team_name', 'kl_team_logo'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      👑 Full Profile
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('🎯 All Stats', ['kl_kills', 'kl_damage', 'kl_avg'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🎯 All Stats
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('Player Photo', ['kl_player_photo'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      📸 Photo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('Player Name', ['kl_player_name'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      👤 Name
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('Kills Stat', ['kl_kills'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      💥 Kills
+                    </button>
+                  </>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => selectPreset('💥 All Kills', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_kills`))}
-                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                >
-                  💥 All Kills
-                </button>
+                {templateType === 'TOP_FRAGGERS' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('🥇 1st MVP', ['tf_p1_badge', 'tf_p1_photo', 'tf_p1_name', 'tf_p1_team', 'tf_p1_kills'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🥇 1st MVP
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('🥈 2nd Runner', ['tf_p2_badge', 'tf_p2_photo', 'tf_p2_name', 'tf_p2_team', 'tf_p2_kills'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🥈 2nd Runner
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('🥉 3rd Place', ['tf_p3_badge', 'tf_p3_photo', 'tf_p3_name', 'tf_p3_team', 'tf_p3_kills'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🥉 3rd Place
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('👥 All Names', ['tf_p1_name', 'tf_p2_name', 'tf_p3_name'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      👥 All Names
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('🎯 All Kills', ['tf_p1_kills', 'tf_p2_kills', 'tf_p3_kills'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🎯 All Kills
+                    </button>
+                  </>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => selectPreset('🔢 All Ranks', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_rank`))}
-                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                >
-                  🔢 All Ranks
-                </button>
+                {templateType === 'TEAM_POSTER' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('Team Identity', ['tp_team_logo', 'tp_team_name', 'tp_team_slogan'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🛡️ Team Identity
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('All 4 Players', ['tp_player_1', 'tp_player_2', 'tp_player_3', 'tp_player_4'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      👥 4 Players
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('Team Logo', ['tp_team_logo'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🖼️ Team Logo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('Team Name', ['tp_team_name'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🏷️ Team Name
+                    </button>
+                  </>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => selectPreset('🖼️ Team Logos', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_logo`))}
-                  className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
-                >
-                  🖼️ Team Logos
-                </button>
+                {templateType === 'SLOTS_LIST' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('All 12 Slots', Array.from({ length: 12 }, (_, i) => `sl_slot_${i + 1}`))}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      📋 All 12 Slots
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('Col 1 (Slots 1-6)', ['sl_slot_1', 'sl_slot_2', 'sl_slot_3', 'sl_slot_4', 'sl_slot_5', 'sl_slot_6'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      ⬅️ Col 1 (1-6)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('Col 2 (Slots 7-12)', ['sl_slot_7', 'sl_slot_8', 'sl_slot_9', 'sl_slot_10', 'sl_slot_11', 'sl_slot_12'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      ➡️ Col 2 (7-12)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('Group Badge', ['sl_group_badge'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🏷️ Group Badge
+                    </button>
+                  </>
+                )}
+
+                {templateType === 'VICTORY_CERTIFICATE' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('Certificate Header', ['vc_ribbon', 'vc_cert_title', 'vc_presented_to'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🏆 Header
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('Winner Team', ['vc_team_name', 'vc_team_logo'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      🛡️ Winner Team
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectPreset('Signatures & Stats', ['vc_award_subtitle', 'vc_match_stats', 'vc_sign_left', 'vc_sign_right'])}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)] hover:text-[var(--accent-primary-text)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+                    >
+                      ✍️ Signatures & Stats
+                    </button>
+                  </>
+                )}
 
                 <button
                   type="button"
@@ -1882,20 +2471,13 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                   👑 All Headers
                 </button>
 
-                {sectionVariables.map((v) => (
-                  <button
-                    key={v.key}
-                    type="button"
-                    onClick={() => selectPreset(v.label, [v.key])}
-                    className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-xs ${
-                      selectedKeys.includes(v.key)
-                        ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)] border-[var(--accent-primary)]'
-                        : 'bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)]/20 text-[var(--text-primary)] border-[var(--border-subtle)]'
-                    }`}
-                  >
-                    {v.label}
-                  </button>
-                ))}
+                <button
+                  type="button"
+                  onClick={() => selectPreset('PointX Watermark', ['pointx_logo'])}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                >
+                  ⭐ PointX Logo
+                </button>
               </div>
             </div>
 
@@ -1923,49 +2505,130 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                   <option value="organizerLogo">Organizer Logo</option>
                   <option value="subtitle">Subtitle / Scope Badge</option>
                 </optgroup>
-                <optgroup label="Squad Slot 1 (Top Seed)">
-                  <option value="slot_1_teamName">Slot 1: Team Name</option>
-                  <option value="slot_1_logo">Slot 1: Team Logo</option>
-                  <option value="slot_1_rank">Slot 1: Rank #01</option>
-                  <option value="slot_1_total">Slot 1: Total Points</option>
-                  <option value="slot_1_kills">Slot 1: Kill Points</option>
-                  <option value="slot_1_place">Slot 1: Place Points</option>
-                  <option value="slot_1_match">Slot 1: Match Played</option>
-                  <option value="slot_1_booyah">Slot 1: Booyah Count</option>
+                <optgroup label="Watermark &amp; Branding">
+                  <option value="pointx_logo">PointX Watermark Logo</option>
                 </optgroup>
-                <optgroup label="Squad Slot 2">
-                  <option value="slot_2_teamName">Slot 2: Team Name</option>
-                  <option value="slot_2_logo">Slot 2: Team Logo</option>
-                  <option value="slot_2_rank">Slot 2: Rank #02</option>
-                  <option value="slot_2_total">Slot 2: Total Points</option>
-                  <option value="slot_2_kills">Slot 2: Kill Points</option>
-                </optgroup>
-                <optgroup label="Squad Slot 3">
-                  <option value="slot_3_teamName">Slot 3: Team Name</option>
-                  <option value="slot_3_logo">Slot 3: Team Logo</option>
-                  <option value="slot_3_rank">Slot 3: Rank #03</option>
-                  <option value="slot_3_total">Slot 3: Total Points</option>
-                  <option value="slot_3_kills">Slot 3: Kill Points</option>
-                </optgroup>
-                <optgroup label="Squad Slot 4">
-                  <option value="slot_4_teamName">Slot 4: Team Name</option>
-                  <option value="slot_4_logo">Slot 4: Team Logo</option>
-                  <option value="slot_4_rank">Slot 4: Rank #04</option>
-                  <option value="slot_4_total">Slot 4: Total Points</option>
-                  <option value="slot_4_kills">Slot 4: Kill Points</option>
-                </optgroup>
-                <optgroup label="Squad Slot 7 (Right Col Top)">
-                  <option value="slot_7_teamName">Slot 7: Team Name</option>
-                  <option value="slot_7_logo">Slot 7: Team Logo</option>
-                  <option value="slot_7_rank">Slot 7: Rank #07</option>
-                  <option value="slot_7_total">Slot 7: Total Points</option>
-                  <option value="slot_7_kills">Slot 7: Kill Points</option>
-                </optgroup>
-                {sectionVariables.length > 0 && (
-                  <optgroup label={`${templateType.replace(/_/g, ' ')} Variables`}>
-                    {sectionVariables.map((v) => (
-                      <option key={v.key} value={v.key}>
-                        {v.label} ({v.variable})
+
+                {templateType === 'POINTS_TABLE' && (
+                  <>
+                    <optgroup label="Squad Slot 1 (Top Seed)">
+                      <option value="slot_1_teamName">Slot 1: Team Name</option>
+                      <option value="slot_1_logo">Slot 1: Team Logo</option>
+                      <option value="slot_1_rank">Slot 1: Rank #01</option>
+                      <option value="slot_1_total">Slot 1: Total Points</option>
+                      <option value="slot_1_kills">Slot 1: Kill Points</option>
+                      <option value="slot_1_place">Slot 1: Place Points</option>
+                      <option value="slot_1_match">Slot 1: Match Played</option>
+                      <option value="slot_1_booyah">Slot 1: Booyah Count</option>
+                    </optgroup>
+                    <optgroup label="Squad Slot 2">
+                      <option value="slot_2_teamName">Slot 2: Team Name</option>
+                      <option value="slot_2_logo">Slot 2: Team Logo</option>
+                      <option value="slot_2_rank">Slot 2: Rank #02</option>
+                      <option value="slot_2_total">Slot 2: Total Points</option>
+                      <option value="slot_2_kills">Slot 2: Kill Points</option>
+                    </optgroup>
+                    <optgroup label="Squad Slot 3">
+                      <option value="slot_3_teamName">Slot 3: Team Name</option>
+                      <option value="slot_3_logo">Slot 3: Team Logo</option>
+                      <option value="slot_3_rank">Slot 3: Rank #03</option>
+                      <option value="slot_3_total">Slot 3: Total Points</option>
+                      <option value="slot_3_kills">Slot 3: Kill Points</option>
+                    </optgroup>
+                    <optgroup label="Squad Slot 4">
+                      <option value="slot_4_teamName">Slot 4: Team Name</option>
+                      <option value="slot_4_logo">Slot 4: Team Logo</option>
+                      <option value="slot_4_rank">Slot 4: Rank #04</option>
+                      <option value="slot_4_total">Slot 4: Total Points</option>
+                      <option value="slot_4_kills">Slot 4: Kill Points</option>
+                    </optgroup>
+                    <optgroup label="Squad Slot 7 (Right Col Top)">
+                      <option value="slot_7_teamName">Slot 7: Team Name</option>
+                      <option value="slot_7_logo">Slot 7: Team Logo</option>
+                      <option value="slot_7_rank">Slot 7: Rank #07</option>
+                      <option value="slot_7_total">Slot 7: Total Points</option>
+                      <option value="slot_7_kills">Slot 7: Kill Points</option>
+                    </optgroup>
+                  </>
+                )}
+
+                {templateType === 'KILL_LEADER' && (
+                  <optgroup label="Kill Leader Elements">
+                    <option value="kl_title">Kill Leader Title Banner</option>
+                    <option value="kl_badge">Tournament Badge</option>
+                    <option value="kl_player_photo">Player Photo / Avatar</option>
+                    <option value="kl_player_name">Player Gamertag</option>
+                    <option value="kl_team_name">Team Name</option>
+                    <option value="kl_team_logo">Team Logo</option>
+                    <option value="kl_kills">Total Kills Counter</option>
+                    <option value="kl_damage">Total Damage Counter</option>
+                    <option value="kl_avg">Avg Kills / Match</option>
+                  </optgroup>
+                )}
+
+                {templateType === 'TOP_FRAGGERS' && (
+                  <optgroup label="Top Fraggers / MVP Elements">
+                    <option value="tf_p1_badge">1st MVP Badge</option>
+                    <option value="tf_p1_photo">1st MVP Photo</option>
+                    <option value="tf_p1_name">1st MVP Name</option>
+                    <option value="tf_p1_team">1st MVP Team</option>
+                    <option value="tf_p1_kills">1st MVP Kills</option>
+                    <option value="tf_p2_badge">2nd Runner Badge</option>
+                    <option value="tf_p2_photo">2nd Runner Photo</option>
+                    <option value="tf_p2_name">2nd Runner Name</option>
+                    <option value="tf_p2_team">2nd Runner Team</option>
+                    <option value="tf_p2_kills">2nd Runner Kills</option>
+                    <option value="tf_p3_badge">3rd Place Badge</option>
+                    <option value="tf_p3_photo">3rd Place Photo</option>
+                    <option value="tf_p3_name">3rd Place Name</option>
+                    <option value="tf_p3_team">3rd Place Team</option>
+                    <option value="tf_p3_kills">3rd Place Kills</option>
+                  </optgroup>
+                )}
+
+                {templateType === 'TEAM_POSTER' && (
+                  <optgroup label="Team Poster Elements">
+                    <option value="tp_team_logo">Team Crest / Logo</option>
+                    <option value="tp_team_name">Team Name Title</option>
+                    <option value="tp_team_slogan">Team Motto / Slogan</option>
+                    <option value="tp_roster_title">Official Roster Header</option>
+                    <option value="tp_player_1">Player #1 (Captain)</option>
+                    <option value="tp_player_2">Player #2 (Rusher)</option>
+                    <option value="tp_player_3">Player #3 (Sniper)</option>
+                    <option value="tp_player_4">Player #4 (Support)</option>
+                  </optgroup>
+                )}
+
+                {templateType === 'SLOTS_LIST' && (
+                  <optgroup label="Slots List Elements">
+                    <option value="sl_group_badge">Group Name / Badge</option>
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <option key={`sl_slot_${i + 1}`} value={`sl_slot_${i + 1}`}>
+                        Slot #{String(i + 1).padStart(2, '0')}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+
+                {templateType === 'VICTORY_CERTIFICATE' && (
+                  <optgroup label="Victory Certificate Elements">
+                    <option value="vc_ribbon">Award Ribbon / Badge</option>
+                    <option value="vc_cert_title">Certificate Title</option>
+                    <option value="vc_presented_to">Presented To Subtitle</option>
+                    <option value="vc_team_name">Champion Team Name</option>
+                    <option value="vc_team_logo">Champion Team Crest</option>
+                    <option value="vc_award_subtitle">Award Citation Subtitle</option>
+                    <option value="vc_match_stats">Match Final Stats Summary</option>
+                    <option value="vc_sign_left">Tournament Director Signature</option>
+                    <option value="vc_sign_right">Esports Convener Signature</option>
+                  </optgroup>
+                )}
+
+                {Array.isArray(alignment.customElements) && alignment.customElements.length > 0 && (
+                  <optgroup label="Custom Canvas Elements">
+                    {alignment.customElements.map((el) => (
+                      <option key={el.id} value={`custom_el_${el.id}`}>
+                        ✦ {el.type.toUpperCase()}: {el.text || el.id}
                       </option>
                     ))}
                   </optgroup>
@@ -2168,10 +2831,264 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                         </div>
                       </div>
                     </div>
+
+                    {/* Scope Badge Font Customization */}
+                    <div className="pt-2 border-t border-[var(--border-subtle)] space-y-2">
+                      <span className="text-[11px] font-bold text-[var(--accent-primary)] font-mono block">
+                        Scope Badge Font Customization:
+                      </span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-mono text-[var(--text-secondary)] mb-1">
+                            Badge Font Family:
+                          </label>
+                          <select
+                            value={alignment.scopeBadgeFont?.fontFamily || alignment.fontFamily || 'Rajdhani'}
+                            onChange={(e) => handleUpdateScopeBadgeFont({ fontFamily: e.target.value })}
+                            className="w-full p-1.5 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-bold text-[var(--text-primary)]"
+                          >
+                            {allAvailableFonts.map((f) => (
+                              <option key={f} value={f}>{f}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-mono text-[var(--text-secondary)] mb-1">
+                            Badge Font Weight:
+                          </label>
+                          <select
+                            value={alignment.scopeBadgeFont?.fontWeight || '800'}
+                            onChange={(e) => handleUpdateScopeBadgeFont({ fontWeight: e.target.value })}
+                            className="w-full p-1.5 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-bold text-[var(--text-primary)]"
+                          >
+                            <option value="600">600 (Semi-Bold)</option>
+                            <option value="700">700 (Bold)</option>
+                            <option value="800">800 (Extra Bold)</option>
+                            <option value="900">900 (Black)</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-mono text-[var(--text-secondary)] mb-1">
+                            Font Size ({alignment.scopeBadgeFont?.fontSize || alignment.subtitleFontSize || 28}px):
+                          </label>
+                          <input
+                            type="range"
+                            min="12"
+                            max="72"
+                            value={alignment.scopeBadgeFont?.fontSize || alignment.subtitleFontSize || 28}
+                            onChange={(e) => handleUpdateScopeBadgeFont({ fontSize: Number(e.target.value) })}
+                            className="w-full accent-[var(--accent-primary)] cursor-pointer"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-mono text-[var(--text-secondary)] mb-1">
+                            Badge Text Color:
+                          </label>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="color"
+                              value={alignment.scopeBadgeFont?.color?.startsWith('#') ? alignment.scopeBadgeFont.color : '#ffffff'}
+                              onChange={(e) => handleUpdateScopeBadgeFont({ color: e.target.value })}
+                              className="h-7 w-8 rounded cursor-pointer border border-[var(--border-subtle)] bg-transparent"
+                            />
+                            <input
+                              type="text"
+                              value={alignment.scopeBadgeFont?.color || '#ffffff'}
+                              onChange={(e) => handleUpdateScopeBadgeFont({ color: e.target.value })}
+                              className="w-full p-1 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-primary)] font-bold"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
             )}
+
+            {/* POINTX WATERMARK INSPECTOR */}
+            {primaryKey === 'pointx_logo' && (
+              <div className="p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] space-y-3 font-mono text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[var(--accent-primary)]">
+                    PointX Watermark Configuration
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleTogglePointXLogo}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer ${
+                      alignment.showPointXLogo !== false
+                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                        : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                    }`}
+                  >
+                    {alignment.showPointXLogo !== false ? 'Watermark Visible' : 'Watermark Hidden'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-[var(--text-secondary)] mb-1">
+                      Width ({alignment.pointXLogoConfig?.width || 140}px):
+                    </label>
+                    <input
+                      type="range"
+                      min="80"
+                      max="360"
+                      value={alignment.pointXLogoConfig?.width || 140}
+                      onChange={(e) => handleUpdatePointXLogoConfig({ width: Number(e.target.value) })}
+                      className="w-full accent-[var(--accent-primary)] cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-[var(--text-secondary)] mb-1">
+                      Height ({alignment.pointXLogoConfig?.height || 44}px):
+                    </label>
+                    <input
+                      type="range"
+                      min="24"
+                      max="120"
+                      value={alignment.pointXLogoConfig?.height || 44}
+                      onChange={(e) => handleUpdatePointXLogoConfig({ height: Number(e.target.value) })}
+                      className="w-full accent-[var(--accent-primary)] cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-[var(--text-secondary)] mb-1">
+                      Opacity: {Math.round((alignment.pointXLogoConfig?.opacity ?? 0.88) * 100)}%
+                    </label>
+                    <input
+                      type="range"
+                      min="10"
+                      max="100"
+                      value={Math.round((alignment.pointXLogoConfig?.opacity ?? 0.88) * 100)}
+                      onChange={(e) => handleUpdatePointXLogoConfig({ opacity: Number(e.target.value) / 100 })}
+                      className="w-full accent-[var(--accent-primary)] cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={() => handleUpdatePointXLogoConfig({ x: width - 170, y: height - 65, width: 140, height: 44, opacity: 0.88 })}
+                      className="w-full p-2 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] text-[11px] font-bold text-[var(--text-secondary)] cursor-pointer"
+                    >
+                      Reset Position
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* CUSTOM CANVAS ELEMENT INSPECTOR */}
+            {primaryKey.startsWith('custom_el_') && (() => {
+              const elId = primaryKey.replace('custom_el_', '');
+              const customEl = (alignment.customElements || []).find((c) => c.id === elId);
+              if (!customEl) return null;
+              return (
+                <div className="p-3 rounded-xl bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] space-y-3 font-mono text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[var(--accent-primary)] uppercase">
+                      Custom {customEl.type} Element
+                    </span>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleDeleteCustomElement(customEl.id)}
+                      leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+
+                  {(customEl.type === 'text' || customEl.type === 'pill') && (
+                    <div>
+                      <label className="block text-[10px] text-[var(--text-secondary)] mb-1">Text Content:</label>
+                      <input
+                        type="text"
+                        value={customEl.text || ''}
+                        onChange={(e) => handleUpdateCustomElementProp(customEl.id, { text: e.target.value })}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)]"
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-[var(--text-secondary)] mb-1">
+                        Width ({customEl.width || (customEl.type === 'text' ? 'auto' : 160)}px):
+                      </label>
+                      <input
+                        type="range"
+                        min="20"
+                        max="800"
+                        value={customEl.width || 160}
+                        onChange={(e) => handleUpdateCustomElementProp(customEl.id, { width: Number(e.target.value) })}
+                        className="w-full accent-[var(--accent-primary)] cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-[var(--text-secondary)] mb-1">
+                        Height ({customEl.height || (customEl.type === 'text' ? customEl.fontSize || 32 : 44)}px):
+                      </label>
+                      <input
+                        type="range"
+                        min="2"
+                        max="400"
+                        value={customEl.height || 44}
+                        onChange={(e) => handleUpdateCustomElementProp(customEl.id, { height: Number(e.target.value) })}
+                        className="w-full accent-[var(--accent-primary)] cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-[var(--text-secondary)] mb-1">
+                        {customEl.type === 'text' ? 'Text Color:' : 'Background Color:'}
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="color"
+                          value={(customEl.bgColor || customEl.color || '#ffffff').startsWith('#') ? (customEl.bgColor || customEl.color || '#ffffff') : '#ffffff'}
+                          onChange={(e) => handleUpdateCustomElementProp(customEl.id, customEl.type === 'text' ? { color: e.target.value } : { bgColor: e.target.value })}
+                          className="h-7 w-8 rounded cursor-pointer border border-[var(--border-subtle)] bg-transparent"
+                        />
+                        <input
+                          type="text"
+                          value={customEl.bgColor || customEl.color || '#ffffff'}
+                          onChange={(e) => handleUpdateCustomElementProp(customEl.id, customEl.type === 'text' ? { color: e.target.value } : { bgColor: e.target.value })}
+                          className="w-full p-1 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-primary)]"
+                        />
+                      </div>
+                    </div>
+                    {customEl.type !== 'text' && (
+                      <div>
+                        <label className="block text-[10px] text-[var(--text-secondary)] mb-1">Border Color:</label>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="color"
+                            value={(customEl.borderColor || '#00f0ff').startsWith('#') ? (customEl.borderColor || '#00f0ff') : '#00f0ff'}
+                            onChange={(e) => handleUpdateCustomElementProp(customEl.id, { borderColor: e.target.value })}
+                            className="h-7 w-8 rounded cursor-pointer border border-[var(--border-subtle)] bg-transparent"
+                          />
+                          <input
+                            type="text"
+                            value={customEl.borderColor || '#00f0ff'}
+                            onChange={(e) => handleUpdateCustomElementProp(customEl.id, { borderColor: e.target.value })}
+                            className="w-full p-1 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-primary)]"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* B. TYPOGRAPHY: FONT FAMILY PICKER (With uploaded custom fonts!) */}
             {!isLogo && (
@@ -2310,59 +3227,110 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
               )}
             </div>
 
-            {/* D. COLOR & GLOW & ALIGNMENT */}
+            {/* D. COLOR & GLOW & ALIGNMENT WITH WEBSITE COLOR PALETTE & EYEDROPPER */}
             {!isLogo && (
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs font-mono">
-                <div className="flex items-center gap-2">
-                  <span className="text-[var(--text-secondary)]">Color:</span>
-                  <input
-                    type="color"
-                    value={primaryElement.fill?.startsWith('#') ? primaryElement.fill : '#ffffff'}
-                    onChange={(e) => updateSelectedElements({ fill: e.target.value })}
-                    className="h-8 w-10 rounded-lg cursor-pointer border border-[var(--border-subtle)] bg-transparent"
-                  />
+              <div className="space-y-2.5 pt-1 text-xs font-mono">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[var(--text-secondary)] font-bold">Element Color:</span>
+                    <button
+                      type="button"
+                      onClick={() => handlePickEyedropper((hex) => updateSelectedElements({ fill: hex }))}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--bg-surface-inset)] hover:bg-[var(--accent-primary)]/20 text-[var(--accent-primary)] border border-[var(--border-subtle)] text-[10px] font-bold cursor-pointer transition-all"
+                      title="Pick any color directly from the website screen (Chromium EyeDropper API)"
+                    >
+                      <Pipette className="h-3 w-3" />
+                      <span>Pick Color From Screen</span>
+                    </button>
+                  </div>
+
+                  {/* Website Color Palette Swatches */}
+                  <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                    {[
+                      { name: 'Esports Cyan', hex: '#00f0ff' },
+                      { name: 'Amber Gold', hex: '#f59e0b' },
+                      { name: 'Crimson Red', hex: '#ef4444' },
+                      { name: 'Emerald Glow', hex: '#10b981' },
+                      { name: 'Cyber Violet', hex: '#8b5cf6' },
+                      { name: 'Tournament Gold', hex: '#FFD200' },
+                      { name: 'Pure White', hex: '#ffffff' },
+                      { name: 'Slate Gray', hex: '#94a3b8' },
+                      { name: 'Sleek Dark', hex: '#090d16' }
+                    ].map((swatch) => (
+                      <button
+                        key={swatch.hex}
+                        type="button"
+                        onClick={() => updateSelectedElements({ fill: swatch.hex })}
+                        className={`h-6 w-6 rounded-md border transition-all cursor-pointer shadow-xs ${
+                          primaryElement.fill?.toLowerCase() === swatch.hex.toLowerCase()
+                            ? 'ring-2 ring-[var(--accent-primary)] scale-110 border-white'
+                            : 'border-white/20 hover:scale-105'
+                        }`}
+                        style={{ backgroundColor: swatch.hex }}
+                        title={`${swatch.name} (${swatch.hex})`}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={primaryElement.fill?.startsWith('#') ? primaryElement.fill : '#ffffff'}
+                      onChange={(e) => updateSelectedElements({ fill: e.target.value })}
+                      className="h-8 w-10 rounded-lg cursor-pointer border border-[var(--border-subtle)] bg-transparent"
+                    />
+                    <input
+                      type="text"
+                      value={primaryElement.fill || '#ffffff'}
+                      onChange={(e) => updateSelectedElements({ fill: e.target.value })}
+                      placeholder="#ffffff"
+                      className="w-24 px-2 py-1 rounded bg-[var(--bg-surface-inset)] border border-[var(--border-subtle)] text-xs font-mono font-bold text-[var(--text-primary)]"
+                    />
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-[var(--text-secondary)]">Glow:</span>
-                  <button
-                    type="button"
-                    onClick={() => updateSelectedElements({ glowColor: primaryElement.glowColor ? undefined : '#f59e0b' })}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                      primaryElement.glowColor
-                        ? 'bg-[var(--accent-primary)]/20 text-[var(--accent-primary)] border-[var(--accent-primary)]'
-                        : 'bg-[var(--bg-surface-inset)] text-[var(--text-muted)] border-[var(--border-subtle)]'
-                    }`}
-                  >
-                    {primaryElement.glowColor ? '✨ Glow On' : 'Glow Off'}
-                  </button>
-                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-[var(--border-subtle)]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[var(--text-secondary)]">Glow:</span>
+                    <button
+                      type="button"
+                      onClick={() => updateSelectedElements({ glowColor: primaryElement.glowColor ? undefined : '#f59e0b' })}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                        primaryElement.glowColor
+                          ? 'bg-[var(--accent-primary)]/20 text-[var(--accent-primary)] border-[var(--accent-primary)]'
+                          : 'bg-[var(--bg-surface-inset)] text-[var(--text-muted)] border-[var(--border-subtle)]'
+                      }`}
+                    >
+                      {primaryElement.glowColor ? '✨ Glow On' : 'Glow Off'}
+                    </button>
+                  </div>
 
-                <div className="flex items-center gap-1 bg-[var(--bg-surface-inset)] p-1 rounded-lg border border-[var(--border-subtle)]">
-                  <button
-                    type="button"
-                    onClick={() => updateSelectedElements({ textAnchor: 'start' })}
-                    className={`p-1 rounded cursor-pointer ${primaryElement.textAnchor === 'start' ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)]' : 'text-[var(--text-muted)]'}`}
-                    title="Align Left"
-                  >
-                    <AlignLeft className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateSelectedElements({ textAnchor: 'middle' })}
-                    className={`p-1 rounded cursor-pointer ${primaryElement.textAnchor === 'middle' ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)]' : 'text-[var(--text-muted)]'}`}
-                    title="Align Center"
-                  >
-                    <AlignCenter className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateSelectedElements({ textAnchor: 'end' })}
-                    className={`p-1 rounded cursor-pointer ${primaryElement.textAnchor === 'end' ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)]' : 'text-[var(--text-muted)]'}`}
-                    title="Align Right"
-                  >
-                    <AlignRight className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1 bg-[var(--bg-surface-inset)] p-1 rounded-lg border border-[var(--border-subtle)]">
+                    <button
+                      type="button"
+                      onClick={() => updateSelectedElements({ textAnchor: 'start' })}
+                      className={`p-1 rounded cursor-pointer ${primaryElement.textAnchor === 'start' ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)]' : 'text-[var(--text-muted)]'}`}
+                      title="Align Left"
+                    >
+                      <AlignLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSelectedElements({ textAnchor: 'middle' })}
+                      className={`p-1 rounded cursor-pointer ${primaryElement.textAnchor === 'middle' ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)]' : 'text-[var(--text-muted)]'}`}
+                      title="Align Center"
+                    >
+                      <AlignCenter className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSelectedElements({ textAnchor: 'end' })}
+                      className={`p-1 rounded cursor-pointer ${primaryElement.textAnchor === 'end' ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)]' : 'text-[var(--text-muted)]'}`}
+                      title="Align Right"
+                    >
+                      <AlignRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -2957,15 +3925,15 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
         <Modal
           isOpen={isDeleteModalOpen}
           onClose={() => setIsDeleteModalOpen(false)}
-          title="Delete Template?"
-          description={`Are you sure you want to remove "${activeTemplate.name}"?`}
+          title="Permanently Delete Template for All Users?"
+          description={`Are you sure you want to permanently delete "${activeTemplate.name}"?`}
           maxWidth="sm"
         >
           <div className="space-y-4 font-sans text-xs sm:text-sm">
             <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-300 flex items-start gap-2.5">
               <AlertTriangle className="h-4 w-4 text-rose-500 shrink-0 mt-0.5" />
               <span>
-                This will delete the template artwork and all custom alignment coordinates.
+                <strong>Admin Superpower Action:</strong> Deleting this template will permanently tombstone and delete it from MongoDB, removing it globally from all common organizers across the entire platform.
               </span>
             </div>
 
@@ -2974,7 +3942,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
                 Cancel
               </Button>
               <Button variant="danger" size="sm" onClick={handleDeleteConfirmed} leftIcon={<Trash2 className="h-4 w-4" />}>
-                Confirm Delete
+                Permanently Delete Everywhere
               </Button>
             </div>
           </div>
@@ -3125,41 +4093,135 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
               <span className="text-[10px] font-mono uppercase font-bold text-white/50">
                 Batch:
               </span>
-              <button
-                type="button"
-                onClick={() => selectPreset('🛡️ All Team Names', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_teamName`))}
-                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-              >
-                🛡️ Teams
-              </button>
-              <button
-                type="button"
-                onClick={() => selectPreset('🎯 Total Points', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_total`))}
-                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-              >
-                🎯 Totals
-              </button>
-              <button
-                type="button"
-                onClick={() => selectPreset('💥 All Kills', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_kills`))}
-                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-              >
-                💥 Kills
-              </button>
-              <button
-                type="button"
-                onClick={() => selectPreset('🔢 All Ranks', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_rank`))}
-                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-              >
-                🔢 Ranks
-              </button>
-              <button
-                type="button"
-                onClick={() => selectPreset('🖼️ Team Logos', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_logo`))}
-                className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-              >
-                🖼️ Logos
-              </button>
+              {templateType === 'POINTS_TABLE' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('🛡️ All Team Names', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_teamName`))}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    🛡️ Teams
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('🎯 Total Points', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_total`))}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    🎯 Totals
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('💥 All Kills', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_kills`))}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    💥 Kills
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('🔢 All Ranks', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_rank`))}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    🔢 Ranks
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('🖼️ Team Logos', Array.from({ length: 12 }, (_, i) => `slot_${i + 1}_logo`))}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    🖼️ Logos
+                  </button>
+                </>
+              )}
+              {templateType === 'KILL_LEADER' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('👑 Full Profile', ['kl_player_photo', 'kl_player_name', 'kl_team_name', 'kl_team_logo'])}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    👑 Profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('🎯 All Stats', ['kl_kills', 'kl_damage', 'kl_avg'])}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    🎯 Stats
+                  </button>
+                </>
+              )}
+              {templateType === 'TOP_FRAGGERS' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('🥇 1st MVP', ['tf_p1_badge', 'tf_p1_photo', 'tf_p1_name', 'tf_p1_team', 'tf_p1_kills'])}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    🥇 1st MVP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('🥈 2nd Runner', ['tf_p2_badge', 'tf_p2_photo', 'tf_p2_name', 'tf_p2_team', 'tf_p2_kills'])}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    🥈 2nd
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('🥉 3rd Place', ['tf_p3_badge', 'tf_p3_photo', 'tf_p3_name', 'tf_p3_team', 'tf_p3_kills'])}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    🥉 3rd
+                  </button>
+                </>
+              )}
+              {templateType === 'TEAM_POSTER' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('Team Identity', ['tp_team_logo', 'tp_team_name', 'tp_team_slogan'])}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    🛡️ Identity
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('All 4 Players', ['tp_player_1', 'tp_player_2', 'tp_player_3', 'tp_player_4'])}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    👥 4 Players
+                  </button>
+                </>
+              )}
+              {templateType === 'SLOTS_LIST' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('All 12 Slots', Array.from({ length: 12 }, (_, i) => `sl_slot_${i + 1}`))}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    📋 All 12 Slots
+                  </button>
+                </>
+              )}
+              {templateType === 'VICTORY_CERTIFICATE' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('Certificate Header', ['vc_ribbon', 'vc_cert_title', 'vc_presented_to'])}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    🏆 Header
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectPreset('Winner Team', ['vc_team_name', 'vc_team_logo'])}
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    🛡️ Winner Team
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={() => selectPreset('👑 All Headers', ['organizer', 'organizerLogo', 'tournamentTitle', 'tournamentLogo', 'subtitle'])}
@@ -3167,16 +4229,13 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({ onClos
               >
                 👑 Headers
               </button>
-              {sectionVariables.map((v) => (
-                <button
-                  key={v.key}
-                  type="button"
-                  onClick={() => selectPreset(v.label, [v.key])}
-                  className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-[var(--accent-primary)] hover:text-black text-[11px] font-bold transition-all cursor-pointer"
-                >
-                  {v.label}
-                </button>
-              ))}
+              <button
+                type="button"
+                onClick={() => selectPreset('PointX Watermark', ['pointx_logo'])}
+                className="px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 text-[11px] font-bold transition-all cursor-pointer"
+              >
+                ⭐ PointX Logo
+              </button>
             </div>
 
             {/* Tactile Mini Nudge Buttons */}

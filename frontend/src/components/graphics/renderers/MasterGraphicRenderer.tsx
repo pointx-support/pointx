@@ -10,12 +10,7 @@ import {
   getSlotsListData,
   getVictoryCertificateData
 } from '../../../engine/sectionDataProviders';
-import { PointsTableRenderer } from './PointsTableRenderer';
-import { KillLeaderRenderer } from './KillLeaderRenderer';
-import { TopFraggersRenderer } from './TopFraggersRenderer';
-import { TeamPosterRenderer } from './TeamPosterRenderer';
-import { SlotsListRenderer } from './SlotsListRenderer';
-import { VictoryCertificateRenderer } from './VictoryCertificateRenderer';
+import { DynamicCustomTemplate } from '../templates/DynamicCustomTemplate';
 
 export interface MasterGraphicRendererProps {
   template: CustomGraphicsTemplate;
@@ -84,172 +79,58 @@ export const MasterGraphicRenderer: React.FC<MasterGraphicRendererProps> = ({
     );
   }
 
-  // When in Interactive Studio Mode, or when calibrated custom slot coordinates exist,
-  // render via PointsTableRenderer (DynamicCustomTemplate) so all templates
-  // (Warheads, Leaders, Top MVP, Roster, Slot List, Victory Certificate) share the exact
-  // same precision editing preview, slot dragging, target element inspection, and coordinates.
-  const hasCalibratedSlots = Boolean(
-    (template?.alignment?.slots && Object.keys(template.alignment.slots).length > 0) ||
-    (template?.alignment?.elements && Object.keys(template.alignment.elements).length > 0)
-  );
-
-  if (isInteractive || hasCalibratedSlots) {
-    const data =
+  let categoryData: any;
+  if (templateType === 'KILL_LEADER') {
+    categoryData = getKillLeaderData(tournament, {
+      customTitle: options?.customTitle,
+      organizerName: options?.organizerName,
+      playerId: options?.selectedTeamId
+    });
+  } else if (templateType === 'TOP_FRAGGERS') {
+    categoryData = getTopFraggersData(tournament, {
+      customTitle: options?.customTitle,
+      organizerName: options?.organizerName
+    });
+  } else if (templateType === 'TEAM_POSTER') {
+    categoryData = getTeamPosterData(tournament, options?.selectedTeamId, {
+      customTitle: options?.customTitle,
+      organizerName: options?.organizerName
+    });
+  } else if (templateType === 'SLOTS_LIST') {
+    categoryData = getSlotsListData(tournament, {
+      customTitle: options?.customTitle,
+      organizerName: options?.organizerName
+    });
+  } else if (templateType === 'VICTORY_CERTIFICATE') {
+    categoryData = getVictoryCertificateData(tournament, options?.winnerTeamId, {
+      customTitle: options?.customTitle,
+      organizerName: options?.organizerName,
+      awardTitle: options?.awardTitle,
+      awardSubtitle: options?.awardSubtitle,
+      tournamentDate: options?.tournamentDate,
+      tournamentTime: options?.tournamentTime,
+    });
+  } else {
+    categoryData =
       options?.standingsData ||
       getPointsTableData(tournament, {
         customTitle: options?.customTitle,
         organizerName: options?.organizerName
       });
-    return (
-      <PointsTableRenderer
-        template={template}
-        data={data}
-        svgRef={svgRef}
-        selectedElementKey={selectedElementKey}
-        selectedElementKeys={selectedElementKeys}
-        onSelectElement={onSelectElement}
-        onSelectMultipleElements={onSelectMultipleElements}
-        onDragElement={onDragElement}
-        isInteractive={isInteractive}
-        hueRotate={hueRotate}
-      />
-    );
   }
 
-  switch (templateType) {
-    case 'KILL_LEADER': {
-      const data = getKillLeaderData(tournament, {
-        customTitle: options?.customTitle,
-        organizerName: options?.organizerName,
-        playerId: options?.selectedTeamId
-      });
-      return (
-        <KillLeaderRenderer
-          data={data}
-          artworkUrl={template.imageUrl}
-          aspectRatio={template.aspectRatio}
-          hueRotate={hueRotate}
-          svgRef={svgRef}
-        />
-      );
-    }
-
-    case 'TOP_FRAGGERS': {
-      const data = getTopFraggersData(tournament, {
-        customTitle: options?.customTitle,
-        organizerName: options?.organizerName
-      });
-      return (
-        <TopFraggersRenderer
-          data={data}
-          artworkUrl={template.imageUrl}
-          aspectRatio={template.aspectRatio}
-          hueRotate={hueRotate}
-          layoutMode={template.defaultLayout}
-          svgRef={svgRef}
-        />
-      );
-    }
-
-    case 'TEAM_POSTER': {
-      const data = getTeamPosterData(tournament, options?.selectedTeamId, {
-        customTitle: options?.customTitle,
-        organizerName: options?.organizerName
-      });
-      return (
-        <TeamPosterRenderer
-          data={data}
-          artworkUrl={template.imageUrl}
-          aspectRatio={template.aspectRatio}
-          hueRotate={hueRotate}
-          svgRef={svgRef}
-        />
-      );
-    }
-
-    case 'SLOTS_LIST': {
-      const data = getSlotsListData(tournament, {
-        customTitle: options?.customTitle,
-        organizerName: options?.organizerName
-      });
-      return (
-        <SlotsListRenderer
-          data={data}
-          artworkUrl={template.imageUrl}
-          aspectRatio={template.aspectRatio}
-          hueRotate={hueRotate}
-          layoutMode={template.defaultLayout}
-          svgRef={svgRef}
-        />
-      );
-    }
-
-    case 'VICTORY_CERTIFICATE': {
-      const data = getVictoryCertificateData(tournament, options?.winnerTeamId, {
-        customTitle: options?.customTitle,
-        organizerName: options?.organizerName,
-        awardTitle: options?.awardTitle,
-        awardSubtitle: options?.awardSubtitle,
-        tournamentDate: options?.tournamentDate,
-        tournamentTime: options?.tournamentTime,
-      });
-      return (
-        <VictoryCertificateRenderer
-          data={data}
-          artworkUrl={template.imageUrl}
-          aspectRatio={template.aspectRatio}
-          hueRotate={hueRotate}
-          svgRef={svgRef}
-        />
-      );
-    }
-
-    case 'POINTS_TABLE': {
-      const data =
-        options?.standingsData ||
-        getPointsTableData(tournament, {
-          customTitle: options?.customTitle,
-          organizerName: options?.organizerName
-        });
-      return (
-        <PointsTableRenderer
-          template={template}
-          data={data}
-          svgRef={svgRef}
-          selectedElementKey={selectedElementKey}
-          selectedElementKeys={selectedElementKeys}
-          onSelectElement={onSelectElement}
-          onSelectMultipleElements={onSelectMultipleElements}
-          onDragElement={onDragElement}
-          isInteractive={isInteractive}
-          hueRotate={hueRotate}
-        />
-      );
-    }
-
-    default: {
-      const isPortrait = template.aspectRatio === '4:5';
-      const width = isPortrait ? 1080 : 1920;
-      const height = isPortrait ? 1350 : 1080;
-      return (
-        <svg
-          ref={svgRef}
-          viewBox={`0 0 ${width} ${height}`}
-          width="100%"
-          height="100%"
-          className="w-full h-auto block select-none bg-slate-950"
-        >
-          <rect width={width} height={height} fill="#0b0f19" />
-          <g transform={`translate(${width / 2}, ${height / 2 - 20})`}>
-            <text x="0" y="0" textAnchor="middle" fill="#ef4444" fontSize="36" fontWeight="900" fontFamily="sans-serif">
-              UNSUPPORTED TEMPLATE TYPE
-            </text>
-            <text x="0" y="50" textAnchor="middle" fill="#94a3b8" fontSize="22" fontFamily="monospace">
-              Cannot render template of type: &quot;{String(templateType)}&quot;
-            </text>
-          </g>
-        </svg>
-      );
-    }
-  }
+  return (
+    <DynamicCustomTemplate
+      template={template}
+      data={categoryData}
+      svgRef={svgRef}
+      selectedElementKey={selectedElementKey}
+      selectedElementKeys={selectedElementKeys}
+      onSelectElement={onSelectElement}
+      onSelectMultipleElements={onSelectMultipleElements}
+      onDragElement={onDragElement}
+      isInteractive={isInteractive}
+      hueRotate={hueRotate}
+    />
+  );
 };

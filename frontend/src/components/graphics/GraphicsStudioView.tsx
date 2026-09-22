@@ -74,8 +74,8 @@ export const GraphicsStudioView: React.FC = () => {
     async function loadServerTemplates() {
       try {
         const res = await templatesApi.getAll();
-        if (isMounted && res.success && Array.isArray(res.data)) {
-          syncTemplates(res.data as any);
+        if (isMounted && res.success && res.data) {
+          syncTemplates(res as any);
         }
       } catch (err) {
         console.warn('[GraphicsStudioView] Server template sync failed:', err);

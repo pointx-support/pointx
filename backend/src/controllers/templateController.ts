@@ -7,6 +7,7 @@ import {
   createTemplate,
   updateTemplate,
   deleteTemplate,
+  getDeletedTemplateIds,
   getOrganizationsForTemplatePicker,
   buildSectionDataForTemplate,
 } from '../services/templateService';
@@ -18,8 +19,15 @@ export async function listTemplates(req: Request, res: Response, next: NextFunct
     const user = authReq.user;
     const orgIds = authReq.authorizedOrganizationIds || [];
     const section = (req.query.section || req.query.templateType || req.query.category) as string | undefined;
-    const templates = await getTemplates(user, section ? { templateType: section } : undefined, orgIds);
-    return res.status(200).json({ success: true, data: templates.map((t) => t.toJSON()) });
+    const [templates, deletedTemplateIds] = await Promise.all([
+      getTemplates(user, section ? { templateType: section } : undefined, orgIds),
+      getDeletedTemplateIds(),
+    ]);
+    return res.status(200).json({
+      success: true,
+      data: templates.map((t) => t.toJSON()),
+      deletedTemplateIds,
+    });
   } catch (error) {
     next(error);
   }
@@ -149,7 +157,14 @@ export async function deleteExistingTemplate(req: AuthorizedTenantRequest, res: 
     if (!deleted) {
       return res.status(404).json({ success: false, error: 'Template not found or cannot be deleted.' });
     }
-    return res.status(200).json({ success: true, message: 'Template deleted.' });
+    const tournamentId = (req.query.tournamentId as string) || (req.body?.tournamentId as string) || 'default';
+    updateAuthoritativeState(
+      tournamentId,
+      { deletedTemplateId: id },
+      undefined,
+      'TEMPLATE_DELETED'
+    ).catch((err) => console.warn('[RealtimeSync] Template delete broadcast error:', err));
+    return res.status(200).json({ success: true, message: 'Template deleted.', deletedTemplateId: id });
   } catch (error) {
     next(error);
   }

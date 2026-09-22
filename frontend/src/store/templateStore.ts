@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CustomGraphicsTemplate, TemplateAlignmentConfig, GraphicTemplateCategory, TemplateType } from '../types/customTemplate';
 import { normalizeTemplateType, VALID_TEMPLATE_TYPES } from '../types/customTemplate';
+import { templatesApi } from '../services/api';
 
 export const DEFAULT_LEGIT_ALIGNMENT: TemplateAlignmentConfig = {
   aspectRatio: '16:9',
@@ -825,7 +826,7 @@ export interface TemplateStoreState {
   // Actions
   setActiveTemplateId: (id: string) => void;
   addTemplate: (template: CustomGraphicsTemplate) => void;
-  syncTemplates: (incoming: CustomGraphicsTemplate[]) => void;
+  syncTemplates: (incoming: CustomGraphicsTemplate[] | { data?: CustomGraphicsTemplate[]; deletedTemplateIds?: string[] }, serverDeletedIds?: string[]) => void;
   createCustomTemplate: (
     name: string,
     imageUrl: string,
@@ -838,9 +839,9 @@ export interface TemplateStoreState {
   ) => string;
   updateTemplateAlignment: (id: string, alignment: Partial<TemplateAlignmentConfig>) => void;
   updateTemplateMetadata: (id: string, metadata: { name?: string; description?: string; imageUrl?: string; aspectRatio?: '16:9' | '4:5' | '1:1' | '9:16'; category?: GraphicTemplateCategory; defaultLayout?: string; elements?: Record<string, any>; variables?: string[] }) => void;
-  publishTemplate: (id: string) => void;
-  unpublishTemplate: (id: string) => void;
-  deleteTemplate: (id: string) => void;
+  publishTemplate: (id: string) => Promise<boolean>;
+  unpublishTemplate: (id: string) => Promise<boolean>;
+  deleteTemplate: (id: string) => Promise<boolean> | void;
   deleteAllTemplates: (ids?: string[]) => void;
   restoreBuiltInTemplates: () => void;
   cloneTemplate: (id: string) => string;
@@ -878,12 +879,22 @@ export const useTemplateStore = create<TemplateStoreState>()(
         });
       },
 
-      syncTemplates: (incoming: CustomGraphicsTemplate[]) => {
-        if (!Array.isArray(incoming)) return;
+      syncTemplates: (incoming: CustomGraphicsTemplate[] | { data?: CustomGraphicsTemplate[]; deletedTemplateIds?: string[] }, serverDeletedIds?: string[]) => {
+        const incomingArray = Array.isArray(incoming) ? incoming : (incoming?.data || []);
+        const incomingDeleted = (!Array.isArray(incoming) && Array.isArray(incoming?.deletedTemplateIds)) ? incoming.deletedTemplateIds : [];
+        const extraDeleted = serverDeletedIds || [];
+        if (!Array.isArray(incomingArray)) return;
+
         set((state) => {
-          const deletedIds = new Set(state.deletedTemplateIds || []);
+          const combinedDeleted = Array.from(new Set([
+            ...(state.deletedTemplateIds || []),
+            ...incomingDeleted,
+            ...extraDeleted
+          ]));
+          const deletedIds = new Set(combinedDeleted);
           const incomingMap = new Map<string, CustomGraphicsTemplate>();
-          incoming.forEach((t) => {
+
+          incomingArray.forEach((t) => {
             const id = (t as any)._id || (t as any).customId || t.id;
             if (!deletedIds.has(id)) {
               const safeType = t.templateType || normalizeTemplateType(t.category);
@@ -898,7 +909,7 @@ export const useTemplateStore = create<TemplateStoreState>()(
             }
           });
 
-          // Builtin templates baseline (excluding deleted ones)
+          // Builtin templates baseline (strictly excluding deleted ones)
           const builtInIds = new Set(BUILTIN_TEMPLATES.map((b) => b.id));
           const builtIns = BUILTIN_TEMPLATES.filter((b) => !deletedIds.has(b.id)).map((b) => {
             if (incomingMap.has(b.id)) {
@@ -919,6 +930,7 @@ export const useTemplateStore = create<TemplateStoreState>()(
           const activeStillExists = combined.some((t) => t.id === state.activeTemplateId);
 
           return {
+            deletedTemplateIds: combinedDeleted,
             templates: combined,
             activeTemplateId: activeStillExists ? state.activeTemplateId : combined[0]?.id || (BUILTIN_TEMPLATES[0]?.id || ''),
           };
@@ -1040,23 +1052,123 @@ export const useTemplateStore = create<TemplateStoreState>()(
         }));
       },
 
-      publishTemplate: (id: string) => {
+      publishTemplate: async (id: string) => {
+        const current = get().templates.find((t) => t.id === id);
+        const wasPublished = current?.isPublished ?? false;
+
+        // 1. Optimistic update
         set((state) => ({
           templates: state.templates.map((t) =>
             t.id === id ? { ...t, isPublished: true, updatedAt: new Date().toISOString() } : t
           )
         }));
+
+        if (typeof window !== 'undefined') {
+          try {
+            window.dispatchEvent(new CustomEvent('pointx_template_updated', { detail: { id, isPublished: true } }));
+          } catch {}
+        }
+
+        // 2. Persist to MongoDB backend
+        try {
+          const payload: any = {
+            isPublished: true,
+            ...(current ? {
+              name: current.name,
+              description: current.description,
+              imageUrl: current.imageUrl,
+              aspectRatio: current.aspectRatio,
+              alignment: current.alignment,
+              category: current.category,
+              templateType: current.templateType,
+              defaultLayout: current.defaultLayout,
+              elements: current.elements,
+              variables: current.variables,
+              isBuiltIn: current.isBuiltIn,
+            } : {})
+          };
+          const res = await templatesApi.update(id, payload);
+          if (res.success && res.data) {
+            const serverTmpl = res.data;
+            set((state) => ({
+              templates: state.templates.map((t) =>
+                t.id === id ? { ...t, ...serverTmpl, isPublished: true } : t
+              )
+            }));
+            return true;
+          }
+        } catch (err) {
+          console.warn('Backend publish failed, reverting:', err);
+          // Revert optimistic state
+          set((state) => ({
+            templates: state.templates.map((t) =>
+              t.id === id ? { ...t, isPublished: wasPublished } : t
+            )
+          }));
+          return false;
+        }
+        return true;
       },
 
-      unpublishTemplate: (id: string) => {
+      unpublishTemplate: async (id: string) => {
+        const current = get().templates.find((t) => t.id === id);
+        const wasPublished = current?.isPublished ?? true;
+
+        // 1. Optimistic update
         set((state) => ({
           templates: state.templates.map((t) =>
             t.id === id ? { ...t, isPublished: false, updatedAt: new Date().toISOString() } : t
           )
         }));
+
+        if (typeof window !== 'undefined') {
+          try {
+            window.dispatchEvent(new CustomEvent('pointx_template_updated', { detail: { id, isPublished: false } }));
+          } catch {}
+        }
+
+        // 2. Persist to MongoDB backend
+        try {
+          const payload: any = {
+            isPublished: false,
+            ...(current ? {
+              name: current.name,
+              description: current.description,
+              imageUrl: current.imageUrl,
+              aspectRatio: current.aspectRatio,
+              alignment: current.alignment,
+              category: current.category,
+              templateType: current.templateType,
+              defaultLayout: current.defaultLayout,
+              elements: current.elements,
+              variables: current.variables,
+              isBuiltIn: current.isBuiltIn,
+            } : {})
+          };
+          const res = await templatesApi.update(id, payload);
+          if (res.success && res.data) {
+            const serverTmpl = res.data;
+            set((state) => ({
+              templates: state.templates.map((t) =>
+                t.id === id ? { ...t, ...serverTmpl, isPublished: false } : t
+              )
+            }));
+            return true;
+          }
+        } catch (err) {
+          console.warn('Backend unpublish failed, reverting:', err);
+          // Revert optimistic state
+          set((state) => ({
+            templates: state.templates.map((t) =>
+              t.id === id ? { ...t, isPublished: wasPublished } : t
+            )
+          }));
+          return false;
+        }
+        return true;
       },
 
-      deleteTemplate: (id: string) => {
+      deleteTemplate: async (id: string) => {
         set((state) => {
           const deletedTemplateIds = Array.from(new Set([...(state.deletedTemplateIds || []), id]));
           const remaining = state.templates.filter((t) => t.id !== id);
@@ -1067,6 +1179,19 @@ export const useTemplateStore = create<TemplateStoreState>()(
             activeTemplateId: state.activeTemplateId === id ? fallback : state.activeTemplateId
           };
         });
+
+        if (typeof window !== 'undefined') {
+          try {
+            window.dispatchEvent(new CustomEvent('pointx_template_deleted', { detail: { id } }));
+          } catch {}
+        }
+
+        try {
+          await templatesApi.delete(id);
+        } catch (err) {
+          console.warn('Backend template delete note:', err);
+        }
+        return true;
       },
 
       deleteAllTemplates: (ids?: string[]) => {

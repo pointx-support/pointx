@@ -24,15 +24,17 @@ import {
   Upload,
   Image as ImageIcon,
   X,
-  ShieldCheck
+  ShieldCheck,
+  Loader2,
 } from 'lucide-react';
 
 export interface TournamentWizardProps {
   onComplete: (tournament: Tournament) => void;
   onCancel: () => void;
+  isSubmitting?: boolean;
 }
 
-export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, onCancel }) => {
+export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, onCancel, isSubmitting = false }) => {
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
 
   // Form State
@@ -1056,9 +1058,10 @@ export const TournamentWizard: React.FC<TournamentWizardProps> = ({ onComplete, 
               variant="booyah"
               size="md"
               onClick={handleCreate}
-              leftIcon={<Sparkles className="h-4 w-4" />}
+              disabled={isSubmitting}
+              leftIcon={isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             >
-              Initialize & Open Workspace
+              {isSubmitting ? 'Initializing Workspace...' : 'Initialize & Open Workspace'}
             </Button>
           )}
         </div>

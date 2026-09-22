@@ -92,6 +92,17 @@ export interface TemplateAlignmentConfig {
   subtitleBgColor: string;
   subtitleBorderColor: string;
   subtitleTextColor: string;
+  scopeBadgeFont?: {
+    fontFamily?: string;
+    fontSize?: number;
+    fontWeight?: string;
+    color?: string;
+    bgColor?: string;
+    borderColor?: string;
+    borderWidth?: number;
+    letterSpacing?: number;
+    rx?: number;
+  };
 
   // Titles
   showOrganizerHeader?: boolean;
@@ -106,6 +117,16 @@ export interface TemplateAlignmentConfig {
   tournamentFontSize?: number;
   tournamentColor?: string;
 
+  // PointX Brand Watermark Logo
+  showPointXLogo?: boolean;
+  pointXLogoConfig?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    opacity?: number;
+  };
+
   // Granular Column & Header Overrides
   elements?: {
     [elementKey: string]: Partial<TextElementStyle> | undefined;
@@ -115,6 +136,28 @@ export interface TemplateAlignmentConfig {
   slots?: {
     [slotIndex: number]: SlotRowOverride;
   };
+
+  // Custom User-Added Elements (Shapes, Lines, Badges, Custom Text)
+  customElements?: CustomCanvasElement[];
+}
+
+export interface CustomCanvasElement {
+  id: string;
+  type: 'text' | 'rect' | 'line' | 'pill';
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  text?: string;
+  color?: string;
+  bgColor?: string;
+  borderColor?: string;
+  borderWidth?: number;
+  fontSize?: number;
+  fontFamily?: string;
+  fontWeight?: string;
+  opacity?: number;
+  visible?: boolean;
 }
 
 export type GraphicTemplateCategory = 'standings' | 'warheads' | 'fraggers' | 'team-poster' | 'slots-list' | 'certificate';

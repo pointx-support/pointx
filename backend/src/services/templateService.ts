@@ -115,20 +115,20 @@ export async function getTemplates(
     return CustomTemplate.find(sectionFilter).sort({ createdAt: -1 });
   }
 
-  // If unauthenticated, return only built-in and globally published templates
+  // If unauthenticated, return only built-in and globally published templates that are active and published
   if (!user || !user._id) {
     return CustomTemplate.find({
       ...sectionFilter,
       active: { $ne: false },
       $or: [
-        { isBuiltIn: true },
+        { isBuiltIn: true, isPublished: true },
         { visibility: 'GLOBAL', isPublished: true },
       ],
     }).sort({ createdAt: -1 });
   }
 
   // Authenticated organizer: can access:
-  // 1. Built-in templates
+  // 1. Built-in templates (if published and active)
   // 2. Globally published templates
   // 3. Restricted templates where their organization is in allowedOrganizationIds
   // 4. Templates they created themselves (userId: user._id)
@@ -138,7 +138,7 @@ export async function getTemplates(
     ...sectionFilter,
     active: { $ne: false },
     $or: [
-      { isBuiltIn: true },
+      { isBuiltIn: true, isPublished: true },
       { visibility: 'GLOBAL', isPublished: true },
       {
         visibility: 'ORGANIZATION_RESTRICTED',
@@ -150,6 +150,15 @@ export async function getTemplates(
   };
 
   return CustomTemplate.find(query).sort({ createdAt: -1 });
+}
+
+export async function getDeletedTemplateIds(): Promise<string[]> {
+  try {
+    const deleted = await CustomTemplate.find({ active: false }, { customId: 1 });
+    return deleted.map((d) => d.customId);
+  } catch {
+    return [];
+  }
 }
 
 export async function getTemplateById(
@@ -334,7 +343,32 @@ export async function updateTemplate(
     $inc: { version: 1 },
   };
 
-  return CustomTemplate.findOneAndUpdate(query, safeUpdates, { returnDocument: 'after' });
+  let template = await CustomTemplate.findOneAndUpdate(query, safeUpdates, { returnDocument: 'after' });
+  if (!template && role === 'admin') {
+    // Upsert built-in or existing template not yet in MongoDB
+    const isBuiltIn = updates.isBuiltIn !== undefined ? !!updates.isBuiltIn : templateId.startsWith('builtin-');
+    template = await CustomTemplate.create({
+      customId: templateId,
+      name: updates.name || (templateId.startsWith('builtin-') ? `Template ${templateId}` : 'Custom Template'),
+      description: updates.description || '',
+      imageUrl: updates.imageUrl || '/templates/default.jpg',
+      aspectRatio: updates.aspectRatio || '16:9',
+      alignment: updates.alignment || {},
+      isBuiltIn,
+      isPublished: updates.isPublished !== undefined ? !!updates.isPublished : true,
+      visibility: updates.visibility || 'GLOBAL',
+      allowedOrganizationIds: Array.isArray(updates.allowedOrganizationIds) ? updates.allowedOrganizationIds : [],
+      active: updates.active !== undefined ? !!updates.active : true,
+      version: 1,
+      templateType: processedUpdates.templateType || 'POINTS_TABLE',
+      defaultLayout: updates.defaultLayout || 'default',
+      elements: updates.elements || {},
+      variables: Array.isArray(updates.variables) ? updates.variables : [],
+      category: updates.category || 'standings',
+    });
+  }
+
+  return template;
 }
 
 export async function deleteTemplate(
@@ -363,10 +397,36 @@ export async function deleteTemplate(
         ],
       },
     ];
+    const res = await CustomTemplate.deleteOne(query);
+    return res.deletedCount > 0;
   }
 
-  const res = await CustomTemplate.deleteOne(query);
-  return res.deletedCount > 0;
+  // Admin permanent deletion: tombstone in MongoDB so that all users receive deletion status permanently
+  await CustomTemplate.findOneAndUpdate(
+    query,
+    {
+      $set: {
+        active: false,
+        isPublished: false,
+        updatedAt: new Date(),
+      },
+      $setOnInsert: {
+        customId: templateId,
+        name: `Deleted Template ${templateId}`,
+        imageUrl: '/templates/default.jpg',
+        alignment: {},
+        isBuiltIn: templateId.startsWith('builtin-') || !templateId.startsWith('custom-'),
+        visibility: 'GLOBAL',
+        templateType: 'NEEDS_REVIEW',
+        defaultLayout: 'default',
+        elements: {},
+        variables: [],
+      }
+    },
+    { upsert: true }
+  );
+
+  return true;
 }
 
 export async function getOrganizationsForTemplatePicker(
